@@ -95,6 +95,16 @@ function _rainbowKeys(): Record<string, string> {
   );
 }
 
+// Vertical stripes: color each key by Math.floor(col) % 2.
+function _verticalStripes(): Record<string, string> {
+  const entries: Array<[string, string]> = [];
+  for (const k of _layout.keys) {
+    const color = Math.floor(k.col) % 2 === 0 ? '#ff44aa' : '#221122';
+    entries.push([k.name, color]);
+  }
+  return buildKeys(entries);
+}
+
 export const BUILTIN_PRESETS: Preset[] = [
   // === Words ===
   {
@@ -161,49 +171,9 @@ export const BUILTIN_PRESETS: Preset[] = [
     },
   },
   {
-    id: 'shape-heart',
-    name: 'Coração',
-    description: 'Forma de coração — dois lobos no topo estreitando para ponta embaixo',
-    category: 'shape',
-    pattern: {
-      keys: buildKeys([
-        // Top lobes (left lobe: 5/6/7, right lobe: 9/0/Minus) — bright red
-        ['5', '#ff1a1a'], ['6', '#ff1a1a'], ['7', '#ff1a1a'],
-        ['9', '#ff1a1a'], ['0', '#ff1a1a'], ['Minus', '#ff1a1a'],
-        // Upper sides curving inward
-        ['R', '#ff1a1a'], ['T', '#cc0022'], ['Y', '#cc0022'], ['U', '#ff1a1a'],
-        ['I', '#ff1a1a'], ['O', '#ff1a1a'], ['P', '#ff1a1a'],
-        // Middle body (slightly darker for depth)
-        ['F', '#ff1a1a'], ['G', '#cc0022'], ['H', '#cc0022'], ['J', '#ff1a1a'], ['K', '#ff1a1a'],
-        // Narrowing lower body
-        ['V', '#ff1a1a'], ['B', '#cc0022'], ['N', '#cc0022'], ['M', '#ff1a1a'],
-        // Bottom point
-        ['Period', '#ff1a1a'],
-      ]),
-      animType: 'blink',
-      animSpeed: 0.2,
-    },
-  },
-  {
-    id: 'shape-x-diagonal',
-    name: 'X diagonal',
-    description: 'Duas diagonais formando X — top-left↘bottom-right e top-right↙bottom-left',
-    category: 'shape',
-    pattern: {
-      keys: buildKeys([
-        // Diagonal 1: top-left → bottom-right (steps ~3 cols per row)
-        ['Escape', '#ffaa00'], ['3', '#ffaa00'], ['E', '#ffaa00'], ['F', '#ffaa00'], ['V', '#ffaa00'],
-        // Diagonal 2: top-right → bottom-left
-        ['Backspace', '#00aaff'], ['0', '#00aaff'], ['P', '#00aaff'], ['L', '#00aaff'], ['Period', '#00aaff'],
-      ]),
-      animType: 'solid',
-      animSpeed: 0.5,
-    },
-  },
-  {
-    id: 'shape-border',
-    name: 'Borda',
-    description: 'Apenas as teclas do perímetro',
+    id: 'shape-frame',
+    name: 'Frame',
+    description: 'Apenas as teclas do perímetro em ciano, piscando devagar — moldura hollow',
     category: 'shape',
     pattern: {
       keys: buildKeys(
@@ -213,10 +183,41 @@ export const BUILTIN_PRESETS: Preset[] = [
           'CapsLock', 'Enter',
           'LShift', 'RShift',
           'LCtrl', 'LSuper', 'LAlt', 'Space', 'RAlt', 'Fn', 'Menu', 'RCtrl',
-        ], '#aa00ff'),
+        ], '#00ffff'),
+      ),
+      animType: 'blink',
+      animSpeed: 0.2,
+    },
+  },
+  {
+    id: 'zone-modifiers',
+    name: 'Modificadores',
+    description: 'Todas as teclas modificadoras em laranja — referência visual para power users',
+    category: 'shape',
+    pattern: {
+      keys: buildKeys(
+        uniform([
+          'Escape', 'Tab', 'CapsLock', 'LShift', 'RShift',
+          'LCtrl', 'RCtrl', 'LAlt', 'RAlt', 'LSuper', 'Fn', 'Menu',
+          'Backspace', 'Enter', 'Space',
+        ], '#ff7700'),
       ),
       animType: 'solid',
       animSpeed: 0.5,
+    },
+  },
+  {
+    id: 'zone-typing-row',
+    name: 'Home Row',
+    description: 'Home row destacada para treino muscular — A/S/D/F/J/K/L/; verde, G/H verde escuro',
+    category: 'shape',
+    pattern: {
+      keys: buildKeys([
+        ...uniform(['A', 'S', 'D', 'F', 'J', 'K', 'L', 'Semicolon'], '#00ff44'),
+        ...uniform(['G', 'H'], '#004422'),
+      ]),
+      animType: 'blink',
+      animSpeed: 0.15,
     },
   },
 
@@ -252,6 +253,17 @@ export const BUILTIN_PRESETS: Preset[] = [
     },
   },
   {
+    id: 'pattern-vertical-stripes',
+    name: 'Faixas (colunas)',
+    description: 'Colunas alternadas pink/escuro — zebra vertical',
+    category: 'pattern',
+    pattern: {
+      keys: _verticalStripes(),
+      animType: 'solid',
+      animSpeed: 0.5,
+    },
+  },
+  {
     id: 'pattern-blink-all',
     name: 'Pisca-pisca',
     description: 'Todo o teclado piscando branco',
@@ -272,6 +284,32 @@ export const BUILTIN_PRESETS: Preset[] = [
       animType: 'chase',
       animSpeed: 0.5,
       sequence: seqFromNames(ALL_KEYS_NAMES),
+    },
+  },
+  {
+    id: 'zone-left-right',
+    name: 'Esquerda / Direita',
+    description: 'Metade esquerda magenta, metade direita ciano',
+    category: 'pattern',
+    pattern: {
+      keys: buildKeys([
+        // Left half: Escape, 1-5, Tab, Q-T, CapsLock, A-G, LShift, Z-B, LCtrl, LSuper, LAlt
+        ...uniform(['Escape', '1', '2', '3', '4', '5'], '#ff00aa'),
+        ...uniform(['Tab', 'Q', 'W', 'E', 'R', 'T'], '#ff00aa'),
+        ...uniform(['CapsLock', 'A', 'S', 'D', 'F', 'G'], '#ff00aa'),
+        ...uniform(['LShift', 'Z', 'X', 'C', 'V', 'B'], '#ff00aa'),
+        ...uniform(['LCtrl', 'LSuper', 'LAlt'], '#ff00aa'),
+        // Right half: 6-0, Minus, Equal, Backspace, Y-P, LBracket, RBracket, Backslash,
+        //             H-L, Semicolon, Quote, Enter, N-M, Comma, Period, Slash, RShift,
+        //             Space, RAlt, Fn, Menu, RCtrl
+        ...uniform(['6', '7', '8', '9', '0', 'Minus', 'Equal', 'Backspace'], '#00aaff'),
+        ...uniform(['Y', 'U', 'I', 'O', 'P', 'LBracket', 'RBracket', 'Backslash'], '#00aaff'),
+        ...uniform(['H', 'J', 'K', 'L', 'Semicolon', 'Quote', 'Enter'], '#00aaff'),
+        ...uniform(['N', 'M', 'Comma', 'Period', 'Slash', 'RShift'], '#00aaff'),
+        ...uniform(['Space', 'RAlt', 'Fn', 'Menu', 'RCtrl'], '#00aaff'),
+      ]),
+      animType: 'solid',
+      animSpeed: 0.5,
     },
   },
 
@@ -315,8 +353,6 @@ export const BUILTIN_PRESETS: Preset[] = [
           '#009c3b',
         ),
         // Yellow rhombus (diamond outline + fill, centered around G/H)
-        // Top apex: 6; upper sides: 5, 7; upper-mid: T, Y; further out: R, U; lower-mid: V, N; bottom apex: B
-        // F and J form the wide middle excluding the blue center
         ['5', '#ffdf00'], ['6', '#ffdf00'], ['7', '#ffdf00'],
         ['R', '#ffdf00'], ['T', '#ffdf00'], ['Y', '#ffdf00'], ['U', '#ffdf00'],
         ['F', '#ffdf00'], ['J', '#ffdf00'],
@@ -344,6 +380,46 @@ export const BUILTIN_PRESETS: Preset[] = [
       ]),
       animType: 'wave',
       animSpeed: 0.3,
+    },
+  },
+  {
+    id: 'theme-cyber',
+    name: 'Cyber',
+    description: 'Base roxa profunda + ciano nos números + verde em WASD — look cyberpunk gaming',
+    category: 'theme',
+    pattern: {
+      keys: buildKeys([
+        // Deep purple base on all keys
+        ...uniform(ALL_KEYS_NAMES, '#3a0066'),
+        // Cyan accent on number row
+        ...uniform(['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'Minus', 'Equal'], '#00ddff'),
+        // Bright green on WASD
+        ...uniform(['W', 'A', 'S', 'D'], '#00ff44'),
+      ]),
+      animType: 'solid',
+      animSpeed: 0.5,
+    },
+  },
+  {
+    id: 'theme-fire',
+    name: 'Fogo',
+    description: 'Gradiente de fogo — amarelo no topo, vermelho escuro na base — animado flag-wave',
+    category: 'theme',
+    pattern: {
+      keys: buildKeys([
+        // Row 0 (top): yellow
+        ...uniform(['Escape', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'Minus', 'Equal', 'Backspace'], '#ffaa00'),
+        // Row 1: orange
+        ...uniform(['Tab', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', 'LBracket', 'RBracket', 'Backslash'], '#ff7700'),
+        // Row 2: red-orange
+        ...uniform(['CapsLock', 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', 'Semicolon', 'Quote', 'Enter'], '#ff4400'),
+        // Row 3: red
+        ...uniform(['LShift', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', 'Comma', 'Period', 'Slash', 'RShift'], '#dd0000'),
+        // Row 4 (bottom): dark red
+        ...uniform(['LCtrl', 'LSuper', 'LAlt', 'Space', 'RAlt', 'Fn', 'Menu', 'RCtrl'], '#880000'),
+      ]),
+      animType: 'flag-wave',
+      animSpeed: 0.5,
     },
   },
 

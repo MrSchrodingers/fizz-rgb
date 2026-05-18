@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { BUILTIN_PRESETS, getPresetById } from '../src/presets.js';
 
 describe('BUILTIN_PRESETS', () => {
-  it('has at least 15 presets', () => {
-    expect(BUILTIN_PRESETS.length).toBeGreaterThanOrEqual(15);
+  it('has at least 16 presets', () => {
+    expect(BUILTIN_PRESETS.length).toBeGreaterThanOrEqual(16);
   });
 
   it('all presets have unique IDs', () => {
@@ -61,10 +61,24 @@ describe('BUILTIN_PRESETS', () => {
     expect(p?.pattern.animType).toBe('flag-wave');
   });
 
-  it('heart preset uses two distinct red shades', () => {
-    const p = getPresetById('shape-heart');
-    expect(p).toBeDefined();
-    const colors = new Set(Object.values(p!.pattern.keys));
-    expect(colors.size).toBeGreaterThanOrEqual(2);
+  it('shape-heart and shape-x-diagonal are removed', () => {
+    expect(getPresetById('shape-heart')).toBeUndefined();
+    expect(getPresetById('shape-x-diagonal')).toBeUndefined();
+  });
+
+  it('shape-border is renamed to shape-frame', () => {
+    expect(getPresetById('shape-border')).toBeUndefined();
+    expect(getPresetById('shape-frame')).toBeDefined();
+  });
+
+  it('has zone presets', () => {
+    expect(getPresetById('zone-left-right')).toBeDefined();
+    expect(getPresetById('zone-modifiers')).toBeDefined();
+    expect(getPresetById('zone-typing-row')).toBeDefined();
+  });
+
+  it('has theme-fire with flag-wave', () => {
+    const p = getPresetById('theme-fire');
+    expect(p?.pattern.animType).toBe('flag-wave');
   });
 });
