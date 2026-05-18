@@ -92,7 +92,7 @@ export default function App() {
         };
         if (isNew) {
           const p = pattern as NewPattern;
-          const validAnimTypes: AnimType[] = ['solid', 'blink', 'chase', 'wave', 'typewriter', 'marquee', 'flag-wave', 'pong', 'snake'];
+          const validAnimTypes: AnimType[] = ['solid', 'blink', 'chase', 'wave', 'typewriter', 'marquee', 'flag-wave', 'pong', 'snake', 'tetris'];
           if (p.animType && validAnimTypes.includes(p.animType as AnimType)) {
             stateUpdate.animType = p.animType as AnimType;
           }

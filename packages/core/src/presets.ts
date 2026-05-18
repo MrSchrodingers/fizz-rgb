@@ -478,6 +478,17 @@ export const BUILTIN_PRESETS: Preset[] = [
       animSpeed: 0.5,
     },
   },
+  {
+    id: 'game-tetris',
+    name: 'Tetris',
+    description: 'Tetris sideways — peças entram pela direita, linhas verticais somem',
+    category: 'game',
+    pattern: {
+      keys: {},
+      animType: 'tetris',
+      animSpeed: 0.5,
+    },
+  },
 ];
 
 export function getPresetById(id: string): Preset | undefined {
