@@ -9,8 +9,9 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "tsc -b",
-    "lint": "eslint . --ext .ts",
+    "build": "tsc -b && npm run copy-assets",
+    "copy-assets": "mkdir -p packages/core/dist/templates && cp packages/core/src/templates/*.json packages/core/dist/templates/ && chmod +x packages/cli/dist/index.js packages/daemon/dist/index.js",
+    "lint": "eslint . --ext .ts,.tsx",
     "format": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest"
