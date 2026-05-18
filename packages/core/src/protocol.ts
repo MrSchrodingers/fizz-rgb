@@ -1,98 +1,11 @@
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+// Renderer-safe protocol types and constants. The actual encoder (which loads
+// captured templates from disk via fs) lives in `./protocol-encoder.ts` and
+// MUST NOT be re-exported from the package index — the Electron renderer
+// imports the index and cannot resolve node:fs.
 import type { FirmwareEffectName, FirmwareEffectParams } from './ipc.js';
-import { parseHex } from './color.js';
 
 export type ProtocolFrame = Buffer;
-export const PACKET_SIZE = 64; // legacy constant — real block size is 1032 (data) or 6 (handshake)
+export const PACKET_SIZE = 64;
 export function emptyPacket(): Buffer { return Buffer.alloc(PACKET_SIZE); }
 
-// === Template loading ===
-// Templates are byte-for-byte captures of one "first burst" per effect, taken
-// from the OpenRGB issue #2172 captures. We patch color and speed/brightness
-// bytes at known offsets and re-emit the whole burst.
-
-const TEMPLATE_DIR = join(dirname(fileURLToPath(import.meta.url)), 'templates');
-
-function loadTemplate(name: FirmwareEffectName): Buffer[] {
-  const path = join(TEMPLATE_DIR, `${name}.json`);
-  const raw = readFileSync(path, 'utf8');
-  const arrays = JSON.parse(raw) as number[][];
-  return arrays.map((a) => Buffer.from(a));
-}
-
-const TEMPLATES: Record<FirmwareEffectName, Buffer[]> = {
-  'fw-static': loadTemplate('fw-static'),
-  'fw-rainbow': loadTemplate('fw-rainbow'),
-  'fw-snake': loadTemplate('fw-snake'),
-  'fw-sine-wave': loadTemplate('fw-sine-wave'),
-  'fw-star-twinkle': loadTemplate('fw-star-twinkle'),
-  'fw-rainbow-blossom': loadTemplate('fw-rainbow-blossom'),
-  'fw-waterfall': loadTemplate('fw-waterfall'),
-  'fw-wheel': loadTemplate('fw-wheel'),
-};
-
-// Patch offsets within the data blocks
-const COLOR_BLOCK_INDEX = 1;        // block #1 (packet[1])
-const COLOR_OFFSET_R = 29;
-const COLOR_OFFSET_G = 30;
-const COLOR_OFFSET_B = 31;
-
-const MODE_BLOCK_INDEX = 4;          // block #4 (packet[4])
-const SPEED_BRIGHTNESS_OFFSETS = [69, 71];
-
-function clampNibble(n: number): number {
-  if (!Number.isFinite(n)) return 0;
-  return Math.max(0, Math.min(15, Math.round(n)));
-}
-
-/**
- * Build the HID feature report sequence for a firmware effect.
- *
- * Returns 5 buffers (handshake + 4 data blocks) ready to send via
- * HidController.sendFrames.
- *
- * Patches the captured template with caller-supplied color and
- * speed/brightness; otherwise reuses the template bytes verbatim.
- */
-export function encodeFirmwareEffect(
-  name: FirmwareEffectName,
-  params: FirmwareEffectParams,
-): ProtocolFrame[] {
-  // Deep copy so we don't mutate the cached template
-  const template = TEMPLATES[name];
-  if (!template) throw new Error(`unknown firmware effect: ${name}`);
-  const frames = template.map((b) => Buffer.from(b));
-
-  // Patch color (if provided) into block #1
-  if (params.color !== undefined) {
-    const rgb = parseHex(params.color);
-    const block1 = frames[COLOR_BLOCK_INDEX]!;
-    block1[COLOR_OFFSET_R] = rgb.r;
-    block1[COLOR_OFFSET_G] = rgb.g;
-    block1[COLOR_OFFSET_B] = rgb.b;
-  }
-
-  // Patch speed × brightness nibbles (if provided) into block #4
-  const speed = params.speed;
-  const brightness = params.brightness;
-  if (speed !== undefined || brightness !== undefined) {
-    const block4 = frames[MODE_BLOCK_INDEX]!;
-    // Decode current value to preserve unspecified nibble
-    const current = block4[SPEED_BRIGHTNESS_OFFSETS[0]!]!;
-    const curSpeed = (current >> 4) & 0x0f;
-    const curBright = current & 0x0f;
-    const newSpeed = speed !== undefined ? clampNibble(speed) : curSpeed;
-    const newBright = brightness !== undefined ? clampNibble(brightness) : curBright;
-    const packed = ((newSpeed & 0x0f) << 4) | (newBright & 0x0f);
-    for (const off of SPEED_BRIGHTNESS_OFFSETS) {
-      block4[off] = packed;
-    }
-  }
-
-  return frames;
-}
-
-// Re-export the names so consumers can `import { FirmwareEffectName } from '@fizz/core/protocol'`
 export type { FirmwareEffectName, FirmwareEffectParams };
