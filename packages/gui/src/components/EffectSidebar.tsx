@@ -44,9 +44,12 @@ export function EffectSidebar() {
           Solid Color
         </button>
 
-        <h2 className="text-xs uppercase tracking-wider text-zinc-500 px-2 mt-4 mb-2">
+        <h2 className="text-xs uppercase tracking-wider text-zinc-500 px-2 mt-4 mb-1">
           Firmware Effects
         </h2>
+        <p className="text-[10px] text-emerald-400/70 px-2 mb-2 leading-tight">
+          ✓ Salvos no teclado — persistem sem PC
+        </p>
         {EFFECT_ORDER.map((name) => {
           const meta = EFFECT_META[name];
           const active = selected === name;
