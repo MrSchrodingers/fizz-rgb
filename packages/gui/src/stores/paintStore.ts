@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { K617_LAYOUT } from '@fizz/core';
 
-export type AnimType = 'solid' | 'blink' | 'chase' | 'wave' | 'typewriter' | 'marquee' | 'flag-wave';
+export type AnimType = 'solid' | 'blink' | 'chase' | 'wave' | 'typewriter' | 'marquee' | 'flag-wave' | 'pong' | 'snake';
 
 function textCharToKeyName(ch: string): string | null {
   if (ch === ' ') return 'Space';

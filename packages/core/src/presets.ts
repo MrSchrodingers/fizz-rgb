@@ -456,6 +456,28 @@ export const BUILTIN_PRESETS: Preset[] = [
       animSpeed: 0.5,
     },
   },
+  {
+    id: 'game-pong',
+    name: 'Pong',
+    description: 'Pong rodando de verdade — paddles e bola correndo no teclado',
+    category: 'game',
+    pattern: {
+      keys: {},
+      animType: 'pong',
+      animSpeed: 0.5,
+    },
+  },
+  {
+    id: 'game-snake',
+    name: 'Snake',
+    description: 'Cobrinha AI come comida pulsante e cresce',
+    category: 'game',
+    pattern: {
+      keys: {},
+      animType: 'snake',
+      animSpeed: 0.5,
+    },
+  },
 ];
 
 export function getPresetById(id: string): Preset | undefined {
