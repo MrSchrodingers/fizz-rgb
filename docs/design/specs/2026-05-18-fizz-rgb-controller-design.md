@@ -111,7 +111,7 @@ fizz-rgb/
 │           ├── stores/              # Zustand
 │           └── three/               # geometria/material
 ├── docs/
-│   ├── superpowers/specs/
+│   ├── design/specs/
 │   ├── reverse-engineering/         # capturas, protocolo, notas
 │   └── adr/
 └── tools/                           # capture.sh, decode-frame.ts

@@ -1,6 +1,6 @@
 # Fizz RGB Phase 1 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For implementers:** This plan uses checkbox (`- [ ]`) syntax for step-by-step tracking. Tackle one task at a time, run the build/tests after each, and commit with a Conventional Commits message.
 
 **Goal:** Deliver a working Linux daemon + CLI that controls the Redragon Fizz K617 keyboard's built-in firmware RGB effects (rainbow, snake, waterfall, etc.) via reverse-engineered USB HID protocol, with `fizz effect run fw-rainbow` ending up changing real LEDs on the keyboard.
 
@@ -3660,7 +3660,7 @@ Fills the gap left by the official Windows-only Redragon software.
 ## Status
 
 **Phase 1** — daemon, CLI, and firmware-native effects working. GUI (Phase 2)
-and per-key custom effects (Phase 3) coming later. See `docs/superpowers/specs/`
+and per-key custom effects (Phase 3) coming later. See `docs/design/specs/`
 for the full design.
 
 ## Requirements
