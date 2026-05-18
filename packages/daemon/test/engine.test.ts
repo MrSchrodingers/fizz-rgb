@@ -48,3 +48,64 @@ describe('EffectEngine', () => {
       .rejects.toThrow(/not connected/);
   });
 });
+
+describe('EffectEngine reconnect persistence', () => {
+  let hid: FakeHidController;
+  let engine: EffectEngine;
+
+  beforeEach(() => {
+    hid = new FakeHidController();
+    engine = new EffectEngine(hid);
+  });
+
+  it('restores last per-key state on reconnect', async () => {
+    await engine.setPerKey(new Map([[0, { r: 255, g: 0, b: 0 }]]));
+    hid.sentFrames.length = 0; // clear log
+    hid.simulateDisconnect();
+    hid.simulateReconnect();
+    // Give async restore a tick
+    await new Promise((r) => setTimeout(r, 50));
+    expect(hid.sentFrames.length).toBeGreaterThan(0); // some frame sent on restore
+  });
+
+  it('restores last pattern stream on reconnect', async () => {
+    await engine.startPattern({
+      keys: { 0: '#ff0000' },
+      animType: 'blink',
+      animSpeed: 0.5,
+    });
+    hid.sentFrames.length = 0;
+    hid.simulateDisconnect();
+    hid.simulateReconnect();
+    await new Promise((r) => setTimeout(r, 100));
+    // Stream resumed → at least one frame sent within 100ms (the loop runs at 30fps)
+    expect(hid.sentFrames.length).toBeGreaterThan(0);
+    // Clean up
+    engine.stopStreamLoop();
+    engine.stop();
+  });
+
+  it('does not restore state after stopPattern', async () => {
+    await engine.startPattern({
+      keys: { 0: '#ff0000' },
+      animType: 'blink',
+      animSpeed: 0.5,
+    });
+    await engine.stopPattern();
+    hid.sentFrames.length = 0;
+    hid.simulateDisconnect();
+    hid.simulateReconnect();
+    await new Promise((r) => setTimeout(r, 50));
+    // Only reconnect itself — no restore frames
+    expect(hid.sentFrames.length).toBe(0);
+  });
+
+  it('restores named effect on reconnect', async () => {
+    await engine.runEffect('fw-static', { color: '#00ff00' });
+    hid.sentFrames.length = 0;
+    hid.simulateDisconnect();
+    hid.simulateReconnect();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(hid.sentFrames.length).toBeGreaterThan(0);
+  });
+});

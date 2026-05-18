@@ -77,7 +77,13 @@ export class NodeHidController implements HidController {
 
   async sendFeatureReport(frame: ProtocolFrame): Promise<void> {
     if (!this.device) throw new Error('device not connected');
-    this.device.sendFeatureReport(Array.from(frame));
+    try {
+      this.device.sendFeatureReport(Array.from(frame));
+    } catch (err) {
+      log.warn({ err: (err as Error).message }, 'sendFeatureReport failed — assuming device disconnected, scheduling reconnect');
+      this.handleDisconnect();
+      throw err;
+    }
   }
 
   async sendFrames(frames: ProtocolFrame[]): Promise<void> {
