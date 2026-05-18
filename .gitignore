@@ -1,0 +1,23 @@
+node_modules/
+dist/
+build/
+out/
+.cache/
+.vite/
+*.log
+.DS_Store
+.env
+.env.local
+
+# Captures e dumps de RE — manter local
+docs/reverse-engineering/captures/
+docs/reverse-engineering/firmware-dumps/
+*.pcapng
+*.pcap
+*.bin
+
+# Editor
+.idea/
+.vscode/*
+!.vscode/settings.example.json
+!.vscode/extensions.json
