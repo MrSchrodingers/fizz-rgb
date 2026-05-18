@@ -7,6 +7,7 @@ import {
   type FirmwareEffectName,
   type FirmwareEffectParams,
   type Profile,
+  parseHex,
 } from '@fizz/core';
 import type { EffectEngine } from './engine.js';
 import type { ProfileManager } from './profiles.js';
@@ -159,6 +160,15 @@ export class IpcServer {
       case 'daemon.shutdown':
         setTimeout(() => process.exit(0), 50);
         return { ok: true };
+      case 'perkey.set': {
+        const p = params as { colors: Record<string, string> };
+        const colorMap = new Map<number, { r: number; g: number; b: number }>();
+        for (const [k, hex] of Object.entries(p.colors)) {
+          colorMap.set(Number(k), parseHex(hex));
+        }
+        await engine.setPerKey(colorMap);
+        return { ok: true };
+      }
     }
   }
 

@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { encodeFirmwareEffect } from '../src/protocol-encoder.js';
+import { encodeFirmwareEffect, encodePerKeyFrame } from '../src/protocol-encoder.js';
+import { keyByName } from '../src/layout.js';
 
 const FIXTURES = join(import.meta.dirname, 'fixtures');
 
@@ -129,5 +130,42 @@ describe('encodeFirmwareEffect — immutability of templates', () => {
     encodeFirmwareEffect('fw-rainbow', { color: '#aabbcc' });
     const after = encodeFirmwareEffect('fw-rainbow', {})[1]![29]!;
     expect(after).toBe(before); // cached template not mutated
+  });
+});
+
+describe('encodePerKeyFrame — Sinodragon per-key protocol', () => {
+  it('produces a 382-byte buffer with correct header', () => {
+    const frame = encodePerKeyFrame(new Map());
+    expect(frame.length).toBe(382);
+    expect(frame[0]).toBe(0x08);
+    expect(frame[1]).toBe(0x0a);
+    expect(frame[2]).toBe(0x7a);
+    expect(frame[3]).toBe(0x01);
+  });
+
+  it('places J color at byte offset 4 + 45*3 = 139', () => {
+    const j = keyByName('J')!;
+    const frame = encodePerKeyFrame(new Map([[j.ledIndex, { r: 0, g: 0, b: 255 }]]));
+    expect(frame[4 + 45 * 3]).toBe(0);       // R
+    expect(frame[4 + 45 * 3 + 1]).toBe(0);   // G
+    expect(frame[4 + 45 * 3 + 2]).toBe(255); // B
+  });
+
+  it('places Space color at byte offset 4 + 35*3 = 109 (green channel)', () => {
+    const space = keyByName('Space')!;
+    const frame = encodePerKeyFrame(new Map([[space.ledIndex, { r: 0, g: 255, b: 0 }]]));
+    expect(frame[4 + 35 * 3 + 1]).toBe(255);
+  });
+
+  it('places Escape color at byte offset 4 + 0*3 = 4', () => {
+    const esc = keyByName('Escape')!;
+    const frame = encodePerKeyFrame(new Map([[esc.ledIndex, { r: 255, g: 0, b: 0 }]]));
+    expect(frame[4]).toBe(255);
+  });
+
+  it('unmapped keys produce zero body bytes', () => {
+    const frame = encodePerKeyFrame(new Map());
+    // Header bytes 0-3, then all 0
+    for (let i = 4; i < frame.length; i++) expect(frame[i]).toBe(0);
   });
 });
