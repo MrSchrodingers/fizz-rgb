@@ -35,6 +35,44 @@ export function PaintToolbar({ onSavePattern }: Props) {
   const setAnimType = usePaintStore((s) => s.setAnimType);
   const setAnimSpeed = usePaintStore((s) => s.setAnimSpeed);
 
+  const handleAnimTypeChange = async (newType: AnimType) => {
+    setAnimType(newType);
+    if (keyColors.size === 0 || !window.fizz) return;
+    const colors: Record<string, string> = {};
+    keyColors.forEach((hex, idx) => { colors[String(idx)] = hex; });
+    try {
+      if (newType === 'solid') {
+        await window.fizz.perkeySet(colors);
+      } else {
+        await window.fizz.perkeyStartPattern({
+          keys: colors,
+          animType: newType,
+          animSpeed,
+          ...(lastSequence.length > 0 ? { sequence: lastSequence } : {}),
+        });
+      }
+    } catch (err) {
+      console.warn('animType change failed', err);
+    }
+  };
+
+  const handleSpeedChange = async (newSpeed: number) => {
+    setAnimSpeed(newSpeed);
+    if (keyColors.size === 0 || !window.fizz || animType === 'solid') return;
+    const colors: Record<string, string> = {};
+    keyColors.forEach((hex, idx) => { colors[String(idx)] = hex; });
+    try {
+      await window.fizz.perkeyStartPattern({
+        keys: colors,
+        animType,
+        animSpeed: newSpeed,
+        ...(lastSequence.length > 0 ? { sequence: lastSequence } : {}),
+      });
+    } catch (err) {
+      console.warn('speed change failed', err);
+    }
+  };
+
   const [pickerOpen, setPickerOpen] = useState(false);
   const [text, setText] = useState('');
   const [streaming, setStreaming] = useState(false);
@@ -236,11 +274,11 @@ export function PaintToolbar({ onSavePattern }: Props) {
       {/* Animation row */}
       <div className="flex items-center gap-3 px-4 py-2 bg-zinc-950/40 text-xs border-t border-zinc-900">
         <span className="text-zinc-500 uppercase tracking-wider">Pattern animation:</span>
-        {(['solid', 'blink', 'chase', 'wave', 'typewriter', 'marquee', 'flag-wave'] as const).map((t: AnimType) => (
+        {(['solid', 'blink', 'chase', 'wave', 'typewriter', 'marquee', 'flag-wave', 'pong', 'snake'] as const).map((t: AnimType) => (
           <button
             key={t}
             type="button"
-            onClick={() => setAnimType(t)}
+            onClick={() => void handleAnimTypeChange(t)}
             className={cn(
               'px-3 py-1 rounded-md transition',
               animType === t ? 'bg-fuchsia-500/20 text-fuchsia-200' : 'text-zinc-400 hover:bg-zinc-800',
@@ -257,7 +295,7 @@ export function PaintToolbar({ onSavePattern }: Props) {
             max={1}
             step={0.05}
             value={animSpeed}
-            onChange={(e) => setAnimSpeed(Number(e.target.value))}
+            onChange={(e) => void handleSpeedChange(Number(e.target.value))}
             className="accent-fuchsia-500"
           />
         </div>
