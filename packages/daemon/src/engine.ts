@@ -1,4 +1,4 @@
-import { encodeFirmwareEffect } from '@fizz/core';
+import { encodeFirmwareEffect } from '@fizz/core/encoder';
 import type { FirmwareEffectName, FirmwareEffectParams } from '@fizz/core';
 import type { HidController } from './hid.js';
 import { log } from './log.js';

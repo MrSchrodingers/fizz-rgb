@@ -18,18 +18,47 @@ async function createWindow() {
       preload: join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
+      // sandbox:false lets the preload script use ESM (vite bundles it as ESM
+      // since the workspace is "type": "module"). Sandboxed preloads must be
+      // CJS which fights the rest of the toolchain. Trade-off: weaker
+      // sandboxing of renderer (no extra OS-level isolation beyond Chromium's),
+      // which is acceptable for a local RGB controller talking to localhost.
+      sandbox: false,
     },
   });
 
-  // In dev, VITE_DEV_SERVER_URL is set by vite-plugin-electron
-  const devUrl = process.env['VITE_DEV_SERVER_URL'];
+  // In dev, VITE_DEV_SERVER_URL is set by vite-plugin-electron. Fall back to
+  // hardcoded dev URL if the env var didn't propagate (some plugin versions
+  // don't export it reliably). Production build: loadFile of bundled dist.
+  const isDev = !app.isPackaged;
+  const devUrl = process.env['VITE_DEV_SERVER_URL'] ?? (isDev ? 'http://localhost:5173' : undefined);
+  console.log('[fizzd-gui] dev mode:', isDev, 'loading URL:', devUrl ?? 'dist/index.html');
+
   if (devUrl) {
-    await mainWindow.loadURL(devUrl);
-    mainWindow.webContents.openDevTools({ mode: 'detach' });
+    try {
+      await mainWindow.loadURL(devUrl);
+      mainWindow.webContents.openDevTools({ mode: 'right' });
+    } catch (err) {
+      console.error('[fizzd-gui] loadURL failed:', (err as Error).message);
+    }
   } else {
     await mainWindow.loadFile(join(__dirname, '..', 'dist', 'index.html'));
   }
+
+  // Always log if renderer fails to load
+  mainWindow.webContents.on('did-fail-load', (_e, errorCode, errorDesc, validatedURL) => {
+    console.error('[fizzd-gui] did-fail-load:', errorCode, errorDesc, validatedURL);
+  });
+  mainWindow.webContents.on('console-message', (event) => {
+    console.log(`[renderer ${event.level}]`, event.message, event.sourceId ? `@${event.sourceId}:${event.lineNumber}` : '');
+  });
+  mainWindow.webContents.on('render-process-gone', (_e, details) => {
+    console.error('[fizzd-gui] render-process-gone:', details);
+  });
+  // Capture unhandled errors from the renderer (would otherwise be silent)
+  mainWindow.webContents.on('preload-error', (_e, preloadPath, error) => {
+    console.error('[fizzd-gui] preload-error:', preloadPath, error);
+  });
 }
 
 // === IPC handlers — forward to daemon ===

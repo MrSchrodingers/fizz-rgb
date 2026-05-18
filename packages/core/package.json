@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./encoder": {
+      "types": "./dist/protocol-encoder.d.ts",
+      "import": "./dist/protocol-encoder.js"
     }
   },
   "files": ["dist", "src/templates"],

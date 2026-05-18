@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { encodeFirmwareEffect } from '../src/protocol.js';
+import { encodeFirmwareEffect } from '../src/protocol-encoder.js';
 
 const FIXTURES = join(import.meta.dirname, 'fixtures');
 
