@@ -8,13 +8,13 @@ SUBSYSTEM=="hidraw", ATTRS{idVendor}=="258a", ATTRS{idProduct}=="0049", MODE="06
 SUBSYSTEM=="usb",    ATTRS{idVendor}=="258a", ATTRS{idProduct}=="0049", MODE="0660", GROUP="plugdev", TAG+="uaccess"
 '
 
-if [[ -f "$RULE_PATH" ]] && [[ "$(sudo cat "$RULE_PATH")" == "$RULE_CONTENT" ]]; then
+if [[ -f "$RULE_PATH" ]] && [[ "$(<"$RULE_PATH")" == "$RULE_CONTENT" ]]; then
   echo "udev rule already installed and up to date."
   exit 0
 fi
 
 echo "Installing udev rule to $RULE_PATH (requires sudo)..."
-echo "$RULE_CONTENT" | sudo tee "$RULE_PATH" > /dev/null
+printf '%s' "$RULE_CONTENT" | sudo tee "$RULE_PATH" > /dev/null
 sudo udevadm control --reload-rules
 sudo udevadm trigger --subsystem-match=hidraw --action=change
 echo "Done. Unplug and replug your keyboard for permissions to apply."
