@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from 'electron';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { socketPath } from '@fizz/core';
@@ -7,6 +7,8 @@ import { DaemonClient } from './daemon-client.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 let mainWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
+let isQuitting = false;
 const daemon = new DaemonClient(socketPath());
 
 async function createWindow() {
@@ -44,6 +46,14 @@ async function createWindow() {
   } else {
     await mainWindow.loadFile(join(__dirname, '..', 'dist', 'index.html'));
   }
+
+  // Hide to tray on close instead of quitting
+  mainWindow.on('close', (e) => {
+    if (!isQuitting) {
+      e.preventDefault();
+      mainWindow?.hide();
+    }
+  });
 
   // Always log if renderer fails to load
   mainWindow.webContents.on('did-fail-load', (_e, errorCode, errorDesc, validatedURL) => {
@@ -94,16 +104,53 @@ daemon.on('device.changed', (params) => {
   mainWindow?.webContents.send('fizz:deviceChanged', params);
 });
 
+function setupTray() {
+  // Minimal 16x16 magenta PNG for the tray icon — replace with a real asset later.
+  const iconBuffer = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAOUlEQVR42mNk+M9Q/x8DjMzAxIDOZmJk+M+ABgZ1AyMTw1AaGRkY/jMy/v//n4GBgYGRkRHbAACWAQqp1ZGqGAAAAABJRU5ErkJggg==',
+    'base64',
+  );
+
+  let icon: Electron.NativeImage;
+  try {
+    icon = nativeImage.createFromBuffer(iconBuffer);
+  } catch {
+    // Fallback: empty image — tray still works on Linux via tooltip+menu
+    icon = nativeImage.createEmpty();
+  }
+
+  tray = new Tray(icon);
+  tray.setToolTip('Fizz RGB');
+
+  const contextMenu = Menu.buildFromTemplate([
+    { label: 'Mostrar Fizz', click: () => { mainWindow?.show(); mainWindow?.focus(); } },
+    { label: 'Parar efeito', click: () => { daemon.call('effect.stop', {}).catch(() => {}); } },
+    { label: 'Apagar teclas (perkey off)', click: () => { daemon.call('perkey.stopPattern', {}).catch(() => {}); } },
+    { type: 'separator' },
+    { label: 'Sair', click: () => { isQuitting = true; app.quit(); } },
+  ]);
+  tray.setContextMenu(contextMenu);
+
+  tray.on('click', () => {
+    if (mainWindow?.isVisible()) {
+      mainWindow.hide();
+    } else {
+      mainWindow?.show();
+      mainWindow?.focus();
+    }
+  });
+}
+
 app.whenReady().then(() => {
   createWindow();
+  setupTray();
   daemon.connect().catch((err: Error) => console.error('Initial daemon connection failed:', err.message));
 });
 
+// Keep app running in tray when all windows are closed
+// (window-all-closed fires but we do not quit — app stays alive in the tray)
 app.on('window-all-closed', () => {
-  // For scaffolding phase: quit on close; tray background mode lands in Batch 4
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  // intentionally no-op: app keeps running in tray
 });
 
 app.on('before-quit', () => {
