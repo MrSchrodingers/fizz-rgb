@@ -80,32 +80,33 @@ export default function App() {
     return () => { unsubEffect(); unsubDevice(); };
   }, [setCurrent, setDeviceStatus]);
 
-  // Auto-save current paint state to localStorage (debounced 500ms)
-  const currentSnapshot = usePaintStore((s) => ({
-    keyColors: s.keyColors,
-    animType: s.animType,
-    animSpeed: s.animSpeed,
-    lastSequence: s.lastSequence,
-    mode: s.mode,
-  }));
+  // Auto-save current paint state to localStorage (debounced 500ms).
+  // IMPORTANT: subscribe to atomic fields individually — a Zustand selector
+  // returning a new object on every call ({...}) causes an infinite re-render
+  // loop because each render gets a different reference.
+  const autoSaveKeyColors = usePaintStore((s) => s.keyColors);
+  const autoSaveAnimType = usePaintStore((s) => s.animType);
+  const autoSaveAnimSpeed = usePaintStore((s) => s.animSpeed);
+  const autoSaveLastSequence = usePaintStore((s) => s.lastSequence);
+  const autoSaveMode = usePaintStore((s) => s.mode);
 
   useEffect(() => {
-    if (currentSnapshot.keyColors.size === 0) return;
+    if (autoSaveKeyColors.size === 0) return;
     const t = setTimeout(() => {
       try {
         const data = {
-          keys: Object.fromEntries(currentSnapshot.keyColors),
-          animType: currentSnapshot.animType,
-          animSpeed: currentSnapshot.animSpeed,
-          sequence: currentSnapshot.lastSequence,
-          mode: currentSnapshot.mode,
+          keys: Object.fromEntries(autoSaveKeyColors),
+          animType: autoSaveAnimType,
+          animSpeed: autoSaveAnimSpeed,
+          sequence: autoSaveLastSequence,
+          mode: autoSaveMode,
           savedAt: Date.now(),
         };
         localStorage.setItem('fizz-current-state', JSON.stringify(data));
       } catch { /* ignore storage errors */ }
     }, 500);
     return () => clearTimeout(t);
-  }, [currentSnapshot]);
+  }, [autoSaveKeyColors, autoSaveAnimType, autoSaveAnimSpeed, autoSaveLastSequence, autoSaveMode]);
 
   // On boot: restore last auto-saved state
   useEffect(() => {
