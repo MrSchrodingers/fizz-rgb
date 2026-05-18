@@ -1,24 +1,6 @@
-import type { Color } from './color.ts';
+import type { FirmwareEffectName, FirmwareEffectParams } from './ipc.js';
 
 export type ProtocolFrame = Buffer;
-
-export type FirmwareEffectName =
-  | 'fw-static'
-  | 'fw-rainbow'
-  | 'fw-snake'
-  | 'fw-sine-wave'
-  | 'fw-star-twinkle'
-  | 'fw-rainbow-blossom'
-  | 'fw-waterfall'
-  | 'fw-wheel';
-
-export interface FirmwareEffectParams {
-  speed?: number;
-  brightness?: number;
-  direction?: 'forward' | 'reverse';
-  color?: Color;
-  density?: number;
-}
 
 export const PACKET_SIZE = 64;
 
@@ -27,8 +9,17 @@ export function emptyPacket(): Buffer {
 }
 
 export function encodeFirmwareEffect(
-  _name: FirmwareEffectName,
-  _params: FirmwareEffectParams,
+  name: FirmwareEffectName,
+  params: FirmwareEffectParams,
 ): ProtocolFrame[] {
-  throw new Error('not implemented — see T13');
+  // Stub until T13 has real opcodes from captures.
+  // Returns one zero-filled 64-byte packet with byte 0 = 0xFF marker so
+  // downstream code can be wired up and tested for routing without crashing.
+  void name;
+  void params;
+  const p = emptyPacket();
+  p[0] = 0xff;
+  return [p];
 }
+
+export type { FirmwareEffectName, FirmwareEffectParams };
