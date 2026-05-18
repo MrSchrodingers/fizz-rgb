@@ -102,6 +102,13 @@ export const RpcMethods = {
     params: z.object({}).strict(),
     result: z.object({ ok: z.literal(true) }),
   },
+  'perkey.set': {
+    params: z.object({
+      // ledIndex (as string) → #RRGGBB hex color
+      colors: z.record(z.string(), HexColorSchema),
+    }),
+    result: z.object({ ok: z.literal(true) }),
+  },
 } as const;
 
 export type RpcMethodName = keyof typeof RpcMethods;
