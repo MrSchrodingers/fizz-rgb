@@ -7,6 +7,7 @@ import {
   type FirmwareEffectName,
   type FirmwareEffectParams,
   type Profile,
+  type Pattern,
   parseHex,
 } from '@fizz/core';
 import type { EffectEngine } from './engine.js';
@@ -167,6 +168,15 @@ export class IpcServer {
           colorMap.set(Number(k), parseHex(hex));
         }
         await engine.setPerKey(colorMap);
+        return { ok: true };
+      }
+      case 'perkey.startPattern': {
+        const p = params as Pattern;
+        await engine.startPattern(p);
+        return { ok: true };
+      }
+      case 'perkey.stopPattern': {
+        await engine.stopPattern();
         return { ok: true };
       }
     }

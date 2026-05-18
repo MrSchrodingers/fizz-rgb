@@ -49,6 +49,18 @@ export const DeviceStatusSchema = z.object({
 });
 export type DeviceStatus = z.infer<typeof DeviceStatusSchema>;
 
+export const AnimTypeSchema = z.enum(['solid', 'blink', 'chase', 'wave', 'typewriter', 'marquee']);
+
+export const PatternSchema = z.object({
+  keys: z.record(z.string(), HexColorSchema),
+  animType: AnimTypeSchema,
+  animSpeed: z.number().min(0).max(1),
+  sequence: z.array(z.number().int().min(0).max(60)).optional(),
+});
+// IpcPattern is the Zod-validated shape of a Pattern over the wire.
+// The canonical Pattern interface lives in animations.ts.
+export type IpcPattern = z.infer<typeof PatternSchema>;
+
 export const RpcMethods = {
   'device.status': {
     params: z.object({}).strict(),
@@ -107,6 +119,14 @@ export const RpcMethods = {
       // ledIndex (as string) → #RRGGBB hex color
       colors: z.record(z.string(), HexColorSchema),
     }),
+    result: z.object({ ok: z.literal(true) }),
+  },
+  'perkey.startPattern': {
+    params: PatternSchema,
+    result: z.object({ ok: z.literal(true) }),
+  },
+  'perkey.stopPattern': {
+    params: z.object({}).strict(),
     result: z.object({ ok: z.literal(true) }),
   },
 } as const;
