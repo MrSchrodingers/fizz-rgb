@@ -11,6 +11,7 @@ out/
 
 # Captures e dumps de RE — manter local
 docs/reverse-engineering/captures/
+docs/reverse-engineering/extracted/
 docs/reverse-engineering/firmware-dumps/
 *.pcapng
 *.pcap
