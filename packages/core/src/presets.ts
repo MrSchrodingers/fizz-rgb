@@ -489,6 +489,27 @@ export const BUILTIN_PRESETS: Preset[] = [
       animSpeed: 0.5,
     },
   },
+  {
+    id: 'game-life',
+    name: 'Conway Life',
+    description: 'Autômato celular — padrões evoluem e morrem',
+    category: 'game',
+    pattern: { keys: {}, animType: 'life', animSpeed: 0.5 },
+  },
+  {
+    id: 'game-matrix-rain',
+    name: 'Matrix Rain',
+    description: 'Chuva verde caindo do topo — estilo Matrix',
+    category: 'game',
+    pattern: { keys: {}, animType: 'matrix-rain', animSpeed: 0.5 },
+  },
+  {
+    id: 'game-breakout',
+    name: 'Breakout',
+    description: 'Paddle bate bola, quebra tijolos. AI joga sozinho',
+    category: 'game',
+    pattern: { keys: {}, animType: 'breakout', animSpeed: 0.5 },
+  },
 ];
 
 export function getPresetById(id: string): Preset | undefined {
