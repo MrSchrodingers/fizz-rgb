@@ -9,7 +9,8 @@ release/
 *.log
 .DS_Store
 .env
-.env.local
+.env.*
+!.env.example
 
 # Captures e dumps de RE — manter local
 docs/reverse-engineering/captures/
@@ -25,3 +26,18 @@ docs/reverse-engineering/firmware-dumps/
 !.vscode/settings.example.json
 !.vscode/extensions.json
 *.tsbuildinfo
+.handoff/
+
+# OS junk
+Thumbs.db
+.Spotlight-V100
+.Trashes
+
+# Coverage / test artifacts
+coverage/
+*.lcov
+.nyc_output/
+
+# Local override settings
+*.local
+
