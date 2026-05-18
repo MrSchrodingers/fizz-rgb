@@ -11,8 +11,9 @@
       "import": "./dist/index.js"
     }
   },
+  "files": ["dist", "src/templates"],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && mkdir -p dist/templates && cp src/templates/*.json dist/templates/",
     "test": "vitest run"
   },
   "dependencies": {
