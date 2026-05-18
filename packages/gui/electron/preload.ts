@@ -22,6 +22,7 @@ const fizz = {
     ipcRenderer.on('fizz:deviceChanged', wrapped);
     return () => ipcRenderer.off('fizz:deviceChanged', wrapped);
   },
+  perkeySet: (colors: Record<string, string>) => ipcRenderer.invoke('fizz:perkeySet', colors),
 };
 
 contextBridge.exposeInMainWorld('fizz', fizz);

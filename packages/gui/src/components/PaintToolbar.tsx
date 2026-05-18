@@ -1,8 +1,20 @@
 import { useState } from 'react';
-import { Brush, Trash2, MousePointer2, CheckSquare, Save } from 'lucide-react';
+import { Brush, Trash2, MousePointer2, CheckSquare, Save, Zap } from 'lucide-react';
 import { usePaintStore } from '../stores/paintStore.js';
 import { ColorPickerField } from './ColorPickerField.js';
 import type { AnimType } from '../stores/paintStore.js';
+
+/** Reads the current keyColors from the store and pushes them to hardware. */
+async function sendToHardware(colors: Map<number, string>): Promise<void> {
+  if (!window.fizz) return;
+  const record: Record<string, string> = {};
+  colors.forEach((hex, idx) => { record[String(idx)] = hex; });
+  try {
+    await window.fizz.perkeySet(record);
+  } catch (err) {
+    console.warn('perkey send failed', err);
+  }
+}
 
 function cn(...classes: (string | false | undefined)[]) {
   return classes.filter(Boolean).join(' ');
@@ -15,6 +27,7 @@ interface Props {
 export function PaintToolbar({ onSavePattern }: Props) {
   const { selected, brushColor, setBrushColor, paintSelected, selectAll, clearSelection, resetKeys } =
     usePaintStore();
+  const keyColors = usePaintStore((s) => s.keyColors);
   const paintByText = usePaintStore((s) => s.paintByText);
   const animType = usePaintStore((s) => s.animType);
   const animSpeed = usePaintStore((s) => s.animSpeed);
@@ -23,6 +36,27 @@ export function PaintToolbar({ onSavePattern }: Props) {
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [text, setText] = useState('');
+
+  const handlePaintSelectedAndSend = async () => {
+    paintSelected(); // updates store
+    // Read fresh state after update
+    const fresh = usePaintStore.getState().keyColors;
+    await sendToHardware(fresh);
+  };
+
+  const handlePaintTextAndSend = async () => {
+    if (!text.trim()) return;
+    paintByText(text);
+    setText('');
+    const fresh = usePaintStore.getState().keyColors;
+    await sendToHardware(fresh);
+  };
+
+  const handleReset = async () => {
+    resetKeys(); // clears keyColors to empty Map
+    // empty record → encoder sends all-black → keyboard goes dark
+    await sendToHardware(new Map());
+  };
 
   return (
     <div className="border-b border-zinc-800 bg-zinc-950/60">
@@ -61,19 +95,13 @@ export function PaintToolbar({ onSavePattern }: Props) {
           className="px-2 py-1.5 rounded-md bg-zinc-900 border border-zinc-700 text-sm w-40 font-mono"
           onKeyDown={(e) => {
             if (e.key === 'Enter' && text.trim()) {
-              paintByText(text);
-              setText('');
+              void handlePaintTextAndSend();
             }
           }}
         />
         <button
           type="button"
-          onClick={() => {
-            if (text.trim()) {
-              paintByText(text);
-              setText('');
-            }
-          }}
+          onClick={() => void handlePaintTextAndSend()}
           disabled={!text.trim()}
           className="px-3 py-1.5 rounded-md bg-indigo-500/20 hover:bg-indigo-500/30 disabled:opacity-40 text-indigo-200 text-sm"
         >
@@ -82,7 +110,7 @@ export function PaintToolbar({ onSavePattern }: Props) {
 
         <button
           type="button"
-          onClick={paintSelected}
+          onClick={() => void handlePaintSelectedAndSend()}
           disabled={selected.size === 0}
           className="px-3 py-1.5 rounded-md bg-fuchsia-500 hover:bg-fuchsia-400 disabled:bg-zinc-800 disabled:text-zinc-500 text-zinc-950 font-medium text-sm transition"
         >
@@ -109,11 +137,21 @@ export function PaintToolbar({ onSavePattern }: Props) {
 
         <button
           type="button"
-          onClick={resetKeys}
+          onClick={() => void handleReset()}
           className="flex items-center gap-1 px-2 py-1.5 rounded-md hover:bg-red-500/10 hover:text-red-400 text-zinc-400 text-sm"
         >
           <Trash2 className="w-3.5 h-3.5" />
           Reset
+        </button>
+
+        <button
+          type="button"
+          onClick={() => void sendToHardware(keyColors)}
+          className="flex items-center gap-1 px-2 py-1.5 rounded-md hover:bg-cyan-500/10 hover:text-cyan-300 text-zinc-400 text-sm"
+          title="Push current pattern to keyboard LEDs"
+        >
+          <Zap className="w-3.5 h-3.5" />
+          Send to hardware
         </button>
 
         <div className="flex-1" />

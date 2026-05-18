@@ -98,6 +98,13 @@ export default function App() {
           }
         }
         usePaintStore.setState(stateUpdate);
+
+        // Push restored per-key pattern to hardware in real time
+        if (window.fizz) {
+          const record: Record<string, string> = {};
+          next.forEach((hex, idx) => { record[String(idx)] = hex; });
+          try { await window.fizz.perkeySet(record); } catch (err) { console.warn('perkey send failed', err); }
+        }
       }
     } catch {
       // ignore localStorage errors

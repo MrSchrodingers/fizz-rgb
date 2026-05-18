@@ -14,6 +14,7 @@ export interface FizzApi {
   profileDelete(name: string): Promise<void>;
   subscribeEffectChanged(handler: (cur: any) => void): () => void;
   subscribeDeviceChanged(handler: (s: any) => void): () => void;
+  perkeySet(colors: Record<string, string>): Promise<void>;
 }
 
 declare global {
