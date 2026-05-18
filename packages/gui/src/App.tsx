@@ -124,7 +124,7 @@ export default function App() {
       const next = new Map<number, string>(
         Object.entries(data.keys).map(([k, v]) => [Number(k), v]),
       );
-      const validAnimTypes: AnimType[] = ['solid', 'blink', 'chase', 'wave', 'typewriter', 'marquee', 'flag-wave', 'pong', 'snake', 'tetris', 'life', 'matrix-rain', 'breakout'];
+      const validAnimTypes: AnimType[] = ['solid', 'blink', 'chase', 'wave', 'typewriter', 'marquee', 'flag-wave', 'pong', 'snake', 'tetris', 'matrix-rain', 'breakout', 'fireworks', 'dvd', 'heart-rate', 'equalizer', 'rule30'];
       const animType: AnimType = validAnimTypes.includes(data.animType as AnimType)
         ? (data.animType as AnimType)
         : 'solid';
@@ -191,7 +191,7 @@ export default function App() {
         };
         if (isNew) {
           const p = pattern as NewPattern;
-          const validAnimTypes: AnimType[] = ['solid', 'blink', 'chase', 'wave', 'typewriter', 'marquee', 'flag-wave', 'pong', 'snake', 'tetris', 'life', 'matrix-rain', 'breakout'];
+          const validAnimTypes: AnimType[] = ['solid', 'blink', 'chase', 'wave', 'typewriter', 'marquee', 'flag-wave', 'pong', 'snake', 'tetris', 'matrix-rain', 'breakout', 'fireworks', 'dvd', 'heart-rate', 'equalizer', 'rule30'];
           if (p.animType && validAnimTypes.includes(p.animType as AnimType)) {
             stateUpdate.animType = p.animType as AnimType;
           }

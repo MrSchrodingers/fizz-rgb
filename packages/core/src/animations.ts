@@ -1,7 +1,9 @@
 import type { Color } from './color.js';
 import { parseHex } from './color.js';
 
-export type AnimType = 'solid' | 'blink' | 'chase' | 'wave' | 'typewriter' | 'marquee' | 'flag-wave' | 'pong' | 'snake' | 'tetris' | 'life' | 'matrix-rain' | 'breakout';
+export type AnimType = 'solid' | 'blink' | 'chase' | 'wave' | 'typewriter' | 'marquee' | 'flag-wave'
+  | 'pong' | 'snake' | 'tetris' | 'matrix-rain' | 'breakout'
+  | 'fireworks' | 'dvd' | 'heart-rate' | 'equalizer' | 'rule30';
 
 export interface Pattern {
   /** ledIndex (0..60) → hex color. Keys not in the map are "off" (black). */

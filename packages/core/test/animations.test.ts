@@ -110,11 +110,6 @@ describe('computeFrame', () => {
     expect(p2.size).toBe(0);
   });
 
-  it('life animType is valid', () => {
-    const f = computeFrame({ keys: {}, animType: 'life' as AnimType, animSpeed: 0.5 }, 0, 61);
-    expect(f.size).toBe(0); // computeFrame is stateless; game logic is in daemon
-  });
-
   it('matrix-rain animType is valid', () => {
     const f = computeFrame({ keys: {}, animType: 'matrix-rain' as AnimType, animSpeed: 0.5 }, 0, 61);
     expect(f.size).toBe(0);
@@ -122,6 +117,31 @@ describe('computeFrame', () => {
 
   it('breakout animType is valid', () => {
     const f = computeFrame({ keys: {}, animType: 'breakout' as AnimType, animSpeed: 0.5 }, 0, 61);
+    expect(f.size).toBe(0);
+  });
+
+  it('fireworks animType returns empty map from computeFrame (stateless fallback)', () => {
+    const f = computeFrame({ keys: {}, animType: 'fireworks' as AnimType, animSpeed: 0.5 }, 0, 61);
+    expect(f.size).toBe(0);
+  });
+
+  it('dvd animType returns empty map from computeFrame (stateless fallback)', () => {
+    const f = computeFrame({ keys: {}, animType: 'dvd' as AnimType, animSpeed: 0.5 }, 0, 61);
+    expect(f.size).toBe(0);
+  });
+
+  it('heart-rate animType returns empty map from computeFrame (stateless fallback)', () => {
+    const f = computeFrame({ keys: {}, animType: 'heart-rate' as AnimType, animSpeed: 0.5 }, 0, 61);
+    expect(f.size).toBe(0);
+  });
+
+  it('equalizer animType returns empty map from computeFrame (stateless fallback)', () => {
+    const f = computeFrame({ keys: {}, animType: 'equalizer' as AnimType, animSpeed: 0.5 }, 0, 61);
+    expect(f.size).toBe(0);
+  });
+
+  it('rule30 animType returns empty map from computeFrame (stateless fallback)', () => {
+    const f = computeFrame({ keys: {}, animType: 'rule30' as AnimType, animSpeed: 0.5 }, 0, 61);
     expect(f.size).toBe(0);
   });
 });

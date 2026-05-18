@@ -12,7 +12,7 @@ describe('BUILTIN_PRESETS', () => {
   });
 
   it('all non-game presets have non-empty key maps', () => {
-    const gameOnlyAnimTypes = ['pong', 'snake', 'tetris', 'life', 'matrix-rain', 'breakout'];
+    const gameOnlyAnimTypes = ['pong', 'snake', 'tetris', 'matrix-rain', 'breakout', 'fireworks', 'dvd', 'heart-rate', 'equalizer', 'rule30'];
     for (const p of BUILTIN_PRESETS) {
       if (p.category === 'game' && gameOnlyAnimTypes.includes(p.pattern.animType)) continue;
       expect(Object.keys(p.pattern.keys).length).toBeGreaterThan(0);
@@ -94,9 +94,20 @@ describe('BUILTIN_PRESETS', () => {
     expect(p?.pattern.animType).toBe('tetris');
   });
 
-  it('has the 3 new game presets', () => {
-    expect(getPresetById('game-life')?.pattern.animType).toBe('life');
+  it('has the matrix-rain and breakout game presets', () => {
     expect(getPresetById('game-matrix-rain')?.pattern.animType).toBe('matrix-rain');
     expect(getPresetById('game-breakout')?.pattern.animType).toBe('breakout');
+  });
+
+  it('game-life preset is removed', () => {
+    expect(getPresetById('game-life')).toBeUndefined();
+  });
+
+  it('has fireworks/dvd/heart-rate/equalizer/rule30 presets', () => {
+    expect(getPresetById('game-fireworks')?.pattern.animType).toBe('fireworks');
+    expect(getPresetById('game-dvd')?.pattern.animType).toBe('dvd');
+    expect(getPresetById('game-heart-rate')?.pattern.animType).toBe('heart-rate');
+    expect(getPresetById('game-equalizer')?.pattern.animType).toBe('equalizer');
+    expect(getPresetById('game-rule30')?.pattern.animType).toBe('rule30');
   });
 });
