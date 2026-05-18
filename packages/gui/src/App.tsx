@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Header } from './components/Header.js';
 import { EffectSidebar } from './components/EffectSidebar.js';
 import { ProfileSidebar } from './components/ProfileSidebar.js';
@@ -9,6 +9,8 @@ import { Keyboard3D } from './three/Keyboard3D.js';
 import { ConnectionBanner } from './components/ConnectionBanner.js';
 import { PaintToolbar } from './components/PaintToolbar.js';
 import { NamePromptModal } from './components/NamePromptModal.js';
+import { Toast } from './components/Toast.js';
+import { TimelineEditor } from './components/TimelineEditor.js';
 import { useDeviceStore } from './stores/deviceStore.js';
 import { useEffectStore } from './stores/effectStore.js';
 import { useProfileStore } from './stores/profileStore.js';
@@ -39,6 +41,12 @@ export default function App() {
     defaultValue: string;
     onConfirm: (name: string) => void;
   } | null>(null);
+
+  // Toast notification state
+  const [toast, setToast] = useState<{ msg: string; variant: 'success' | 'error' } | null>(null);
+  const showToast = useCallback((msg: string, variant: 'success' | 'error' = 'success') => {
+    setToast({ msg, variant });
+  }, []);
 
   // Helper: show the name prompt modal and invoke action on confirm
   function promptForName(
@@ -220,19 +228,27 @@ export default function App() {
       `${selected}-${Date.now().toString().slice(-4)}`,
       async (name) => {
         if (!window.fizz) return;
-        if (selected === 'solid-color') {
-          await window.fizz.profileSave(name, {
-            name,
-            effect: { name: 'fw-static', params: { color: solidColor } },
-          });
-        } else {
-          await window.fizz.profileSave(name, {
-            name,
-            effect: { name: selected, params: draft },
-          });
+        console.log('[saveProfile] attempting:', name);
+        try {
+          if (selected === 'solid-color') {
+            await window.fizz.profileSave(name, {
+              name,
+              effect: { name: 'fw-static', params: { color: solidColor } },
+            });
+          } else {
+            await window.fizz.profileSave(name, {
+              name,
+              effect: { name: selected, params: draft },
+            });
+          }
+          const updated = await window.fizz.profileList();
+          setProfiles(updated);
+          console.log('[saveProfile] success:', updated.length, 'profiles');
+          showToast(`Perfil "${name}" salvo`, 'success');
+        } catch (err) {
+          console.error('[saveProfile] error:', err);
+          showToast(`Erro ao salvar: ${(err as Error).message}`, 'error');
         }
-        const updated = await window.fizz.profileList();
-        setProfiles(updated);
       },
     );
   }
@@ -257,37 +273,45 @@ export default function App() {
       `pattern-${Date.now().toString().slice(-4)}`,
       async (name) => {
         if (!window.fizz) return;
-        // Compute average color for hardware fallback
-        let r = 0, g = 0, b = 0;
-        colors.forEach((hex) => {
-          const n = parseInt(hex.replace('#', ''), 16);
-          r += (n >> 16) & 0xff;
-          g += (n >> 8) & 0xff;
-          b += n & 0xff;
-        });
-        const c = colors.size;
-        const avgHex =
-          '#' +
-          ((Math.round(r / c) << 16) | (Math.round(g / c) << 8) | Math.round(b / c))
-            .toString(16)
-            .padStart(6, '0');
+        console.log('[savePattern] attempting:', name);
+        try {
+          // Compute average color for hardware fallback
+          let r = 0, g = 0, b = 0;
+          colors.forEach((hex) => {
+            const n = parseInt(hex.replace('#', ''), 16);
+            r += (n >> 16) & 0xff;
+            g += (n >> 8) & 0xff;
+            b += n & 0xff;
+          });
+          const c = colors.size;
+          const avgHex =
+            '#' +
+            ((Math.round(r / c) << 16) | (Math.round(g / c) << 8) | Math.round(b / c))
+              .toString(16)
+              .padStart(6, '0');
 
-        await window.fizz.profileSave(name, {
-          name,
-          effect: { name: 'fw-static', params: { color: avgHex } },
-        });
+          await window.fizz.profileSave(name, {
+            name,
+            effect: { name: 'fw-static', params: { color: avgHex } },
+          });
 
-        // Persist per-key pattern in localStorage (new shape includes animType + animSpeed)
-        const patterns = JSON.parse(localStorage.getItem('fizz-patterns') ?? '{}') as Record<string, unknown>;
-        patterns[name] = {
-          keys: Object.fromEntries(Array.from(colors.entries()).map(([k, v]) => [String(k), v])),
-          animType: paintAnimType,
-          animSpeed: paintAnimSpeed,
-        };
-        localStorage.setItem('fizz-patterns', JSON.stringify(patterns));
+          // Persist per-key pattern in localStorage (new shape includes animType + animSpeed)
+          const patterns = JSON.parse(localStorage.getItem('fizz-patterns') ?? '{}') as Record<string, unknown>;
+          patterns[name] = {
+            keys: Object.fromEntries(Array.from(colors.entries()).map(([k, v]) => [String(k), v])),
+            animType: paintAnimType,
+            animSpeed: paintAnimSpeed,
+          };
+          localStorage.setItem('fizz-patterns', JSON.stringify(patterns));
 
-        const updated = await window.fizz.profileList();
-        setProfiles(updated);
+          const updated = await window.fizz.profileList();
+          setProfiles(updated);
+          console.log('[savePattern] success:', updated.length, 'profiles');
+          showToast(`Padrão "${name}" salvo`, 'success');
+        } catch (err) {
+          console.error('[savePattern] error:', err);
+          showToast(`Erro ao salvar padrão: ${(err as Error).message}`, 'error');
+        }
       },
     );
   }
@@ -435,12 +459,20 @@ export default function App() {
           <ParametersPanel onApply={handleApply} />
         )}
       </div>
+      {paintMode === 'paint' && <TimelineEditor />}
       {namePrompt && (
         <NamePromptModal
           title={namePrompt.title}
           defaultValue={namePrompt.defaultValue}
           onConfirm={namePrompt.onConfirm}
           onCancel={() => setNamePrompt(null)}
+        />
+      )}
+      {toast && (
+        <Toast
+          message={toast.msg}
+          variant={toast.variant}
+          onClose={() => setToast(null)}
         />
       )}
     </div>
