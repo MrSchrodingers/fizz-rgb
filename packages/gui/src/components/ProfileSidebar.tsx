@@ -1,4 +1,4 @@
-import { Plus, Trash2 } from 'lucide-react';
+import { Download, Plus, Trash2, Upload } from 'lucide-react';
 import { useProfileStore } from '../stores/profileStore.js';
 import { cn } from '../lib/classnames.js';
 
@@ -6,10 +6,14 @@ export function ProfileSidebar({
   onActivate,
   onSaveNew,
   onDelete,
+  onExport,
+  onImport,
 }: {
   onActivate: (name: string) => void;
   onSaveNew: () => void;
   onDelete: (name: string) => void;
+  onExport: () => void;
+  onImport: () => void;
 }) {
   const profiles = useProfileStore((s) => s.profiles);
   const active = useProfileStore((s) => s.active);
@@ -55,6 +59,24 @@ export function ProfileSidebar({
         <Plus className="w-4 h-4" />
         Save current as profile
       </button>
+      <div className="flex gap-1 mt-1">
+        <button
+          type="button"
+          onClick={onExport}
+          className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs rounded bg-zinc-800/60 hover:bg-zinc-800 text-zinc-300 transition"
+          title="Export all profiles & patterns to file"
+        >
+          <Download className="w-3 h-3" /> Export
+        </button>
+        <button
+          type="button"
+          onClick={onImport}
+          className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs rounded bg-zinc-800/60 hover:bg-zinc-800 text-zinc-300 transition"
+          title="Import profiles & patterns from file"
+        >
+          <Upload className="w-3 h-3" /> Import
+        </button>
+      </div>
     </aside>
   );
 }

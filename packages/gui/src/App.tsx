@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Header } from './components/Header.js';
 import { EffectSidebar } from './components/EffectSidebar.js';
 import { ProfileSidebar } from './components/ProfileSidebar.js';
@@ -8,12 +8,13 @@ import type { UserPreset } from './components/PresetGallery.js';
 import { Keyboard3D } from './three/Keyboard3D.js';
 import { ConnectionBanner } from './components/ConnectionBanner.js';
 import { PaintToolbar } from './components/PaintToolbar.js';
+import { NamePromptModal } from './components/NamePromptModal.js';
 import { useDeviceStore } from './stores/deviceStore.js';
 import { useEffectStore } from './stores/effectStore.js';
 import { useProfileStore } from './stores/profileStore.js';
 import { usePaintStore } from './stores/paintStore.js';
 import type { AnimType } from './stores/paintStore.js';
-import type { Preset } from '@fizz/core';
+import type { Preset, Profile } from '@fizz/core';
 
 export default function App() {
   const setDeviceStatus = useDeviceStore((s) => s.setStatus);
@@ -24,12 +25,36 @@ export default function App() {
   const setCurrent = useEffectStore((s) => s.setCurrent);
   const setProfiles = useProfileStore((s) => s.setProfiles);
   const setActive = useProfileStore((s) => s.setActive);
+  const profiles = useProfileStore((s) => s.profiles);
 
   const paintMode = usePaintStore((s) => s.mode);
   const paintKeyColors = usePaintStore((s) => s.keyColors);
   const paintAnimType = usePaintStore((s) => s.animType);
   const paintAnimSpeed = usePaintStore((s) => s.animSpeed);
   const setPaintKeyColors = usePaintStore((s) => s.resetKeys);
+
+  // Modal state: null = hidden, otherwise shows the prompt
+  const [namePrompt, setNamePrompt] = useState<{
+    title: string;
+    defaultValue: string;
+    onConfirm: (name: string) => void;
+  } | null>(null);
+
+  // Helper: show the name prompt modal and invoke action on confirm
+  function promptForName(
+    title: string,
+    defaultValue: string,
+    action: (name: string) => Promise<void>,
+  ) {
+    setNamePrompt({
+      title,
+      defaultValue,
+      onConfirm: async (name) => {
+        setNamePrompt(null);
+        await action(name);
+      },
+    });
+  }
 
   // Initial fetch
   useEffect(() => {
@@ -54,6 +79,79 @@ export default function App() {
     });
     return () => { unsubEffect(); unsubDevice(); };
   }, [setCurrent, setDeviceStatus]);
+
+  // Auto-save current paint state to localStorage (debounced 500ms)
+  const currentSnapshot = usePaintStore((s) => ({
+    keyColors: s.keyColors,
+    animType: s.animType,
+    animSpeed: s.animSpeed,
+    lastSequence: s.lastSequence,
+    mode: s.mode,
+  }));
+
+  useEffect(() => {
+    if (currentSnapshot.keyColors.size === 0) return;
+    const t = setTimeout(() => {
+      try {
+        const data = {
+          keys: Object.fromEntries(currentSnapshot.keyColors),
+          animType: currentSnapshot.animType,
+          animSpeed: currentSnapshot.animSpeed,
+          sequence: currentSnapshot.lastSequence,
+          mode: currentSnapshot.mode,
+          savedAt: Date.now(),
+        };
+        localStorage.setItem('fizz-current-state', JSON.stringify(data));
+      } catch { /* ignore storage errors */ }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [currentSnapshot]);
+
+  // On boot: restore last auto-saved state
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('fizz-current-state');
+      if (!raw) return;
+      const data = JSON.parse(raw) as {
+        keys?: Record<string, string>;
+        animType?: string;
+        animSpeed?: number;
+        sequence?: number[];
+        mode?: string;
+      };
+      if (!data.keys || Object.keys(data.keys).length === 0) return;
+      const next = new Map<number, string>(
+        Object.entries(data.keys).map(([k, v]) => [Number(k), v]),
+      );
+      const validAnimTypes: AnimType[] = ['solid', 'blink', 'chase', 'wave', 'typewriter', 'marquee', 'flag-wave', 'pong', 'snake', 'tetris'];
+      const animType: AnimType = validAnimTypes.includes(data.animType as AnimType)
+        ? (data.animType as AnimType)
+        : 'solid';
+      usePaintStore.setState({
+        keyColors: next,
+        animType,
+        animSpeed: data.animSpeed ?? 0.5,
+        lastSequence: data.sequence ?? [],
+        mode: (data.mode === 'paint' || data.mode === 'effect') ? data.mode : 'paint',
+      });
+      // Push to hardware after daemon connects
+      setTimeout(() => {
+        if (!window.fizz) return;
+        const colors: Record<string, string> = {};
+        next.forEach((hex, idx) => { colors[String(idx)] = hex; });
+        if (animType === 'solid') {
+          window.fizz.perkeySet(colors).catch(() => {});
+        } else {
+          window.fizz.perkeyStartPattern({
+            keys: colors,
+            animType,
+            animSpeed: data.animSpeed ?? 0.5,
+            ...(data.sequence && data.sequence.length > 0 ? { sequence: data.sequence } : {}),
+          }).catch(() => {});
+        }
+      }, 1500);
+    } catch { /* ignore */ }
+  }, []); // run once on mount
 
   async function handleApply() {
     if (!window.fizz) return;
@@ -116,21 +214,26 @@ export default function App() {
 
   async function handleSaveProfile() {
     if (!window.fizz) return;
-    const name = window.prompt('Profile name?', `${selected}-${Date.now().toString().slice(-4)}`);
-    if (!name) return;
-    if (selected === 'solid-color') {
-      await window.fizz.profileSave(name, {
-        name,
-        effect: { name: 'fw-static', params: { color: solidColor } },
-      });
-    } else {
-      await window.fizz.profileSave(name, {
-        name,
-        effect: { name: selected, params: draft },
-      });
-    }
-    const updated = await window.fizz.profileList();
-    setProfiles(updated);
+    promptForName(
+      'Nome do perfil',
+      `${selected}-${Date.now().toString().slice(-4)}`,
+      async (name) => {
+        if (!window.fizz) return;
+        if (selected === 'solid-color') {
+          await window.fizz.profileSave(name, {
+            name,
+            effect: { name: 'fw-static', params: { color: solidColor } },
+          });
+        } else {
+          await window.fizz.profileSave(name, {
+            name,
+            effect: { name: selected, params: draft },
+          });
+        }
+        const updated = await window.fizz.profileList();
+        setProfiles(updated);
+      },
+    );
   }
 
   async function handleDeleteProfile(name: string) {
@@ -148,40 +251,44 @@ export default function App() {
       alert('No keys painted yet. Click keys in the 3D view to select, then "Paint selected".');
       return;
     }
-    const name = window.prompt('Pattern name?', `pattern-${Date.now().toString().slice(-4)}`);
-    if (!name) return;
+    promptForName(
+      'Nome do padrão (pattern)',
+      `pattern-${Date.now().toString().slice(-4)}`,
+      async (name) => {
+        if (!window.fizz) return;
+        // Compute average color for hardware fallback
+        let r = 0, g = 0, b = 0;
+        colors.forEach((hex) => {
+          const n = parseInt(hex.replace('#', ''), 16);
+          r += (n >> 16) & 0xff;
+          g += (n >> 8) & 0xff;
+          b += n & 0xff;
+        });
+        const c = colors.size;
+        const avgHex =
+          '#' +
+          ((Math.round(r / c) << 16) | (Math.round(g / c) << 8) | Math.round(b / c))
+            .toString(16)
+            .padStart(6, '0');
 
-    // Compute average color for hardware fallback
-    let r = 0, g = 0, b = 0;
-    colors.forEach((hex) => {
-      const n = parseInt(hex.replace('#', ''), 16);
-      r += (n >> 16) & 0xff;
-      g += (n >> 8) & 0xff;
-      b += n & 0xff;
-    });
-    const c = colors.size;
-    const avgHex =
-      '#' +
-      ((Math.round(r / c) << 16) | (Math.round(g / c) << 8) | Math.round(b / c))
-        .toString(16)
-        .padStart(6, '0');
+        await window.fizz.profileSave(name, {
+          name,
+          effect: { name: 'fw-static', params: { color: avgHex } },
+        });
 
-    await window.fizz.profileSave(name, {
-      name,
-      effect: { name: 'fw-static', params: { color: avgHex } },
-    });
+        // Persist per-key pattern in localStorage (new shape includes animType + animSpeed)
+        const patterns = JSON.parse(localStorage.getItem('fizz-patterns') ?? '{}') as Record<string, unknown>;
+        patterns[name] = {
+          keys: Object.fromEntries(Array.from(colors.entries()).map(([k, v]) => [String(k), v])),
+          animType: paintAnimType,
+          animSpeed: paintAnimSpeed,
+        };
+        localStorage.setItem('fizz-patterns', JSON.stringify(patterns));
 
-    // Persist per-key pattern in localStorage (new shape includes animType + animSpeed)
-    const patterns = JSON.parse(localStorage.getItem('fizz-patterns') ?? '{}') as Record<string, unknown>;
-    patterns[name] = {
-      keys: Object.fromEntries(Array.from(colors.entries()).map(([k, v]) => [String(k), v])),
-      animType: paintAnimType,
-      animSpeed: paintAnimSpeed,
-    };
-    localStorage.setItem('fizz-patterns', JSON.stringify(patterns));
-
-    const updated = await window.fizz.profileList();
-    setProfiles(updated);
+        const updated = await window.fizz.profileList();
+        setProfiles(updated);
+      },
+    );
   }
 
   // Suppress unused warning - setPaintKeyColors is held for future use
@@ -223,6 +330,85 @@ export default function App() {
     }
   }
 
+  // Export all profiles + patterns + presets as a portable JSON file
+  function handleExportProfiles() {
+    const data = {
+      schemaVersion: 1,
+      exportedAt: new Date().toISOString(),
+      profiles,
+      patterns: JSON.parse(localStorage.getItem('fizz-patterns') ?? '{}'),
+      userPresets: JSON.parse(localStorage.getItem('fizz-user-presets') ?? '[]'),
+      currentState: JSON.parse(localStorage.getItem('fizz-current-state') ?? 'null'),
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `fizz-profiles-${new Date().toISOString().slice(0, 10)}.fizzpattern.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // Import profiles + patterns + presets from a portable JSON file
+  function handleImportProfiles() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,.fizzpattern.json,application/json';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text) as {
+          schemaVersion?: number;
+          profiles?: Array<{ name: string; [k: string]: unknown }>;
+          patterns?: Record<string, unknown>;
+          userPresets?: Array<{ id: string; [k: string]: unknown }>;
+        };
+        if (typeof data !== 'object' || data.schemaVersion !== 1) {
+          alert('Arquivo inválido (não é um fizz-pattern v1)');
+          return;
+        }
+        // Import profiles via daemon
+        if (data.profiles && Array.isArray(data.profiles) && window.fizz) {
+          for (const profile of data.profiles) {
+            await window.fizz
+              .profileSave(profile.name, profile as Omit<Profile, 'createdAt'>)
+              .catch((err) => console.warn('profile import skipped', profile.name, err));
+          }
+        }
+        // Merge patterns into localStorage
+        if (data.patterns) {
+          const existing = JSON.parse(localStorage.getItem('fizz-patterns') ?? '{}') as Record<string, unknown>;
+          localStorage.setItem('fizz-patterns', JSON.stringify({ ...existing, ...data.patterns }));
+        }
+        // Merge user presets (skip duplicates by id)
+        if (data.userPresets) {
+          const existing = JSON.parse(localStorage.getItem('fizz-user-presets') ?? '[]') as Array<{ id: string }>;
+          const incoming = data.userPresets.filter(
+            (p) => !existing.some((e) => e.id === p.id),
+          );
+          localStorage.setItem('fizz-user-presets', JSON.stringify([...existing, ...incoming]));
+        }
+        // Refresh profile list from daemon
+        if (window.fizz) {
+          const updated = await window.fizz.profileList();
+          setProfiles(updated);
+        }
+        alert(
+          `Importado: ${data.profiles?.length ?? 0} profiles, ` +
+          `${Object.keys(data.patterns ?? {}).length} patterns, ` +
+          `${data.userPresets?.length ?? 0} user presets`,
+        );
+      } catch (err) {
+        alert(`Falha ao importar: ${(err as Error).message}`);
+      }
+    };
+    input.click();
+  }
+
   return (
     <div className="flex flex-col h-full bg-zinc-950 text-zinc-100">
       <Header />
@@ -234,6 +420,8 @@ export default function App() {
             onActivate={handleProfileActivate}
             onSaveNew={handleSaveProfile}
             onDelete={handleDeleteProfile}
+            onExport={handleExportProfiles}
+            onImport={handleImportProfiles}
           />
         </div>
         <div className="flex-1 flex flex-col overflow-hidden">
@@ -246,6 +434,14 @@ export default function App() {
           <ParametersPanel onApply={handleApply} />
         )}
       </div>
+      {namePrompt && (
+        <NamePromptModal
+          title={namePrompt.title}
+          defaultValue={namePrompt.defaultValue}
+          onConfirm={namePrompt.onConfirm}
+          onCancel={() => setNamePrompt(null)}
+        />
+      )}
     </div>
   );
 }

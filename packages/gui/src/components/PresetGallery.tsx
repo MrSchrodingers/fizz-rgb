@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { BUILTIN_PRESETS, K617_LAYOUT } from '@fizz/core';
 import type { Preset } from '@fizz/core';
 import { usePaintStore } from '../stores/paintStore.js';
+import { NamePromptModal } from './NamePromptModal.js';
 import { Trash2, Plus } from 'lucide-react';
 
 export interface UserPreset {
@@ -39,6 +40,11 @@ export function PresetGallery({
   const [filter, setFilter] = useState<string>('all');
   const [userPresets, setUserPresets] = useState<UserPreset[]>(loadUserPresets);
   const [tintEnabled, setTintEnabled] = useState(false);
+  const [namePrompt, setNamePrompt] = useState<{
+    title: string;
+    defaultValue: string;
+    onConfirm: (name: string) => void;
+  } | null>(null);
 
   const keyColors = usePaintStore((s) => s.keyColors);
   const animType = usePaintStore((s) => s.animType);
@@ -63,30 +69,32 @@ export function PresetGallery({
       alert('Nada pintado pra salvar. Pinta umas teclas primeiro.');
       return;
     }
-    const name = window.prompt(
-      'Nome do preset?',
-      `Custom ${Date.now().toString().slice(-4)}`,
-    );
-    if (!name) return;
-    const keysObj: Record<string, string> = {};
-    keyColors.forEach((hex, idx) => {
-      keysObj[String(idx)] = hex;
-    });
-    const newPreset: UserPreset = {
-      id: `user-${Date.now()}`,
-      name,
-      description: `${keyColors.size} keys, ${animType}`,
-      category: 'user',
-      pattern: {
-        keys: keysObj,
-        animType,
-        animSpeed,
-        ...(lastSequence.length > 0 ? { sequence: lastSequence } : {}),
+    setNamePrompt({
+      title: 'Nome do preset?',
+      defaultValue: `Custom ${Date.now().toString().slice(-4)}`,
+      onConfirm: (name) => {
+        setNamePrompt(null);
+        const keysObj: Record<string, string> = {};
+        keyColors.forEach((hex, idx) => {
+          keysObj[String(idx)] = hex;
+        });
+        const newPreset: UserPreset = {
+          id: `user-${Date.now()}`,
+          name,
+          description: `${keyColors.size} keys, ${animType}`,
+          category: 'user',
+          pattern: {
+            keys: keysObj,
+            animType,
+            animSpeed,
+            ...(lastSequence.length > 0 ? { sequence: lastSequence } : {}),
+          },
+        };
+        const next: UserPreset[] = [...userPresets, newPreset];
+        setUserPresets(next);
+        saveUserPresets(next);
       },
-    };
-    const next: UserPreset[] = [...userPresets, newPreset];
-    setUserPresets(next);
-    saveUserPresets(next);
+    });
   }
 
   function deleteUser(id: string) {
@@ -180,6 +188,16 @@ export function PresetGallery({
           </div>
         ))}
       </div>
+
+      {/* Name prompt modal */}
+      {namePrompt && (
+        <NamePromptModal
+          title={namePrompt.title}
+          defaultValue={namePrompt.defaultValue}
+          onConfirm={namePrompt.onConfirm}
+          onCancel={() => setNamePrompt(null)}
+        />
+      )}
     </aside>
   );
 }
