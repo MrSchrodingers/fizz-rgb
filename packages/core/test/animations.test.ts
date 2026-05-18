@@ -81,4 +81,24 @@ describe('computeFrame', () => {
     // Wave should produce varying intensity across keys
     expect(max).toBeGreaterThan(min);
   });
+
+  it('flag-wave varies intensity by ledIndex', () => {
+    const pattern = {
+      keys: { '0': '#ff0000', '1': '#ff0000', '2': '#ff0000', '7': '#ff0000', '14': '#ff0000' },
+      animType: 'flag-wave' as const,
+      animSpeed: 0.5,
+    };
+    const f = computeFrame(pattern, 0, 61);
+    // Different column positions should produce different intensities at t=0
+    const r0 = f.get(0)?.r ?? 0;
+    const r14 = f.get(14)?.r ?? 0;
+    // ledIndex 0 → col 0; ledIndex 14 → col 0 (same column mod 14), so use 0 vs 7
+    const r7 = f.get(7)?.r ?? 0;
+    expect(r0).not.toBe(r7); // col 0 vs col 7 → different phase → different intensity
+    // All values should be in valid 0-255 range
+    expect(r0).toBeGreaterThanOrEqual(0);
+    expect(r0).toBeLessThanOrEqual(255);
+    expect(r14).toBeGreaterThanOrEqual(0);
+    expect(r14).toBeLessThanOrEqual(255);
+  });
 });

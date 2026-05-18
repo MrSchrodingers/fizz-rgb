@@ -55,4 +55,16 @@ describe('BUILTIN_PRESETS', () => {
     const cats = new Set(BUILTIN_PRESETS.map((p) => p.category));
     expect(cats.size).toBeGreaterThanOrEqual(4);
   });
+
+  it('brasil preset uses flag-wave animation', () => {
+    const p = getPresetById('theme-brazil');
+    expect(p?.pattern.animType).toBe('flag-wave');
+  });
+
+  it('heart preset uses two distinct red shades', () => {
+    const p = getPresetById('shape-heart');
+    expect(p).toBeDefined();
+    const colors = new Set(Object.values(p!.pattern.keys));
+    expect(colors.size).toBeGreaterThanOrEqual(2);
+  });
 });

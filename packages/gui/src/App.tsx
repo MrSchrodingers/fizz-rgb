@@ -92,7 +92,7 @@ export default function App() {
         };
         if (isNew) {
           const p = pattern as NewPattern;
-          const validAnimTypes: AnimType[] = ['solid', 'blink', 'chase', 'wave'];
+          const validAnimTypes: AnimType[] = ['solid', 'blink', 'chase', 'wave', 'typewriter', 'marquee', 'flag-wave'];
           if (p.animType && validAnimTypes.includes(p.animType as AnimType)) {
             stateUpdate.animType = p.animType as AnimType;
           }
@@ -187,10 +187,11 @@ export default function App() {
   // Suppress unused warning - setPaintKeyColors is held for future use
   void setPaintKeyColors;
 
-  async function handleApplyPreset(preset: Preset | UserPreset) {
+  async function handleApplyPreset(preset: Preset | UserPreset, tintColor?: string) {
     const next = new Map<number, string>();
     for (const [k, v] of Object.entries(preset.pattern.keys)) {
-      next.set(Number(k), v);
+      // If tint is enabled, replace ALL preset colors with the brush color
+      next.set(Number(k), tintColor ?? v);
     }
     usePaintStore.setState({
       keyColors: next,
@@ -201,12 +202,15 @@ export default function App() {
       mode: 'paint',
     });
 
+    console.log('[applyPreset]', preset.id, 'animType=', preset.pattern.animType, tintColor ? `tint=${tintColor}` : '');
     if (window.fizz) {
       const colors: Record<string, string> = {};
       next.forEach((hex, idx) => { colors[String(idx)] = hex; });
       if (preset.pattern.animType === 'solid') {
+        console.log('[applyPreset] → perkeySet (solid)');
         try { await window.fizz.perkeySet(colors); } catch (err) { console.warn(err); }
       } else {
+        console.log('[applyPreset] → perkeyStartPattern (animated)', preset.pattern.animType);
         try {
           await window.fizz.perkeyStartPattern({
             keys: colors,
