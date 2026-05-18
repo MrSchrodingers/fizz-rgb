@@ -138,7 +138,7 @@ export function computeKeyColor(p: Params): RGB {
     return hexToRgb01(p.solidColor);
   }
 
-  if (ANIMATED_NO_COLOR.includes(p.selected as FirmwareEffectName)) {
+  if (ANIMATED_NO_COLOR.includes(p.selected)) {
     // Rotating rainbow across keys
     const hue = (p.keyIndex / p.keyCount) * 360 + p.time * 60;
     return hsvToRgb01(hue, 0.85, 0.95);
