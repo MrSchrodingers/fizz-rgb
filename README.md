@@ -162,4 +162,4 @@ To report a vulnerability, see [SECURITY.md](SECURITY.md). **Please do not file 
 
 ## License
 
-[MIT](LICENSE) © Daniel and fizz-rgb contributors.
+[MIT](LICENSE) © Matheus Munhoz and fizz-rgb contributors.

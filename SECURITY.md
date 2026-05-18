@@ -18,7 +18,7 @@ Please **do not** open a public GitHub issue for security vulnerabilities.
 Report privately via one of:
 
 1. **GitHub Security Advisories** — preferred. Use the *Report a vulnerability* button on the [Security tab](https://github.com/MrSchrodingers/fizz-rgb/security/advisories/new).
-2. **Email** — `daniel@debt.com.br` with subject prefix `[fizz-rgb security]`.
+2. **Email** — `mrschrodingers@gmail.com` with subject prefix `[fizz-rgb security]`.
 
 Include, when possible:
 
@@ -69,7 +69,7 @@ Durante a fase pré-1.0, apenas a última minor release na `main` recebe correç
 Reporte de forma privada:
 
 1. **GitHub Security Advisories** — preferido. Use o botão *Report a vulnerability* na [aba Security](https://github.com/MrSchrodingers/fizz-rgb/security/advisories/new).
-2. **Email** — `daniel@debt.com.br` com prefixo `[fizz-rgb security]`.
+2. **Email** — `mrschrodingers@gmail.com` com prefixo `[fizz-rgb security]`.
 
 Inclua, quando possível:
 

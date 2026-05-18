@@ -1,7 +1,7 @@
 # Design — Fizz RGB Controller
 
 - **Data:** 2026-05-18
-- **Autor:** Daniel (daniel@debt.com.br)
+- **Autor:** Matheus Munhoz (mrschrodingers@gmail.com)
 - **Status:** Draft (aguardando revisão final)
 - **Target:** Redragon Fizz K617 (USB ID `258A:0049`) no Fedora Linux
 

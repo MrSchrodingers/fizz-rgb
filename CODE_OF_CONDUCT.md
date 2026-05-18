@@ -28,7 +28,7 @@ Examples of unacceptable behavior:
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the maintainers at `daniel@debt.com.br`. All complaints will be reviewed and investigated promptly and fairly.
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the maintainers at `mrschrodingers@gmail.com`. All complaints will be reviewed and investigated promptly and fairly.
 
 Maintainers are obligated to respect the privacy and security of the reporter of any incident.
 
@@ -75,7 +75,7 @@ Exemplos de comportamento inaceitável:
 
 ### Aplicação
 
-Casos de comportamento abusivo, assediador ou inaceitável podem ser reportados aos mantenedores em `daniel@debt.com.br`. Todas as queixas serão revisadas e investigadas pronta e justamente.
+Casos de comportamento abusivo, assediador ou inaceitável podem ser reportados aos mantenedores em `mrschrodingers@gmail.com`. Todas as queixas serão revisadas e investigadas pronta e justamente.
 
 Os mantenedores são obrigados a respeitar a privacidade e a segurança de quem reportar qualquer incidente.
 
