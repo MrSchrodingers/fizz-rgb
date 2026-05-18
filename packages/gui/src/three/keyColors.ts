@@ -1,4 +1,5 @@
 import type { FirmwareEffectName } from '@fizz/core';
+import type { AnimType } from '../stores/paintStore.js';
 
 interface Params {
   selected: FirmwareEffectName | 'solid-color';
@@ -11,6 +12,9 @@ interface Params {
   paintMode: boolean;
   keyColors: Map<number, string>;
   paintSelected: Set<number>;
+  // Animation
+  animType: AnimType;
+  animSpeed: number;
 }
 
 interface RGB {
@@ -77,17 +81,57 @@ export function computeKeyColor(p: Params): RGB {
   // Paint mode overrides all effects
   if (p.paintMode) {
     const painted = p.keyColors.get(p.keyIndex);
-    const base = painted ? hexToRgb01(painted) : { r: 0.05, g: 0.05, b: 0.08 };
+    const baseDim = { r: 0.05, g: 0.05, b: 0.08 };
+
+    if (!painted) {
+      // unpainted key — show selection pulse if selected, otherwise dim
+      if (p.paintSelected.has(p.keyIndex)) {
+        const pulse = 0.5 + 0.5 * Math.sin(p.time * 6);
+        return {
+          r: baseDim.r * 0.4 + pulse,
+          g: baseDim.g * 0.4 + pulse,
+          b: baseDim.b * 0.4 + pulse,
+        };
+      }
+      return baseDim;
+    }
+
+    const base = hexToRgb01(painted);
+    let mod = 1; // brightness multiplier from animation
+
+    if (p.animType === 'blink') {
+      // simple on/off blink at ~2Hz scaled by speed
+      const phase = (p.time * (1 + p.animSpeed * 4)) % 1;
+      mod = phase < 0.5 ? 1 : 0.1;
+    } else if (p.animType === 'chase') {
+      // "running light" through the painted keys
+      const paintedIndices = Array.from(p.keyColors.keys()).sort((a, b) => a - b);
+      if (paintedIndices.length === 0) return base;
+      const positionInChase = paintedIndices.indexOf(p.keyIndex);
+      if (positionInChase === -1) return base;
+      const head = Math.floor(p.time * (1 + p.animSpeed * 8)) % paintedIndices.length;
+      const dist = Math.abs(positionInChase - head);
+      mod = Math.max(0.1, 1 - dist / Math.max(1, paintedIndices.length / 3));
+    } else if (p.animType === 'wave') {
+      // sine wave brightness modulation, phase-shifted by key position
+      const phase = p.time * (1 + p.animSpeed * 4) + p.keyIndex * 0.4;
+      mod = 0.3 + 0.7 * (Math.sin(phase) + 1) / 2;
+    }
+    // 'solid' → mod stays 1
+
+    let result = { r: base.r * mod, g: base.g * mod, b: base.b * mod };
+
+    // selection pulse on top
     if (p.paintSelected.has(p.keyIndex)) {
-      // Pulsing highlight: blend between base and white
       const pulse = 0.5 + 0.5 * Math.sin(p.time * 6);
-      return {
-        r: base.r * 0.4 + pulse,
-        g: base.g * 0.4 + pulse,
-        b: base.b * 0.4 + pulse,
+      result = {
+        r: result.r * 0.4 + pulse,
+        g: result.g * 0.4 + pulse,
+        b: result.b * 0.4 + pulse,
       };
     }
-    return base;
+
+    return result;
   }
 
   if (p.selected === 'solid-color') {

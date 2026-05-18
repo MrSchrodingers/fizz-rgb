@@ -10,6 +10,7 @@ import { useDeviceStore } from './stores/deviceStore.js';
 import { useEffectStore } from './stores/effectStore.js';
 import { useProfileStore } from './stores/profileStore.js';
 import { usePaintStore } from './stores/paintStore.js';
+import type { AnimType } from './stores/paintStore.js';
 
 export default function App() {
   const setDeviceStatus = useDeviceStore((s) => s.setStatus);
@@ -23,6 +24,8 @@ export default function App() {
 
   const paintMode = usePaintStore((s) => s.mode);
   const paintKeyColors = usePaintStore((s) => s.keyColors);
+  const paintAnimType = usePaintStore((s) => s.animType);
+  const paintAnimSpeed = usePaintStore((s) => s.animSpeed);
   const setPaintKeyColors = usePaintStore((s) => s.resetKeys);
 
   // Initial fetch
@@ -64,17 +67,37 @@ export default function App() {
     setActive(name);
     // Restore per-key pattern from localStorage if it exists for this profile
     try {
-      const patterns = JSON.parse(localStorage.getItem('fizz-patterns') ?? '{}') as Record<string, Record<string, string>>;
+      type LegacyPattern = Record<string, string>;
+      type NewPattern = { keys: Record<string, string>; animType?: string; animSpeed?: number };
+      const patterns = JSON.parse(localStorage.getItem('fizz-patterns') ?? '{}') as Record<string, LegacyPattern | NewPattern>;
       const pattern = patterns[name];
       if (pattern) {
+        // Detect new shape vs legacy shape
+        const isNew = typeof pattern === 'object' && 'keys' in pattern;
+        const keysRaw: Record<string, string> = isNew ? (pattern as NewPattern).keys : (pattern as LegacyPattern);
+
         // Rebuild the Map and inject it into paintStore
         const store = usePaintStore.getState();
         const next = new Map<number, string>();
-        for (const [k, v] of Object.entries(pattern)) {
+        for (const [k, v] of Object.entries(keysRaw)) {
           next.set(Number(k), v as string);
         }
         store.setMode('paint');
-        usePaintStore.setState({ keyColors: next, selected: new Set() });
+        const stateUpdate: { keyColors: Map<number, string>; selected: Set<number>; animType?: AnimType; animSpeed?: number } = {
+          keyColors: next,
+          selected: new Set(),
+        };
+        if (isNew) {
+          const p = pattern as NewPattern;
+          const validAnimTypes: AnimType[] = ['solid', 'blink', 'chase', 'wave'];
+          if (p.animType && validAnimTypes.includes(p.animType as AnimType)) {
+            stateUpdate.animType = p.animType as AnimType;
+          }
+          if (p.animSpeed !== undefined) {
+            stateUpdate.animSpeed = p.animSpeed;
+          }
+        }
+        usePaintStore.setState(stateUpdate);
       }
     } catch {
       // ignore localStorage errors
@@ -138,11 +161,13 @@ export default function App() {
       effect: { name: 'fw-static', params: { color: avgHex } },
     });
 
-    // Persist per-key pattern in localStorage
-    const patterns = JSON.parse(localStorage.getItem('fizz-patterns') ?? '{}') as Record<string, Record<string, string>>;
-    patterns[name] = Object.fromEntries(
-      Array.from(colors.entries()).map(([k, v]) => [String(k), v]),
-    );
+    // Persist per-key pattern in localStorage (new shape includes animType + animSpeed)
+    const patterns = JSON.parse(localStorage.getItem('fizz-patterns') ?? '{}') as Record<string, unknown>;
+    patterns[name] = {
+      keys: Object.fromEntries(Array.from(colors.entries()).map(([k, v]) => [String(k), v])),
+      animType: paintAnimType,
+      animSpeed: paintAnimSpeed,
+    };
     localStorage.setItem('fizz-patterns', JSON.stringify(patterns));
 
     const updated = await window.fizz.profileList();

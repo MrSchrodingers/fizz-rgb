@@ -114,6 +114,8 @@ function KeyboardKeys() {
   const paintSelected = usePaintStore((s) => s.selected);
   const keyColors = usePaintStore((s) => s.keyColors);
   const toggleKey = usePaintStore((s) => s.toggleKey);
+  const animType = usePaintStore((s) => s.animType);
+  const animSpeed = usePaintStore((s) => s.animSpeed);
 
   // Debug: log when paint state changes
   useEffect(() => {
@@ -139,6 +141,8 @@ function KeyboardKeys() {
           paintMode: paintMode === 'paint',
           keyColors,
           paintSelected,
+          animType,
+          animSpeed,
         });
         const isSelected = paintMode === 'paint' && paintSelected.has(k.ledIndex);
         return (
