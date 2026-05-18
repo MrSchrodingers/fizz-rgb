@@ -1,8 +1,9 @@
 import { z } from 'zod';
 
-export const HexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'expected #RRGGBB');
+export const HexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'expected #RRGGBB');
+export type HexColor = z.infer<typeof HexColorSchema>;
 
-export const FirmwareEffectName = z.enum([
+export const FirmwareEffectNameSchema = z.enum([
   'fw-static',
   'fw-rainbow',
   'fw-snake',
@@ -12,48 +13,53 @@ export const FirmwareEffectName = z.enum([
   'fw-waterfall',
   'fw-wheel',
 ]);
+export type FirmwareEffectName = z.infer<typeof FirmwareEffectNameSchema>;
 
-export const FirmwareEffectParams = z.object({
+export const FirmwareEffectParamsSchema = z.object({
   speed: z.number().int().min(0).max(255).optional(),
   brightness: z.number().int().min(0).max(255).optional(),
   direction: z.enum(['forward', 'reverse']).optional(),
-  color: HexColor.optional(),
+  color: HexColorSchema.optional(),
   density: z.number().int().min(0).max(255).optional(),
 });
+export type FirmwareEffectParams = z.infer<typeof FirmwareEffectParamsSchema>;
 
-export const EffectDescriptor = z.object({
-  name: FirmwareEffectName,
+export const EffectDescriptorSchema = z.object({
+  name: FirmwareEffectNameSchema,
   description: z.string(),
 });
+export type EffectDescriptor = z.infer<typeof EffectDescriptorSchema>;
 
-export const Profile = z.object({
+export const ProfileSchema = z.object({
   name: z.string().min(1).max(64),
   createdAt: z.string().datetime(),
   effect: z.object({
-    name: FirmwareEffectName,
-    params: FirmwareEffectParams,
+    name: FirmwareEffectNameSchema,
+    params: FirmwareEffectParamsSchema,
   }),
 });
+export type Profile = z.infer<typeof ProfileSchema>;
 
-export const DeviceStatus = z.object({
+export const DeviceStatusSchema = z.object({
   connected: z.boolean(),
   vid: z.number().int(),
   pid: z.number().int(),
   serial: z.string().optional(),
   firmware: z.string().optional(),
 });
+export type DeviceStatus = z.infer<typeof DeviceStatusSchema>;
 
 export const RpcMethods = {
   'device.status': {
     params: z.object({}).strict(),
-    result: DeviceStatus,
+    result: DeviceStatusSchema,
   },
   'effect.list': {
     params: z.object({}).strict(),
-    result: z.array(EffectDescriptor),
+    result: z.array(EffectDescriptorSchema),
   },
   'effect.run': {
-    params: z.object({ name: FirmwareEffectName, params: FirmwareEffectParams.default({}) }),
+    params: z.object({ name: FirmwareEffectNameSchema, params: FirmwareEffectParamsSchema.default({}) }),
     result: z.object({ ok: z.literal(true) }),
   },
   'effect.stop': {
@@ -63,25 +69,25 @@ export const RpcMethods = {
   'effect.current': {
     params: z.object({}).strict(),
     result: z.object({
-      name: FirmwareEffectName,
-      params: FirmwareEffectParams,
+      name: FirmwareEffectNameSchema,
+      params: FirmwareEffectParamsSchema,
       startedAt: z.string().datetime(),
     }).nullable(),
   },
   'solid.set': {
-    params: z.object({ color: HexColor }),
+    params: z.object({ color: HexColorSchema }),
     result: z.object({ ok: z.literal(true) }),
   },
   'profile.list': {
     params: z.object({}).strict(),
-    result: z.array(Profile),
+    result: z.array(ProfileSchema),
   },
   'profile.activate': {
     params: z.object({ name: z.string() }),
     result: z.object({ ok: z.literal(true) }),
   },
   'profile.save': {
-    params: z.object({ name: z.string(), profile: Profile.omit({ createdAt: true }) }),
+    params: z.object({ name: z.string(), profile: ProfileSchema.omit({ createdAt: true }) }),
     result: z.object({ ok: z.literal(true) }),
   },
   'profile.delete': {
