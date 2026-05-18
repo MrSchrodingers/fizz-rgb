@@ -120,7 +120,7 @@ export function PresetGallery({
     <aside className="flex flex-col w-72 border-l border-zinc-800 bg-zinc-950 overflow-hidden">
       {/* Header */}
       <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
-        <h2 className="font-semibold text-sm">Presets</h2>
+        <h2 className="font-semibold text-sm">Presets <span className="text-xs text-zinc-500 font-normal">(do PC)</span></h2>
         <button
           type="button"
           onClick={saveCurrent}
@@ -129,6 +129,11 @@ export function PresetGallery({
           <Plus className="w-3.5 h-3.5" />
           Salvar atual
         </button>
+      </div>
+
+      {/* Persistence info banner */}
+      <div className="px-4 py-2 border-b border-zinc-900 bg-amber-500/5 text-[10px] text-amber-200/80 leading-tight">
+        Presets aqui rodam via Fizz daemon (PC). Pra padrão que persiste no teclado sem PC, usa <span className="font-mono">FIRMWARE EFFECTS</span> na sidebar esquerda. <span className="text-amber-100 font-medium">Export</span> pra levar pra outro PC.
       </div>
 
       {/* Tint toggle */}
