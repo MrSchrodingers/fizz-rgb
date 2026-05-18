@@ -1,6 +1,6 @@
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Environment } from '@react-three/drei';
-import { Suspense, useMemo, useRef } from 'react';
+import { OrbitControls, Text } from '@react-three/drei';
+import { Suspense, useMemo, useState } from 'react';
 import * as THREE from 'three';
 import { K617_LAYOUT } from '@fizz/core';
 import type { KeyDef } from '@fizz/core';
@@ -8,10 +8,10 @@ import { useEffectStore } from '../stores/effectStore.js';
 import { usePaintStore } from '../stores/paintStore.js';
 import { computeKeyColor } from './keyColors.js';
 
-const UNIT = 1.0;  // base key size (1u)
-const GAP = 0.08;  // gap between keycaps
+const UNIT = 1.0;
+const GAP = 0.08;
 const KEY_HEIGHT = 0.45;
-const KEY_PITCH = UNIT + GAP; // center-to-center spacing for 1u keys
+const KEY_PITCH = UNIT + GAP;
 
 interface PositionedKey extends KeyDef {
   x: number;
@@ -19,63 +19,82 @@ interface PositionedKey extends KeyDef {
   bodyWidth: number;
 }
 
-function buildPositionedKeys(): PositionedKey[] {
-  const keys: PositionedKey[] = K617_LAYOUT.keys.map((k) => {
-    // col is the running unit-position (sum of previous widths in the row)
-    // centerX = (col + width/2) * pitch
-    const centerX = (k.col + k.width / 2) * KEY_PITCH;
-    const rowZ = k.row * KEY_PITCH;
-    // Body fills its unit-count minus one GAP so adjacent keys have a GAP gap between them
-    const bodyWidth = k.width * KEY_PITCH - GAP;
-    return { ...k, x: centerX, z: rowZ, bodyWidth };
-  });
+// Short label per key for the 3D text overlay
+const KEY_LABEL: Record<string, string> = {
+  Escape: 'Esc',
+  Minus: '-',
+  Equal: '=',
+  Backspace: '⌫',
+  Tab: 'Tab',
+  LBracket: '[',
+  RBracket: ']',
+  Backslash: '\\',
+  CapsLock: 'Caps',
+  Semicolon: ';',
+  Quote: "'",
+  Enter: '↵',
+  LShift: '⇧',
+  RShift: '⇧',
+  Comma: ',',
+  Period: '.',
+  Slash: '/',
+  LCtrl: 'Ctrl',
+  RCtrl: 'Ctrl',
+  LSuper: '◆',
+  LAlt: 'Alt',
+  RAlt: 'Alt',
+  Space: '',
+  Fn: 'Fn',
+  Menu: '☰',
+};
 
-  // Re-center around origin
+function labelFor(name: string): string {
+  if (KEY_LABEL[name] !== undefined) return KEY_LABEL[name];
+  return name;
+}
+
+function buildPositionedKeys(): PositionedKey[] {
+  const keys: PositionedKey[] = K617_LAYOUT.keys.map((k) => ({
+    ...k,
+    x: (k.col + k.width / 2) * KEY_PITCH,
+    z: k.row * KEY_PITCH,
+    bodyWidth: k.width * KEY_PITCH - GAP,
+  }));
   const minX = Math.min(...keys.map((k) => k.x - k.bodyWidth / 2));
   const maxX = Math.max(...keys.map((k) => k.x + k.bodyWidth / 2));
   const midX = (minX + maxX) / 2;
   const minZ = Math.min(...keys.map((k) => k.z - UNIT / 2));
   const maxZ = Math.max(...keys.map((k) => k.z + UNIT / 2));
   const midZ = (minZ + maxZ) / 2;
-
   return keys.map((k) => ({ ...k, x: k.x - midX, z: k.z - midZ }));
 }
 
 export function Keyboard3D() {
   return (
-    <div className="flex-1 m-6 rounded-2xl overflow-hidden border border-zinc-800 bg-gradient-to-br from-zinc-950 to-zinc-900">
+    <div className="flex-1 m-6 rounded-2xl overflow-hidden border border-zinc-800 bg-gradient-to-br from-zinc-950 to-zinc-900 min-h-0">
       <Canvas
+        camera={{ position: [0, 13, 16], fov: 32 }}
+        gl={{ antialias: true }}
         shadows
-        camera={{ position: [0, 9, 11], fov: 35 }}
-        gl={{ antialias: true, toneMappingExposure: 1.1 }}
+        style={{ width: '100%', height: '100%' }}
       >
         <Suspense fallback={null}>
           <color attach="background" args={['#0a0a0e']} />
-          <fog attach="fog" args={['#0a0a0e', 18, 30]} />
-          <ambientLight intensity={0.25} />
+          <ambientLight intensity={0.4} />
           <directionalLight
-            position={[6, 10, 4]}
-            intensity={1.6}
+            position={[6, 12, 6]}
+            intensity={0.8}
             castShadow
             shadow-mapSize={[1024, 1024]}
           />
-          <directionalLight position={[-6, 6, -4]} intensity={0.6} color="#aaaaff" />
-          <Environment preset="city" environmentIntensity={0.35} />
-
-          {/* Subtle ground for shadow */}
-          <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -KEY_HEIGHT, 0]}>
-            <planeGeometry args={[30, 30]} />
-            <shadowMaterial opacity={0.4} />
-          </mesh>
-
+          <directionalLight position={[-6, 6, -4]} intensity={0.3} color="#aaaaff" />
           <KeyboardKeys />
-
           <OrbitControls
             enablePan={false}
-            minPolarAngle={0.15}
-            maxPolarAngle={Math.PI / 2.2}
-            minDistance={8}
-            maxDistance={18}
+            minPolarAngle={0.1}
+            maxPolarAngle={Math.PI / 2.3}
+            minDistance={10}
+            maxDistance={30}
             target={[0, 0, 0]}
           />
         </Suspense>
@@ -86,9 +105,6 @@ export function Keyboard3D() {
 
 function KeyboardKeys() {
   const keys = useMemo(() => buildPositionedKeys(), []);
-  const meshRef = useRef<THREE.InstancedMesh>(null);
-  const dummy = useMemo(() => new THREE.Object3D(), []);
-  const color = useMemo(() => new THREE.Color(), []);
 
   const selected = useEffectStore((s) => s.selected);
   const solidColor = useEffectStore((s) => s.solidColor);
@@ -99,70 +115,125 @@ function KeyboardKeys() {
   const keyColors = usePaintStore((s) => s.keyColors);
   const toggleKey = usePaintStore((s) => s.toggleKey);
 
+  // Per-frame color computation — stored in state so each key receives its current color
+  const [time, setTime] = useState(0);
   useFrame(({ clock }) => {
-    if (!meshRef.current) return;
-    const t = clock.getElapsedTime();
-    keys.forEach((k, i) => {
-      dummy.position.set(k.x, 0, k.z);
-      // Scale X to actual body width, Z to 1u (body depth), Y stays 1 (KEY_HEIGHT from geometry)
-      dummy.scale.set(k.bodyWidth, 1, UNIT);
-      dummy.updateMatrix();
-      meshRef.current!.setMatrixAt(i, dummy.matrix);
-
-      const rgb = computeKeyColor({
-        selected,
-        solidColor,
-        draftColor: typeof draftParams.color === 'string' ? draftParams.color : undefined,
-        keyIndex: k.ledIndex,
-        keyCount: keys.length,
-        time: t,
-        paintMode: paintMode === 'paint',
-        keyColors,
-        paintSelected,
-      });
-      color.setRGB(rgb.r, rgb.g, rgb.b);
-      meshRef.current!.setColorAt(i, color);
-    });
-    meshRef.current.instanceMatrix.needsUpdate = true;
-    if (meshRef.current.instanceColor) meshRef.current.instanceColor.needsUpdate = true;
+    setTime(clock.getElapsedTime());
   });
 
   return (
-    <instancedMesh
-      ref={meshRef}
-      args={[undefined, undefined, keys.length]}
-      castShadow
-      receiveShadow
-      onPointerDown={(e) => {
-        e.stopPropagation();
-        if (paintMode !== 'paint') return;
-        if (e.instanceId === undefined) return;
-        const additive = e.shiftKey || e.metaKey || e.ctrlKey;
-        toggleKey(keys[e.instanceId]!.ledIndex, additive);
-      }}
-    >
-      <boxGeometry args={[1, KEY_HEIGHT, 1]} />
-      <meshStandardMaterial
-        color="#202028"
-        emissive="#ffffff"
-        emissiveIntensity={1.0}
-        roughness={0.35}
-        metalness={0.05}
-        toneMapped={false}
-        onBeforeCompile={(shader) => {
-          // Multiply the uniform emissive radiance by the per-instance color
-          // so each key glows with its own assigned color.
-          shader.fragmentShader = shader.fragmentShader.replace(
-            '#include <emissivemap_fragment>',
-            `
-              #include <emissivemap_fragment>
-              #ifdef USE_INSTANCING_COLOR
-                totalEmissiveRadiance *= vInstanceColor;
-              #endif
-            `,
-          );
+    <group>
+      {keys.map((k) => {
+        const rgb = computeKeyColor({
+          selected,
+          solidColor,
+          draftColor: typeof draftParams.color === 'string' ? draftParams.color : undefined,
+          keyIndex: k.ledIndex,
+          keyCount: keys.length,
+          time,
+          paintMode: paintMode === 'paint',
+          keyColors,
+          paintSelected,
+        });
+        const isSelected = paintMode === 'paint' && paintSelected.has(k.ledIndex);
+        return (
+          <Key
+            key={k.ledIndex}
+            keyDef={k}
+            colorRGB={rgb}
+            isSelected={isSelected}
+            onClick={(additive) => {
+              if (paintMode !== 'paint') return;
+              console.log('[Key click] ledIndex', k.ledIndex, 'additive', additive);
+              toggleKey(k.ledIndex, additive);
+            }}
+          />
+        );
+      })}
+    </group>
+  );
+}
+
+interface KeyProps {
+  keyDef: PositionedKey;
+  colorRGB: { r: number; g: number; b: number };
+  isSelected: boolean;
+  onClick: (additive: boolean) => void;
+}
+
+function Key({ keyDef, colorRGB, isSelected, onClick }: KeyProps) {
+  const [hovered, setHovered] = useState(false);
+  const emissiveColor = useMemo(
+    () => new THREE.Color(colorRGB.r, colorRGB.g, colorRGB.b),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [colorRGB.r, colorRGB.g, colorRGB.b],
+  );
+  const label = labelFor(keyDef.name);
+  const brightness = colorRGB.r * 0.3 + colorRGB.g * 0.6 + colorRGB.b * 0.1;
+  const textColor = brightness > 0.5 ? '#0a0a0e' : '#e6e6ec';
+
+  return (
+    <group position={[keyDef.x, 0, keyDef.z]}>
+      {/* Keycap body */}
+      <mesh
+        scale={[keyDef.bodyWidth, 1, UNIT]}
+        castShadow
+        receiveShadow
+        onPointerOver={(e) => {
+          e.stopPropagation();
+          setHovered(true);
+          document.body.style.cursor = 'pointer';
         }}
-      />
-    </instancedMesh>
+        onPointerOut={() => {
+          setHovered(false);
+          document.body.style.cursor = 'auto';
+        }}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          onClick(e.shiftKey || e.metaKey || e.ctrlKey);
+        }}
+      >
+        <boxGeometry args={[1, KEY_HEIGHT, 1]} />
+        <meshStandardMaterial
+          color="#1a1a1f"
+          emissive={emissiveColor}
+          emissiveIntensity={1.4}
+          roughness={0.55}
+          metalness={0.1}
+          toneMapped={false}
+        />
+      </mesh>
+
+      {/* Selection outline — wireframe slightly larger box */}
+      {isSelected && (
+        <mesh scale={[keyDef.bodyWidth * 1.05, 1.1, UNIT * 1.05]}>
+          <boxGeometry args={[1, KEY_HEIGHT, 1]} />
+          <meshBasicMaterial color="#ffffff" wireframe transparent opacity={0.9} toneMapped={false} />
+        </mesh>
+      )}
+
+      {/* Hover ring */}
+      {hovered && !isSelected && (
+        <mesh scale={[keyDef.bodyWidth * 1.02, 1.05, UNIT * 1.02]}>
+          <boxGeometry args={[1, KEY_HEIGHT, 1]} />
+          <meshBasicMaterial color="#888899" wireframe transparent opacity={0.4} toneMapped={false} />
+        </mesh>
+      )}
+
+      {/* Label on top face */}
+      {label && (
+        <Text
+          position={[0, KEY_HEIGHT / 2 + 0.01, 0]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          fontSize={keyDef.width >= 2 ? 0.22 : 0.28}
+          color={textColor}
+          anchorX="center"
+          anchorY="middle"
+          maxWidth={keyDef.bodyWidth * 0.9}
+        >
+          {label}
+        </Text>
+      )}
+    </group>
   );
 }
