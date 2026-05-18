@@ -109,4 +109,19 @@ describe('computeFrame', () => {
     expect(p1.size).toBe(0);
     expect(p2.size).toBe(0);
   });
+
+  it('life animType is valid', () => {
+    const f = computeFrame({ keys: {}, animType: 'life' as AnimType, animSpeed: 0.5 }, 0, 61);
+    expect(f.size).toBe(0); // computeFrame is stateless; game logic is in daemon
+  });
+
+  it('matrix-rain animType is valid', () => {
+    const f = computeFrame({ keys: {}, animType: 'matrix-rain' as AnimType, animSpeed: 0.5 }, 0, 61);
+    expect(f.size).toBe(0);
+  });
+
+  it('breakout animType is valid', () => {
+    const f = computeFrame({ keys: {}, animType: 'breakout' as AnimType, animSpeed: 0.5 }, 0, 61);
+    expect(f.size).toBe(0);
+  });
 });

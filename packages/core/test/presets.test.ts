@@ -12,8 +12,9 @@ describe('BUILTIN_PRESETS', () => {
   });
 
   it('all non-game presets have non-empty key maps', () => {
+    const gameOnlyAnimTypes = ['pong', 'snake', 'tetris', 'life', 'matrix-rain', 'breakout'];
     for (const p of BUILTIN_PRESETS) {
-      if (p.category === 'game' && (p.pattern.animType === 'pong' || p.pattern.animType === 'snake' || p.pattern.animType === 'tetris')) continue;
+      if (p.category === 'game' && gameOnlyAnimTypes.includes(p.pattern.animType)) continue;
       expect(Object.keys(p.pattern.keys).length).toBeGreaterThan(0);
     }
   });
@@ -91,5 +92,11 @@ describe('BUILTIN_PRESETS', () => {
   it('has game-tetris with tetris animType', () => {
     const p = getPresetById('game-tetris');
     expect(p?.pattern.animType).toBe('tetris');
+  });
+
+  it('has the 3 new game presets', () => {
+    expect(getPresetById('game-life')?.pattern.animType).toBe('life');
+    expect(getPresetById('game-matrix-rain')?.pattern.animType).toBe('matrix-rain');
+    expect(getPresetById('game-breakout')?.pattern.animType).toBe('breakout');
   });
 });

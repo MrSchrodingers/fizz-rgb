@@ -228,7 +228,7 @@ class TetrisEngine {
   private field: Array<Array<Color | null>> = Array.from({ length: 14 }, () => Array(5).fill(null));
   private current: { shape: string; x: number; y: number; color: Color; cells: Array<[number, number]> } | null = null;
   private tickCounter = 0;
-  private readonly TICKS_PER_FALL = 6; // gravity tick = ~5 Hz (move every 6 frames at 30fps)
+  private readonly TICKS_PER_FALL = 8; // gravity tick = ~3.75 Hz (move every 8 frames at 30fps)
   private flashFrames = 0; // line clear flash counter
   private flashCols: number[] = [];
 
@@ -358,6 +358,232 @@ class TetrisEngine {
         }
       }
     }
+    return out;
+  }
+}
+
+// ─── Conway's Game of Life ───────────────────────────────────────────────────
+
+class LifeEngine {
+  private cells: boolean[][] = Array.from({ length: 14 }, () => Array(5).fill(false));
+  private tickCounter = 0;
+  private readonly TICKS_PER_GEN = 12; // ~2.5 generations per second at 30fps
+  private genCount = 0;
+
+  constructor() {
+    this.seedRandom();
+  }
+
+  private seedRandom() {
+    // 30% live density
+    for (let x = 0; x < 14; x++) {
+      for (let y = 0; y < 5; y++) {
+        this.cells[x]![y] = Math.random() < 0.3;
+      }
+    }
+    this.genCount = 0;
+  }
+
+  step(): void {
+    this.tickCounter++;
+    if (this.tickCounter < this.TICKS_PER_GEN) return;
+    this.tickCounter = 0;
+    this.genCount++;
+
+    // Reseed every 80 generations to keep things visually interesting
+    if (this.genCount > 80) {
+      this.seedRandom();
+      return;
+    }
+
+    // Conway's rules with TOROIDAL wrap (so cells at edges still have 8 neighbors)
+    const next: boolean[][] = Array.from({ length: 14 }, () => Array(5).fill(false));
+    for (let x = 0; x < 14; x++) {
+      for (let y = 0; y < 5; y++) {
+        let live = 0;
+        for (let dx = -1; dx <= 1; dx++) {
+          for (let dy = -1; dy <= 1; dy++) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = (x + dx + 14) % 14;
+            const ny = (y + dy + 5) % 5;
+            if (this.cells[nx]![ny]) live++;
+          }
+        }
+        const alive = this.cells[x]![y];
+        next[x]![y] = alive ? (live === 2 || live === 3) : (live === 3);
+      }
+    }
+    this.cells = next;
+  }
+
+  render(): Map<number, Color> {
+    const out = new Map<number, Color>();
+    const live: Color = { r: 0, g: 220, b: 100 };  // green for live cells
+    for (let x = 0; x < 14; x++) {
+      for (let y = 0; y < 5; y++) {
+        if (this.cells[x]![y]) {
+          const led = gridToLed(x, y);
+          if (led !== null) out.set(led, live);
+        }
+      }
+    }
+    return out;
+  }
+}
+
+// ─── Matrix Rain animation ───────────────────────────────────────────────────
+
+class MatrixRainEngine {
+  // Each column has a stream with a head Y position and length.
+  private streams: Array<{ y: number; len: number; speed: number } | null> = new Array(14).fill(null);
+  private tickCounter = 0;
+  private readonly TICKS_PER_STEP = 3;  // 10Hz update
+
+  step(): void {
+    this.tickCounter++;
+    if (this.tickCounter < this.TICKS_PER_STEP) return;
+    this.tickCounter = 0;
+
+    // Spawn new streams randomly in empty columns
+    for (let x = 0; x < 14; x++) {
+      if (this.streams[x] === null && Math.random() < 0.15) {
+        this.streams[x] = { y: 0, len: 2 + Math.floor(Math.random() * 4), speed: 1 };
+      }
+    }
+    // Advance each stream
+    for (let x = 0; x < 14; x++) {
+      const s = this.streams[x];
+      if (s) {
+        s.y += s.speed;
+        // Once the head has passed the bottom AND the trail too, retire
+        if (s.y - s.len > 5) {
+          this.streams[x] = null;
+        }
+      }
+    }
+  }
+
+  render(): Map<number, Color> {
+    const out = new Map<number, Color>();
+    for (let x = 0; x < 14; x++) {
+      const s = this.streams[x];
+      if (!s) continue;
+      for (let trail = 0; trail < s.len; trail++) {
+        const y = s.y - trail;
+        if (y < 0 || y >= 5) continue;
+        // Head = bright white-green, trail fades to dim green
+        const intensity = trail === 0 ? 1 : Math.max(0.1, 1 - trail / s.len);
+        const isHead = trail === 0;
+        const color: Color = isHead
+          ? { r: 200, g: 255, b: 200 }
+          : { r: 0, g: Math.round(220 * intensity), b: Math.round(60 * intensity) };
+        const led = gridToLed(x, y);
+        if (led !== null) out.set(led, color);
+      }
+    }
+    return out;
+  }
+}
+
+// ─── Breakout animation ──────────────────────────────────────────────────────
+
+class BreakoutEngine {
+  private paddleX = 6;  // gridX, left edge of paddle (paddle is 3 cells wide)
+  private readonly PADDLE_WIDTH = 3;
+  private ballX = 7;
+  private ballY = 3;
+  private ballVX = 1;
+  private ballVY = -1;  // start moving up
+  private tickCounter = 0;
+  private readonly TICKS_PER_STEP = 4;  // 7.5Hz
+  // Bricks at rows 0-1
+  private bricks: Array<{ x: number; y: number; color: Color }> = [];
+
+  constructor() {
+    this.seedBricks();
+  }
+
+  private seedBricks() {
+    this.bricks = [];
+    const colors: Color[] = [
+      { r: 220, g: 30, b: 30 },   // red
+      { r: 220, g: 140, b: 0 },   // orange
+    ];
+    for (let y = 0; y < 2; y++) {
+      for (let x = 0; x < 14; x++) {
+        if (Math.random() < 0.85) {  // 85% chance per brick
+          this.bricks.push({ x, y, color: colors[y]! });
+        }
+      }
+    }
+  }
+
+  step(): void {
+    this.tickCounter++;
+    if (this.tickCounter < this.TICKS_PER_STEP) return;
+    this.tickCounter = 0;
+
+    // Move paddle toward ball
+    const ballCenter = this.ballX;
+    const paddleCenter = this.paddleX + 1;
+    if (ballCenter < paddleCenter && this.paddleX > 0) this.paddleX--;
+    else if (ballCenter > paddleCenter && this.paddleX < 14 - this.PADDLE_WIDTH) this.paddleX++;
+
+    // Move ball
+    let nx = this.ballX + this.ballVX;
+    let ny = this.ballY + this.ballVY;
+
+    // Bounce off left/right walls
+    if (nx < 0) { nx = 0; this.ballVX = -this.ballVX; }
+    if (nx > 13) { nx = 13; this.ballVX = -this.ballVX; }
+    // Bounce off top wall
+    if (ny < 0) { ny = 0; this.ballVY = -this.ballVY; }
+
+    // Bounce off paddle (row 4, cells paddleX..paddleX+2)
+    if (ny === 4 && nx >= this.paddleX && nx < this.paddleX + this.PADDLE_WIDTH) {
+      ny = 4;
+      this.ballVY = -this.ballVY;
+      // Add some english based on where it hit
+      const hitOffset = nx - (this.paddleX + 1);  // -1, 0, or 1
+      this.ballVX = Math.sign(hitOffset || this.ballVX);
+    }
+    // Missed — reset
+    if (ny > 4) {
+      this.ballX = 7; this.ballY = 3;
+      this.ballVX = Math.random() > 0.5 ? 1 : -1;
+      this.ballVY = -1;
+      return;
+    }
+
+    // Brick collision
+    const brickIdx = this.bricks.findIndex((b) => b.x === nx && b.y === ny);
+    if (brickIdx >= 0) {
+      this.bricks.splice(brickIdx, 1);
+      this.ballVY = -this.ballVY;
+    }
+
+    this.ballX = nx;
+    this.ballY = ny;
+
+    // Reseed bricks if all cleared
+    if (this.bricks.length === 0) this.seedBricks();
+  }
+
+  render(): Map<number, Color> {
+    const out = new Map<number, Color>();
+    // Bricks
+    for (const b of this.bricks) {
+      const led = gridToLed(b.x, b.y);
+      if (led !== null) out.set(led, b.color);
+    }
+    // Paddle (white)
+    for (let i = 0; i < this.PADDLE_WIDTH; i++) {
+      const led = gridToLed(this.paddleX + i, 4);
+      if (led !== null) out.set(led, { r: 200, g: 200, b: 220 });
+    }
+    // Ball (cyan)
+    const ballLed = gridToLed(this.ballX, this.ballY);
+    if (ballLed !== null) out.set(ballLed, { r: 80, g: 255, b: 255 });
     return out;
   }
 }
@@ -492,6 +718,39 @@ export class EffectEngine {
         this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
       }, 1000 / 30);
       log.info('tetris stream started');
+      return;
+    }
+
+    if (pattern.animType === 'life') {
+      const game = new LifeEngine();
+      this.streamInterval = setInterval(() => {
+        game.step();
+        const frame = encodePerKeyFrame(game.render());
+        this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
+      }, 1000 / 30);
+      log.info('Life stream started');
+      return;
+    }
+
+    if (pattern.animType === 'matrix-rain') {
+      const game = new MatrixRainEngine();
+      this.streamInterval = setInterval(() => {
+        game.step();
+        const frame = encodePerKeyFrame(game.render());
+        this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
+      }, 1000 / 30);
+      log.info('Matrix Rain stream started');
+      return;
+    }
+
+    if (pattern.animType === 'breakout') {
+      const game = new BreakoutEngine();
+      this.streamInterval = setInterval(() => {
+        game.step();
+        const frame = encodePerKeyFrame(game.render());
+        this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
+      }, 1000 / 30);
+      log.info('Breakout stream started');
       return;
     }
 

@@ -17,7 +17,7 @@ export interface FizzApi {
   perkeySet(colors: Record<string, string>): Promise<void>;
   perkeyStartPattern(pattern: {
     keys: Record<string, string>;
-    animType: 'solid' | 'blink' | 'chase' | 'wave' | 'typewriter' | 'marquee' | 'flag-wave' | 'pong' | 'snake' | 'tetris';
+    animType: 'solid' | 'blink' | 'chase' | 'wave' | 'typewriter' | 'marquee' | 'flag-wave' | 'pong' | 'snake' | 'tetris' | 'life' | 'matrix-rain' | 'breakout';
     animSpeed: number;
     sequence?: number[];
   }): Promise<void>;
