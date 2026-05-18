@@ -42,15 +42,15 @@ O teclado Redragon Fizz K617 é um 60% com 61 LEDs RGB individuais. O software o
 
 ## 3. Decisões locked-in
 
-| # | Decisão | Justificativa |
-|---|---|---|
-| D1 | Escopo MVP = per-key + custom effects (end-game) | Usuário priorizou ambição máxima |
-| D2 | Motor = host streaming (PC envia frames 30–60fps) | Permite efeitos arbitrários reativos a qualquer fonte; wired, sem custo de bateria |
-| D3 | Estrutura = daemon (systemd --user) + GUI Electron + CLI | Padrão profissional; GUI fecha sem parar efeito; CLI scriptable |
-| D4 | Reverse engineering = só Linux, sem Windows VM | Restrição do usuário; abordagem em camadas (replay → fuzz → Ghidra → smk fallback) |
-| D5 | Faseamento incremental com valor por release | Mitiga incerteza do RE; cada fase entrega algo usável |
-| D6 | Stack = Node.js + Electron + React + R3F + ThreeJS | Stack único, menos manutenção, libs maduras pra GUI 3D |
-| D7 | Distribuição = pessoal com código publicável | Foco em valor primeiro, polish de packaging só quando publicar |
+| #   | Decisão                                                  | Justificativa                                                                      |
+| --- | -------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| D1  | Escopo MVP = per-key + custom effects (end-game)         | Usuário priorizou ambição máxima                                                   |
+| D2  | Motor = host streaming (PC envia frames 30–60fps)        | Permite efeitos arbitrários reativos a qualquer fonte; wired, sem custo de bateria |
+| D3  | Estrutura = daemon (systemd --user) + GUI Electron + CLI | Padrão profissional; GUI fecha sem parar efeito; CLI scriptable                    |
+| D4  | Reverse engineering = só Linux, sem Windows VM           | Restrição do usuário; abordagem em camadas (replay → fuzz → Ghidra → smk fallback) |
+| D5  | Faseamento incremental com valor por release             | Mitiga incerteza do RE; cada fase entrega algo usável                              |
+| D6  | Stack = Node.js + Electron + React + R3F + ThreeJS       | Stack único, menos manutenção, libs maduras pra GUI 3D                             |
+| D7  | Distribuição = pessoal com código publicável             | Foco em valor primeiro, polish de packaging só quando publicar                     |
 
 ## 4. Arquitetura
 
@@ -137,44 +137,47 @@ fizz-rgb/
 
 ### 5.2 Métodos request/response
 
-| Método | Params | Retorno |
-|---|---|---|
-| `device.status` | — | `{connected, vid, pid, firmware?, serial?}` |
-| `device.setKeys` | `{frames: KeyColor[]}` | `{ok}` *(uso interno do engine)* |
-| `effect.list` | — | `Effect[]` (nome, descrição, schema de parâmetros) |
-| `effect.run` | `{name, params}` | `{ok}` |
-| `effect.stop` | — | `{ok}` |
-| `effect.current` | — | `{name, params, startedAt}` |
-| `solid.set` | `{color}` | `{ok}` *(atalho)* |
-| `profile.list` | — | `Profile[]` |
-| `profile.activate` | `{name}` | `{ok}` |
-| `profile.save` | `{name, profile}` | `{ok}` |
-| `profile.delete` | `{name}` | `{ok}` |
-| `daemon.version` | — | `{version, buildHash}` |
-| `daemon.shutdown` | — | `{ok}` |
-| `engine.subscribeFrames` | `{enabled: boolean}` | `{ok}` |
+| Método                   | Params                 | Retorno                                            |
+| ------------------------ | ---------------------- | -------------------------------------------------- |
+| `device.status`          | —                      | `{connected, vid, pid, firmware?, serial?}`        |
+| `device.setKeys`         | `{frames: KeyColor[]}` | `{ok}` _(uso interno do engine)_                   |
+| `effect.list`            | —                      | `Effect[]` (nome, descrição, schema de parâmetros) |
+| `effect.run`             | `{name, params}`       | `{ok}`                                             |
+| `effect.stop`            | —                      | `{ok}`                                             |
+| `effect.current`         | —                      | `{name, params, startedAt}`                        |
+| `solid.set`              | `{color}`              | `{ok}` _(atalho)_                                  |
+| `profile.list`           | —                      | `Profile[]`                                        |
+| `profile.activate`       | `{name}`               | `{ok}`                                             |
+| `profile.save`           | `{name, profile}`      | `{ok}`                                             |
+| `profile.delete`         | `{name}`               | `{ok}`                                             |
+| `daemon.version`         | —                      | `{version, buildHash}`                             |
+| `daemon.shutdown`        | —                      | `{ok}`                                             |
+| `engine.subscribeFrames` | `{enabled: boolean}`   | `{ok}`                                             |
 
 ### 5.3 Notificações (server → client)
 
-| Método | Quando |
-|---|---|
-| `device.changed` | Hotplug USB |
-| `effect.changed` | Mudança de efeito |
-| `profile.changed` | Ativação de perfil |
-| `engine.frame` | A cada tick, apenas pra subscribers (preview 3D ao vivo) |
-| `engine.error` | Efeito crashou |
+| Método            | Quando                                                   |
+| ----------------- | -------------------------------------------------------- |
+| `device.changed`  | Hotplug USB                                              |
+| `effect.changed`  | Mudança de efeito                                        |
+| `profile.changed` | Ativação de perfil                                       |
+| `engine.frame`    | A cada tick, apenas pra subscribers (preview 3D ao vivo) |
+| `engine.error`    | Efeito crashou                                           |
 
 ### 5.4 Fluxos principais
 
 **Mudar cor sólida pelo color picker:**
+
 ```
 React onChange → IPC contextBridge → main process → JSON-RPC fizz.solid.set
 → fizzd valida (Zod) → engine.runEffect(solid) → encoder → hid.writeFrame
 → LED muda → fizzd responde {ok} → fizzd broadcast effect.changed
 ```
+
 Alvo de latência: **< 50ms P95** click → LED.
 
 **GUI assina frames pra renderizar o 3D:**
+
 ```
 GUI → engine.subscribeFrames(true) → fizzd marca client_id
 → loop engine emite engine.frame pra subscribers → renderer atualiza
@@ -215,21 +218,25 @@ GUI fecha → socket fecha → daemon remove subscriber (sem leak)
 ### 6.3 Estratégia de reverse engineering em camadas
 
 **Camada 1 — Replay dos pacotes da issue #2172**
+
 - Extrair com `tshark`, enviar via `hidapi.write()`.
 - Risco baixo, valor alto. Desbloqueia Fase 1 completa.
 
 **Camada 2 — Bifurcação inteligente do report descriptor**
+
 - `usbhid-dump -d 258a:0049 -es` pra mapear feature reports.
 - Variar opcodes em bytes não-cobertos; observar LEDs.
 - Risco médio, valor médio.
 
 **Camada 3 — Dump de firmware + Ghidra**
+
 - `sinowealth-kb-tool read --device fizz` → `firmware.bin`.
 - Ghidra com loader 8051 + SDCC calling convention.
 - Localizar handler de USB SETUP request → parser de feature report → mapa completo de opcodes.
 - Risco alto (Ghidra com 8051 é trabalhoso), valor altíssimo.
 
 **Camada 4 — `smk` custom firmware (fallback)**
+
 - Porte do `smk` pro K617 (similar ao port pro E-YOOSO Z11).
 - Flash via `sinowealth-kb-tool write`.
 - **Risco de brick existe** (sem recovery sem programador SPI externo). Decisão consciente da Phase 3.
@@ -238,19 +245,19 @@ GUI fecha → socket fecha → daemon remove subscriber (sem leak)
 
 ```typescript
 // @fizz/core/src/effects/types.ts
-export type Color = { r: number; g: number; b: number };  // 0..255
-export type FrameBuffer = Color[];                         // length = 61
+export type Color = { r: number; g: number; b: number }; // 0..255
+export type FrameBuffer = Color[]; // length = 61
 
 export interface EffectContext {
-  t: number;          // ms desde início do efeito
-  dt: number;         // ms desde último tick
+  t: number; // ms desde início do efeito
+  dt: number; // ms desde último tick
   layout: KeyLayout;
   params: Record<string, unknown>;
 }
 
 export interface Effect<P = unknown> {
   name: string;
-  paramsSchema: ZodSchema<P>;   // GUI gera form sozinha
+  paramsSchema: ZodSchema<P>; // GUI gera form sozinha
   defaults: P;
   tick(ctx: EffectContext): FrameBuffer;
   init?(ctx: EffectContext): void;
@@ -331,12 +338,12 @@ Interface estável; implementação reescrita conforme RE avança.
 
 ### 6.9 Riscos e mitigações
 
-| Risco | Impacto | Mitigação |
-|---|---|---|
-| Per-key não descoberto na Phase 3 | Sem efeitos custom de verdade | Phase 1+2 ainda entrega muito; fallback `smk` |
-| USB stream cap < 30fps | Efeitos travados | Encoder negocia taxa, GUI exibe |
-| Keyboard travar | Frustração | `device.reset` reabre handle; unplug físico documentado |
-| Outro processo segurar device | Daemon falha ao abrir | udev rule + grupo plugdev; docs com `lsof /dev/hidraw*` |
+| Risco                             | Impacto                       | Mitigação                                               |
+| --------------------------------- | ----------------------------- | ------------------------------------------------------- |
+| Per-key não descoberto na Phase 3 | Sem efeitos custom de verdade | Phase 1+2 ainda entrega muito; fallback `smk`           |
+| USB stream cap < 30fps            | Efeitos travados              | Encoder negocia taxa, GUI exibe                         |
+| Keyboard travar                   | Frustração                    | `device.reset` reabre handle; unplug físico documentado |
+| Outro processo segurar device     | Daemon falha ao abrir         | udev rule + grupo plugdev; docs com `lsof /dev/hidraw*` |
 
 ## 7. GUI Electron + React + R3F
 
@@ -348,17 +355,17 @@ Interface estável; implementação reescrita conforme RE avança.
 
 ### 7.2 Stack do renderer
 
-| Camada | Escolha | Razão |
-|---|---|---|
-| Bundler | Vite | Dev server instantâneo, HMR perfeito |
-| UI | React 18 | Concurrent features ajudam quando 3D + UI rerenderizam |
-| 3D | @react-three/fiber + @react-three/drei | Decidido; drei traz controls + InstancedMesh wrappers |
-| Estado | Zustand | Leve, sem boilerplate. Stores: `device`, `effect`, `profile`, `frameBuffer` |
-| Color | react-colorful | Color picker compacto |
-| Forms | React Hook Form + Zod resolver | Schemas vêm dos efeitos; forms gerados automaticamente |
-| Styling | Tailwind v4 + CSS variables | Theme via CSS vars; sem CSS-in-JS |
-| Animação | Framer Motion | Transições suaves |
-| Ícones | Lucide React | Limpo, tree-shakeable |
+| Camada   | Escolha                                | Razão                                                                       |
+| -------- | -------------------------------------- | --------------------------------------------------------------------------- |
+| Bundler  | Vite                                   | Dev server instantâneo, HMR perfeito                                        |
+| UI       | React 18                               | Concurrent features ajudam quando 3D + UI rerenderizam                      |
+| 3D       | @react-three/fiber + @react-three/drei | Decidido; drei traz controls + InstancedMesh wrappers                       |
+| Estado   | Zustand                                | Leve, sem boilerplate. Stores: `device`, `effect`, `profile`, `frameBuffer` |
+| Color    | react-colorful                         | Color picker compacto                                                       |
+| Forms    | React Hook Form + Zod resolver         | Schemas vêm dos efeitos; forms gerados automaticamente                      |
+| Styling  | Tailwind v4 + CSS variables            | Theme via CSS vars; sem CSS-in-JS                                           |
+| Animação | Framer Motion                          | Transições suaves                                                           |
+| Ícones   | Lucide React                           | Limpo, tree-shakeable                                                       |
 
 ### 7.3 Layout principal
 
@@ -398,13 +405,13 @@ Interface estável; implementação reescrita conforme RE avança.
 
 Cada efeito declara `paramsSchema: ZodSchema<P>`. GUI introspeciona via `zod-to-json-schema` e renderiza:
 
-| Zod type | UI control |
-|---|---|
-| `z.string().regex(/^#[0-9a-f]{6}$/i)` | Color picker |
-| `z.number().min(a).max(b)` | Slider |
-| `z.enum([...])` | Radio / Select |
-| `z.boolean()` | Switch |
-| `z.object({...})` | Fieldset agrupado |
+| Zod type                              | UI control        |
+| ------------------------------------- | ----------------- |
+| `z.string().regex(/^#[0-9a-f]{6}$/i)` | Color picker      |
+| `z.number().min(a).max(b)`            | Slider            |
+| `z.enum([...])`                       | Radio / Select    |
+| `z.boolean()`                         | Switch            |
+| `z.object({...})`                     | Fieldset agrupado |
 
 Adicionar efeito = 0 código de UI.
 
@@ -466,7 +473,10 @@ Adicionar efeito = 0 código de UI.
     "gaming": {
       "name": "Gaming",
       "createdAt": "2026-05-18T11:05:00Z",
-      "effect": { "name": "reactive-keypress", "params": { "baseColor": "#0a0a2a", "hitColor": "#ff3030", "fadeMs": 800 } }
+      "effect": {
+        "name": "reactive-keypress",
+        "params": { "baseColor": "#0a0a2a", "hitColor": "#ff3030", "fadeMs": 800 }
+      }
     }
   }
 }
@@ -484,15 +494,15 @@ Adicionar efeito = 0 código de UI.
 
 ### 8.4 Tabela de cenários
 
-| Cenário | Detecção | UI | Recuperação |
-|---|---|---|---|
-| Daemon não rodando | Main Electron (conexão falha) | Banner "Daemon offline" + botão | `systemctl --user start fizzd` |
-| Device unplugado | Daemon (node-hid error) | Header "Disconnected" + tray cinza | Retry 2s, volta quando reconecta |
-| Permissão negada `/dev/hidraw` | Daemon no boot | Banner + link docs/permissions.md | Script `tools/install-udev.sh` |
-| Efeito custom crasha | Engine | Toast + reverte pra `solid` | Log com stack |
-| `profiles.json` corrompido | Daemon no boot | Banner "Profiles invalid, loaded defaults" | Backup `.bak`, recria default |
-| USB write timeout | Daemon | Tray pisca amarelo | `device.reset` |
-| GUI desconectada do main | Renderer | Toast "Reconnecting…" | Reconnect automático |
+| Cenário                        | Detecção                      | UI                                         | Recuperação                      |
+| ------------------------------ | ----------------------------- | ------------------------------------------ | -------------------------------- |
+| Daemon não rodando             | Main Electron (conexão falha) | Banner "Daemon offline" + botão            | `systemctl --user start fizzd`   |
+| Device unplugado               | Daemon (node-hid error)       | Header "Disconnected" + tray cinza         | Retry 2s, volta quando reconecta |
+| Permissão negada `/dev/hidraw` | Daemon no boot                | Banner + link docs/permissions.md          | Script `tools/install-udev.sh`   |
+| Efeito custom crasha           | Engine                        | Toast + reverte pra `solid`                | Log com stack                    |
+| `profiles.json` corrompido     | Daemon no boot                | Banner "Profiles invalid, loaded defaults" | Backup `.bak`, recria default    |
+| USB write timeout              | Daemon                        | Tray pisca amarelo                         | `device.reset`                   |
+| GUI desconectada do main       | Renderer                      | Toast "Reconnecting…"                      | Reconnect automático             |
 
 ### 8.5 Logging
 
@@ -532,6 +542,7 @@ Adicionar efeito = 0 código de UI.
 ## 10. Quebra de fases
 
 ### Phase 1 — Daemon + CLI + efeitos firmware
+
 - Scaffold workspace (TS, vitest, eslint, prettier)
 - `@fizz/core`: tipos, layout, encoders firmware-effect validados contra captures #2172
 - `daemon`: HID handle, IPC server, engine suportando modo "single-shot" (firmware-passthrough)
@@ -542,6 +553,7 @@ Adicionar efeito = 0 código de UI.
 - **Estimativa:** 2-3 sessões focadas (depende muito do RE)
 
 ### Phase 2 — GUI Electron + 3D
+
 - Scaffold Electron + Vite + React + R3F
 - Conexão IPC main↔daemon, contextBridge
 - 3D do K617 com InstancedMesh, cores ao vivo
@@ -553,6 +565,7 @@ Adicionar efeito = 0 código de UI.
 - **Estimativa:** 3-4 sessões
 
 ### Phase 3 — Per-key + Plugin SDK (alto risco)
+
 - Camada 2/3 de RE: report descriptor + Ghidra
 - `encodePerKeyFrame` real
 - Engine streaming 30–60fps com per-key
@@ -566,6 +579,7 @@ Adicionar efeito = 0 código de UI.
 - **Estimativa:** indefinida — 2 sessões se Camada 1/2 entregarem; semanas se cair no Ghidra
 
 ### Phase 4 — Reactivity + integrações
+
 - Audio reactivity (PipeWire/Pulse loopback → FFT → cores)
 - CPU/GPU temp como source
 - Per-app profile auto-switch (X11 active window / Wayland)
