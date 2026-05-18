@@ -1,6 +1,6 @@
 # Pong + Snake + AnimType Re-stream + Brasil T/Y Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For implementers:** This plan uses checkbox (`- [ ]`) syntax for step-by-step tracking. Tackle one task at a time, run the build/tests after each, and commit with a Conventional Commits message.
 
 **Goal:** Add Pong and Snake live game animations to K617 LEDs, fix animType toolbar to hot-swap streams, and add T/Y to the Brasil preset blue center.
 
