@@ -3,7 +3,7 @@ import { Header } from './components/Header.js';
 import { EffectSidebar } from './components/EffectSidebar.js';
 import { ProfileSidebar } from './components/ProfileSidebar.js';
 import { ParametersPanel } from './components/ParametersPanel.js';
-import { KeyboardCanvasPlaceholder } from './components/KeyboardCanvasPlaceholder.js';
+import { Keyboard3D } from './three/Keyboard3D.js';
 import { ConnectionBanner } from './components/ConnectionBanner.js';
 import { useDeviceStore } from './stores/deviceStore.js';
 import { useEffectStore } from './stores/effectStore.js';
@@ -99,7 +99,7 @@ export default function App() {
           />
         </div>
         <div className="flex-1 flex flex-col">
-          <KeyboardCanvasPlaceholder />
+          <Keyboard3D />
         </div>
         <ParametersPanel onApply={handleApply} />
       </div>
