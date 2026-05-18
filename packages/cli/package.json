@@ -3,8 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "bin": { "fizz": "./dist/index.js" },
-  "scripts": { "build": "tsc && chmod +x dist/index.js", "test": "vitest run" },
+  "bin": {
+    "fizz": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc && chmod +x dist/index.js",
+    "test": "vitest run"
+  },
   "dependencies": {
     "@fizz/core": "*",
     "commander": "^13.0.0",
