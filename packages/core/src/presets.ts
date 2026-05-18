@@ -358,8 +358,8 @@ export const BUILTIN_PRESETS: Preset[] = [
         ['F', '#ffdf00'], ['J', '#ffdf00'],
         ['V', '#ffdf00'], ['N', '#ffdf00'],
         ['B', '#ffdf00'],
-        // Blue center circle (overrides yellow at G/H)
-        ['G', '#002776'], ['H', '#002776'],
+        // Blue center circle (overrides yellow at T/Y/G/H — 2×2 square)
+        ['T', '#002776'], ['Y', '#002776'], ['G', '#002776'], ['H', '#002776'],
       ]),
       animType: 'flag-wave',
       animSpeed: 0.3,
