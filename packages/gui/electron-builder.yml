@@ -1,0 +1,12 @@
+# electron-builder config — populated in Batch 4
+appId: com.fizz-rgb.app
+productName: Fizz RGB
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**/*
+  - dist-electron/**/*
+linux:
+  target: AppImage
+  category: Utility
