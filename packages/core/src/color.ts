@@ -5,8 +5,8 @@ export interface Color {
 }
 
 export const Color = {
-  black: { r: 0, g: 0, b: 0 } as Color,
-  white: { r: 255, g: 255, b: 255 } as Color,
+  black: { r: 0, g: 0, b: 0 } satisfies Color,
+  white: { r: 255, g: 255, b: 255 } satisfies Color,
 } as const;
 
 const HEX_RE = /^#?([0-9a-fA-F]{6})$/;
