@@ -490,13 +490,6 @@ export const BUILTIN_PRESETS: Preset[] = [
     },
   },
   {
-    id: 'game-life',
-    name: 'Conway Life',
-    description: 'Autômato celular — padrões evoluem e morrem',
-    category: 'game',
-    pattern: { keys: {}, animType: 'life', animSpeed: 0.5 },
-  },
-  {
     id: 'game-matrix-rain',
     name: 'Matrix Rain',
     description: 'Chuva verde caindo do topo — estilo Matrix',
@@ -509,6 +502,41 @@ export const BUILTIN_PRESETS: Preset[] = [
     description: 'Paddle bate bola, quebra tijolos. AI joga sozinho',
     category: 'game',
     pattern: { keys: {}, animType: 'breakout', animSpeed: 0.5 },
+  },
+  {
+    id: 'game-fireworks',
+    name: 'Fogos',
+    description: 'Explosões coloridas de partículas em loop',
+    category: 'game',
+    pattern: { keys: {}, animType: 'fireworks', animSpeed: 0.5 },
+  },
+  {
+    id: 'game-dvd',
+    name: 'DVD Bouncer',
+    description: 'Tecla brilhante quica nos cantos, mudando de cor',
+    category: 'game',
+    pattern: { keys: {}, animType: 'dvd', animSpeed: 0.5 },
+  },
+  {
+    id: 'game-heart-rate',
+    name: 'Heart Rate',
+    description: 'Linha de ECG correndo pelo teclado, com spike QRS',
+    category: 'game',
+    pattern: { keys: {}, animType: 'heart-rate', animSpeed: 0.5 },
+  },
+  {
+    id: 'game-equalizer',
+    name: 'Equalizer',
+    description: 'Barras verticais subindo/descendo como visualizer de música',
+    category: 'game',
+    pattern: { keys: {}, animType: 'equalizer', animSpeed: 0.5 },
+  },
+  {
+    id: 'game-rule30',
+    name: 'Rule 30',
+    description: 'Autômato 1D de Wolfram — padrões caóticos a partir de uma semente',
+    category: 'game',
+    pattern: { keys: {}, animType: 'rule30', animSpeed: 0.5 },
   },
 ];
 

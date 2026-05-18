@@ -362,75 +362,6 @@ class TetrisEngine {
   }
 }
 
-// ─── Conway's Game of Life ───────────────────────────────────────────────────
-
-class LifeEngine {
-  private cells: boolean[][] = Array.from({ length: 14 }, () => Array(5).fill(false));
-  private tickCounter = 0;
-  private readonly TICKS_PER_GEN = 12; // ~2.5 generations per second at 30fps
-  private genCount = 0;
-
-  constructor() {
-    this.seedRandom();
-  }
-
-  private seedRandom() {
-    // 30% live density
-    for (let x = 0; x < 14; x++) {
-      for (let y = 0; y < 5; y++) {
-        this.cells[x]![y] = Math.random() < 0.3;
-      }
-    }
-    this.genCount = 0;
-  }
-
-  step(): void {
-    this.tickCounter++;
-    if (this.tickCounter < this.TICKS_PER_GEN) return;
-    this.tickCounter = 0;
-    this.genCount++;
-
-    // Reseed every 80 generations to keep things visually interesting
-    if (this.genCount > 80) {
-      this.seedRandom();
-      return;
-    }
-
-    // Conway's rules with TOROIDAL wrap (so cells at edges still have 8 neighbors)
-    const next: boolean[][] = Array.from({ length: 14 }, () => Array(5).fill(false));
-    for (let x = 0; x < 14; x++) {
-      for (let y = 0; y < 5; y++) {
-        let live = 0;
-        for (let dx = -1; dx <= 1; dx++) {
-          for (let dy = -1; dy <= 1; dy++) {
-            if (dx === 0 && dy === 0) continue;
-            const nx = (x + dx + 14) % 14;
-            const ny = (y + dy + 5) % 5;
-            if (this.cells[nx]![ny]) live++;
-          }
-        }
-        const alive = this.cells[x]![y];
-        next[x]![y] = alive ? (live === 2 || live === 3) : (live === 3);
-      }
-    }
-    this.cells = next;
-  }
-
-  render(): Map<number, Color> {
-    const out = new Map<number, Color>();
-    const live: Color = { r: 0, g: 220, b: 100 };  // green for live cells
-    for (let x = 0; x < 14; x++) {
-      for (let y = 0; y < 5; y++) {
-        if (this.cells[x]![y]) {
-          const led = gridToLed(x, y);
-          if (led !== null) out.set(led, live);
-        }
-      }
-    }
-    return out;
-  }
-}
-
 // ─── Matrix Rain animation ───────────────────────────────────────────────────
 
 class MatrixRainEngine {
@@ -588,6 +519,338 @@ class BreakoutEngine {
   }
 }
 
+// ─── HSV helper ─────────────────────────────────────────────────────────────
+
+function hsvToColor(h: number, s: number, v: number): Color {
+  const c = v * s;
+  const hh = (((h % 360) + 360) % 360) / 60;
+  const x = c * (1 - Math.abs((hh % 2) - 1));
+  let r = 0, g = 0, b = 0;
+  if (hh < 1)      { r = c; g = x; }
+  else if (hh < 2) { r = x; g = c; }
+  else if (hh < 3) { g = c; b = x; }
+  else if (hh < 4) { g = x; b = c; }
+  else if (hh < 5) { r = x; b = c; }
+  else             { r = c; b = x; }
+  const m = v - c;
+  return {
+    r: Math.round((r + m) * 255),
+    g: Math.round((g + m) * 255),
+    b: Math.round((b + m) * 255),
+  };
+}
+
+// ─── Fireworks animation ─────────────────────────────────────────────────────
+
+interface Particle {
+  x: number; y: number;
+  vx: number; vy: number;
+  life: number;     // 0..1, decreases each step
+  color: Color;
+}
+
+class FireworksEngine {
+  private particles: Particle[] = [];
+  private tickCounter = 0;
+  private readonly TICKS_PER_STEP = 3;  // ~10Hz physics
+  private readonly LAUNCH_INTERVAL = 18;  // every ~0.6s a new firework
+  private launchCounter = 0;
+
+  private spawnFirework(): void {
+    const cx = Math.random() * 13;
+    const cy = Math.random() * 4;
+    const baseHue = Math.random() * 360;
+    const count = 8 + Math.floor(Math.random() * 6);
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2;
+      const speed = 0.5 + Math.random() * 0.6;
+      const color = hsvToColor(baseHue + (Math.random() - 0.5) * 30, 1, 1);
+      this.particles.push({
+        x: cx, y: cy,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life: 1.0,
+        color,
+      });
+    }
+  }
+
+  step(): void {
+    this.tickCounter++;
+    this.launchCounter++;
+    if (this.launchCounter >= this.LAUNCH_INTERVAL) {
+      this.launchCounter = 0;
+      this.spawnFirework();
+    }
+    if (this.tickCounter < this.TICKS_PER_STEP) return;
+    this.tickCounter = 0;
+
+    // Update particles
+    for (const p of this.particles) {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.08;  // gravity
+      p.life -= 0.05;
+    }
+    this.particles = this.particles.filter((p) => p.life > 0 && p.y < 6 && p.x >= -1 && p.x <= 14);
+  }
+
+  render(): Map<number, Color> {
+    const out = new Map<number, Color>();
+    for (const p of this.particles) {
+      const gx = Math.round(p.x);
+      const gy = Math.round(p.y);
+      const led = gridToLed(gx, gy);
+      if (led === null) continue;
+      const dim = {
+        r: Math.round(p.color.r * p.life),
+        g: Math.round(p.color.g * p.life),
+        b: Math.round(p.color.b * p.life),
+      };
+      // If multiple particles overlap, take the brightest
+      const existing = out.get(led);
+      if (existing) {
+        out.set(led, {
+          r: Math.max(existing.r, dim.r),
+          g: Math.max(existing.g, dim.g),
+          b: Math.max(existing.b, dim.b),
+        });
+      } else {
+        out.set(led, dim);
+      }
+    }
+    return out;
+  }
+}
+
+// ─── DVD Bouncer animation ───────────────────────────────────────────────────
+
+class DvdBouncerEngine {
+  private x = 4;
+  private y = 2;
+  private vx = 1;
+  private vy = 1;
+  private hue = 200;
+  private tickCounter = 0;
+  private readonly TICKS_PER_STEP = 5;  // 6Hz movement
+
+  step(): void {
+    this.tickCounter++;
+    if (this.tickCounter < this.TICKS_PER_STEP) return;
+    this.tickCounter = 0;
+
+    let nx = this.x + this.vx;
+    let ny = this.y + this.vy;
+    let bounced = false;
+
+    if (nx < 0) { nx = 0; this.vx = -this.vx; bounced = true; }
+    if (nx > 13) { nx = 13; this.vx = -this.vx; bounced = true; }
+    if (ny < 0) { ny = 0; this.vy = -this.vy; bounced = true; }
+    if (ny > 4) { ny = 4; this.vy = -this.vy; bounced = true; }
+
+    if (bounced) {
+      this.hue = (this.hue + 47) % 360;  // shift color on each bounce
+    }
+
+    this.x = nx;
+    this.y = ny;
+  }
+
+  render(): Map<number, Color> {
+    const out = new Map<number, Color>();
+    const led = gridToLed(this.x, this.y);
+    if (led !== null) out.set(led, hsvToColor(this.hue, 1, 1));
+    return out;
+  }
+}
+
+// ─── Heart Rate (ECG) animation ──────────────────────────────────────────────
+
+class HeartRateEngine {
+  private cursor = 0;           // current X position of the scan line
+  private wave: number[] = [];  // ECG waveform values (-1..1)
+  private tickCounter = 0;
+  private readonly TICKS_PER_STEP = 2;  // 15Hz scan
+
+  constructor() {
+    // Generate a 14-column ECG-like waveform: flat baseline + spike pattern
+    this.wave = new Array(14).fill(0);
+    this.wave[3] = 0.3;   // P wave
+    this.wave[4] = 0.2;
+    this.wave[6] = -0.4;  // Q
+    this.wave[7] = 1.0;   // R (big spike up)
+    this.wave[8] = -0.6;  // S
+    this.wave[10] = 0.4;  // T wave
+    this.wave[11] = 0.3;
+  }
+
+  step(): void {
+    this.tickCounter++;
+    if (this.tickCounter < this.TICKS_PER_STEP) return;
+    this.tickCounter = 0;
+    this.cursor = (this.cursor + 1) % 14;
+  }
+
+  render(): Map<number, Color> {
+    const out = new Map<number, Color>();
+    for (let x = 0; x < 14; x++) {
+      const wavY = this.wave[x] ?? 0;
+      // Map wave (-1..1) to grid Y (0..4), center at row 2
+      const gy = Math.max(0, Math.min(4, Math.round(2 - wavY * 2)));
+      // Distance from cursor — closer = brighter
+      const dist = (this.cursor - x + 14) % 14;
+      const intensity = dist === 0 ? 1 : Math.max(0.15, 1 - dist / 8);
+      const color: Color = {
+        r: Math.round(0 * intensity),
+        g: Math.round(255 * intensity),
+        b: Math.round(20 * intensity),
+      };
+      const led = gridToLed(x, gy);
+      if (led !== null) out.set(led, color);
+    }
+    return out;
+  }
+}
+
+// ─── Equalizer animation ─────────────────────────────────────────────────────
+
+class EqualizerEngine {
+  private bars: Array<{ height: number; target: number }> = [];
+  private tickCounter = 0;
+  private readonly TICKS_PER_STEP = 2;  // 15Hz update
+
+  constructor() {
+    for (let i = 0; i < 14; i++) {
+      this.bars.push({ height: 0, target: 0 });
+    }
+    this.shuffleTargets();
+  }
+
+  private shuffleTargets(): void {
+    for (const b of this.bars) {
+      b.target = Math.random() * 5;
+    }
+  }
+
+  step(): void {
+    this.tickCounter++;
+    if (this.tickCounter < this.TICKS_PER_STEP) return;
+    this.tickCounter = 0;
+
+    // Occasionally reshuffle targets (simulates beat changes)
+    if (Math.random() < 0.05) this.shuffleTargets();
+
+    // Smoothly approach targets
+    for (const b of this.bars) {
+      const diff = b.target - b.height;
+      b.height += diff * 0.4;
+      // Small random jitter for liveliness
+      b.height += (Math.random() - 0.5) * 0.3;
+      b.height = Math.max(0, Math.min(5, b.height));
+      // Pick a new target sometimes
+      if (Math.random() < 0.1) b.target = Math.random() * 5;
+    }
+  }
+
+  render(): Map<number, Color> {
+    const out = new Map<number, Color>();
+    // Each column: paint bottom-up cells in gradient (green→yellow→red)
+    for (let x = 0; x < 14; x++) {
+      const h = this.bars[x]!.height;
+      for (let y = 0; y < 5; y++) {
+        const cellHeight = 5 - y;  // y=4 (bottom) is height 1, y=0 (top) is height 5
+        if (cellHeight > h) continue;
+        // Color: green at bottom, red at top
+        const norm = (4 - y) / 4;
+        const color: Color =
+          norm < 0.5
+            ? { r: Math.round(255 * (norm * 2)), g: 255, b: 0 }
+            : { r: 255, g: Math.round(255 * (1 - (norm - 0.5) * 2)), b: 0 };
+        const led = gridToLed(x, y);
+        if (led !== null) out.set(led, color);
+      }
+    }
+    return out;
+  }
+}
+
+// ─── Rule 30 cellular automaton ──────────────────────────────────────────────
+
+class Rule30Engine {
+  private rows: boolean[][] = [];  // history, oldest first; max 5 rows
+  private tickCounter = 0;
+  private readonly TICKS_PER_STEP = 12;  // ~2.5Hz new generation
+
+  constructor() {
+    // Seed with a single cell in the middle
+    const seed = new Array(14).fill(false);
+    seed[7] = true;
+    this.rows = [seed];
+  }
+
+  private nextRow(prev: boolean[]): boolean[] {
+    const out = new Array(14).fill(false);
+    for (let i = 0; i < 14; i++) {
+      const left = prev[(i - 1 + 14) % 14] ? 1 : 0;
+      const center = prev[i] ? 1 : 0;
+      const right = prev[(i + 1) % 14] ? 1 : 0;
+      const pattern = (left << 2) | (center << 1) | right;
+      // Rule 30 truth table: 00011110 → outputs for patterns 7,6,5,4,3,2,1,0
+      const rule = 0b00011110;
+      out[i] = ((rule >> pattern) & 1) === 1;
+    }
+    return out;
+  }
+
+  step(): void {
+    this.tickCounter++;
+    if (this.tickCounter < this.TICKS_PER_STEP) return;
+    this.tickCounter = 0;
+
+    const last = this.rows[this.rows.length - 1]!;
+    const next = this.nextRow(last);
+
+    // If pattern stabilizes to all-false or all-true, reseed
+    const allDead = next.every((c) => !c);
+    const allAlive = next.every((c) => c);
+    if (allDead || allAlive) {
+      const seed = new Array(14).fill(false);
+      seed[Math.floor(Math.random() * 14)] = true;
+      this.rows = [seed];
+      return;
+    }
+
+    this.rows.push(next);
+    if (this.rows.length > 5) this.rows.shift();
+  }
+
+  render(): Map<number, Color> {
+    const out = new Map<number, Color>();
+    // Render history bottom-up: newest row at bottom (y=4), oldest at top
+    const totalRows = this.rows.length;
+    for (let i = 0; i < totalRows; i++) {
+      const y = 5 - totalRows + i;  // align bottom
+      if (y < 0 || y >= 5) continue;
+      const row = this.rows[i]!;
+      const age = i / totalRows;  // 0=oldest, 1=newest
+      for (let x = 0; x < 14; x++) {
+        if (row[x]) {
+          // Fade older rows
+          const intensity = 0.3 + age * 0.7;
+          const color: Color = {
+            r: Math.round(200 * intensity),
+            g: Math.round(80 * intensity),
+            b: Math.round(255 * intensity),
+          };
+          const led = gridToLed(x, y);
+          if (led !== null) out.set(led, color);
+        }
+      }
+    }
+    return out;
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export class EffectEngine {
@@ -721,17 +984,6 @@ export class EffectEngine {
       return;
     }
 
-    if (pattern.animType === 'life') {
-      const game = new LifeEngine();
-      this.streamInterval = setInterval(() => {
-        game.step();
-        const frame = encodePerKeyFrame(game.render());
-        this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
-      }, 1000 / 30);
-      log.info('Life stream started');
-      return;
-    }
-
     if (pattern.animType === 'matrix-rain') {
       const game = new MatrixRainEngine();
       this.streamInterval = setInterval(() => {
@@ -751,6 +1003,61 @@ export class EffectEngine {
         this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
       }, 1000 / 30);
       log.info('Breakout stream started');
+      return;
+    }
+
+    if (pattern.animType === 'fireworks') {
+      const game = new FireworksEngine();
+      this.streamInterval = setInterval(() => {
+        game.step();
+        const frame = encodePerKeyFrame(game.render());
+        this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
+      }, 1000 / 30);
+      log.info('Fireworks stream started');
+      return;
+    }
+
+    if (pattern.animType === 'dvd') {
+      const game = new DvdBouncerEngine();
+      this.streamInterval = setInterval(() => {
+        game.step();
+        const frame = encodePerKeyFrame(game.render());
+        this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
+      }, 1000 / 30);
+      log.info('DVD bouncer stream started');
+      return;
+    }
+
+    if (pattern.animType === 'heart-rate') {
+      const game = new HeartRateEngine();
+      this.streamInterval = setInterval(() => {
+        game.step();
+        const frame = encodePerKeyFrame(game.render());
+        this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
+      }, 1000 / 30);
+      log.info('Heart rate stream started');
+      return;
+    }
+
+    if (pattern.animType === 'equalizer') {
+      const game = new EqualizerEngine();
+      this.streamInterval = setInterval(() => {
+        game.step();
+        const frame = encodePerKeyFrame(game.render());
+        this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
+      }, 1000 / 30);
+      log.info('Equalizer stream started');
+      return;
+    }
+
+    if (pattern.animType === 'rule30') {
+      const game = new Rule30Engine();
+      this.streamInterval = setInterval(() => {
+        game.step();
+        const frame = encodePerKeyFrame(game.render());
+        this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
+      }, 1000 / 30);
+      log.info('Rule 30 stream started');
       return;
     }
 
