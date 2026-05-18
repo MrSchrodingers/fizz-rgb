@@ -11,8 +11,9 @@ describe('BUILTIN_PRESETS', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('all presets have non-empty key maps', () => {
+  it('all non-game presets have non-empty key maps', () => {
     for (const p of BUILTIN_PRESETS) {
+      if (p.category === 'game' && (p.pattern.animType === 'pong' || p.pattern.animType === 'snake')) continue;
       expect(Object.keys(p.pattern.keys).length).toBeGreaterThan(0);
     }
   });
@@ -80,5 +81,10 @@ describe('BUILTIN_PRESETS', () => {
   it('has theme-fire with flag-wave', () => {
     const p = getPresetById('theme-fire');
     expect(p?.pattern.animType).toBe('flag-wave');
+  });
+
+  it('has game-pong and game-snake', () => {
+    expect(getPresetById('game-pong')?.pattern.animType).toBe('pong');
+    expect(getPresetById('game-snake')?.pattern.animType).toBe('snake');
   });
 });
