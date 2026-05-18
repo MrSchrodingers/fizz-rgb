@@ -3,6 +3,8 @@ import { Header } from './components/Header.js';
 import { EffectSidebar } from './components/EffectSidebar.js';
 import { ProfileSidebar } from './components/ProfileSidebar.js';
 import { ParametersPanel } from './components/ParametersPanel.js';
+import { PresetGallery } from './components/PresetGallery.js';
+import type { UserPreset } from './components/PresetGallery.js';
 import { Keyboard3D } from './three/Keyboard3D.js';
 import { ConnectionBanner } from './components/ConnectionBanner.js';
 import { PaintToolbar } from './components/PaintToolbar.js';
@@ -11,6 +13,7 @@ import { useEffectStore } from './stores/effectStore.js';
 import { useProfileStore } from './stores/profileStore.js';
 import { usePaintStore } from './stores/paintStore.js';
 import type { AnimType } from './stores/paintStore.js';
+import type { Preset } from '@fizz/core';
 
 export default function App() {
   const setDeviceStatus = useDeviceStore((s) => s.setStatus);
@@ -184,6 +187,38 @@ export default function App() {
   // Suppress unused warning - setPaintKeyColors is held for future use
   void setPaintKeyColors;
 
+  async function handleApplyPreset(preset: Preset | UserPreset) {
+    const next = new Map<number, string>();
+    for (const [k, v] of Object.entries(preset.pattern.keys)) {
+      next.set(Number(k), v);
+    }
+    usePaintStore.setState({
+      keyColors: next,
+      selected: new Set(),
+      animType: preset.pattern.animType as AnimType,
+      animSpeed: preset.pattern.animSpeed,
+      lastSequence: preset.pattern.sequence ?? [],
+      mode: 'paint',
+    });
+
+    if (window.fizz) {
+      const colors: Record<string, string> = {};
+      next.forEach((hex, idx) => { colors[String(idx)] = hex; });
+      if (preset.pattern.animType === 'solid') {
+        try { await window.fizz.perkeySet(colors); } catch (err) { console.warn(err); }
+      } else {
+        try {
+          await window.fizz.perkeyStartPattern({
+            keys: colors,
+            animType: preset.pattern.animType as AnimType,
+            animSpeed: preset.pattern.animSpeed,
+            ...(preset.pattern.sequence != null ? { sequence: preset.pattern.sequence } : {}),
+          });
+        } catch (err) { console.warn(err); }
+      }
+    }
+  }
+
   return (
     <div className="flex flex-col h-full bg-zinc-950 text-zinc-100">
       <Header />
@@ -201,7 +236,11 @@ export default function App() {
           {paintMode === 'paint' && <PaintToolbar onSavePattern={handleSavePattern} />}
           <Keyboard3D />
         </div>
-        <ParametersPanel onApply={handleApply} />
+        {paintMode === 'paint' ? (
+          <PresetGallery onApply={handleApplyPreset} />
+        ) : (
+          <ParametersPanel onApply={handleApply} />
+        )}
       </div>
     </div>
   );
