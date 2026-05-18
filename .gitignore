@@ -22,3 +22,4 @@ docs/reverse-engineering/firmware-dumps/
 .vscode/*
 !.vscode/settings.example.json
 !.vscode/extensions.json
+*.tsbuildinfo
