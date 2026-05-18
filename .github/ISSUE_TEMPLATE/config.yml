@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🔒 Security vulnerability
+    url: https://github.com/MrSchrodingers/fizz-rgb/security/advisories/new
+    about: Please report security issues privately via GitHub Security Advisories.
+  - name: 💬 Discussions
+    url: https://github.com/MrSchrodingers/fizz-rgb/discussions
+    about: Questions, ideas, and general chat go here instead of issues.

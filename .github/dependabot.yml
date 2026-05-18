@@ -1,0 +1,37 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: '/'
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      typescript-eslint:
+        patterns:
+          - '@typescript-eslint/*'
+      react-three:
+        patterns:
+          - '@react-three/*'
+          - 'three'
+          - 'postprocessing'
+      vite-electron:
+        patterns:
+          - 'vite'
+          - 'vite-plugin-electron*'
+          - 'electron'
+          - 'electron-builder'
+      types:
+        patterns:
+          - '@types/*'
+    commit-message:
+      prefix: 'chore(deps)'
+      include: scope
+
+  - package-ecosystem: github-actions
+    directory: '/'
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: 'chore(ci)'
