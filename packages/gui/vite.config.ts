@@ -19,7 +19,10 @@ export default defineConfig({
           build: {
             outDir: 'dist-electron',
             rollupOptions: {
-              external: ['electron'],
+              // Keep @fizz/core external so its import.meta.url resolves to the
+              // real node_modules location (which has the templates/ folder
+              // next to protocol.js). Bundling it would break that resolution.
+              external: ['electron', '@fizz/core', 'node-hid'],
             },
           },
         },
