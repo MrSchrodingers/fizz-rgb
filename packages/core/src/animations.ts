@@ -1,7 +1,7 @@
 import type { Color } from './color.js';
 import { parseHex } from './color.js';
 
-export type AnimType = 'solid' | 'blink' | 'chase' | 'wave' | 'typewriter' | 'marquee';
+export type AnimType = 'solid' | 'blink' | 'chase' | 'wave' | 'typewriter' | 'marquee' | 'flag-wave';
 
 export interface Pattern {
   /** ledIndex (0..60) → hex color. Keys not in the map are "off" (black). */
@@ -115,6 +115,20 @@ export function computeFrame(p: Pattern, t: number, _keyCount: number): Map<numb
       // Fade trailing keys
       const intensity = 1 - (i / windowSize) * 0.6;
       out.set(ledIndex, scaleColor(hexToColor(hex), intensity));
+    }
+    return out;
+  }
+
+  if (p.animType === 'flag-wave') {
+    // Phase varies primarily by column position (ledIndex % 14 approximates col in K617).
+    // Time advances the wave left-to-right, creating a ripple effect like a waving flag.
+    for (const [kStr, hex] of Object.entries(p.keys)) {
+      const k = Number(kStr);
+      // approximate column from ledIndex (K617 has ~14 cols per row)
+      const col = k % 14;
+      const phase = t * speed + col * 0.4;
+      const intensity = 0.5 + 0.5 * Math.sin(phase);
+      out.set(k, scaleColor(hexToColor(hex), intensity));
     }
     return out;
   }

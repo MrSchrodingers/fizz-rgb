@@ -163,15 +163,22 @@ export const BUILTIN_PRESETS: Preset[] = [
   {
     id: 'shape-heart',
     name: 'Coração',
-    description: 'Forma de coração ao redor das teclas do meio',
+    description: 'Forma de coração — dois lobos no topo estreitando para ponta embaixo',
     category: 'shape',
     pattern: {
       keys: buildKeys([
-        ['R', '#ff0044'], ['Y', '#ff0044'],
-        ['T', '#ff2266'],
-        ['D', '#ff0044'], ['F', '#ff2266'], ['G', '#ff2266'], ['H', '#ff2266'], ['J', '#ff0044'],
-        ['C', '#ff2266'], ['V', '#ff2266'], ['B', '#ff2266'], ['N', '#ff2266'],
-        ['Space', '#ff0044'],
+        // Top lobes (left lobe: 5/6/7, right lobe: 9/0/Minus) — bright red
+        ['5', '#ff1a1a'], ['6', '#ff1a1a'], ['7', '#ff1a1a'],
+        ['9', '#ff1a1a'], ['0', '#ff1a1a'], ['Minus', '#ff1a1a'],
+        // Upper sides curving inward
+        ['R', '#ff1a1a'], ['T', '#cc0022'], ['Y', '#cc0022'], ['U', '#ff1a1a'],
+        ['I', '#ff1a1a'], ['O', '#ff1a1a'], ['P', '#ff1a1a'],
+        // Middle body (slightly darker for depth)
+        ['F', '#ff1a1a'], ['G', '#cc0022'], ['H', '#cc0022'], ['J', '#ff1a1a'], ['K', '#ff1a1a'],
+        // Narrowing lower body
+        ['V', '#ff1a1a'], ['B', '#cc0022'], ['N', '#cc0022'], ['M', '#ff1a1a'],
+        // Bottom point
+        ['Period', '#ff1a1a'],
       ]),
       animType: 'blink',
       animSpeed: 0.2,
@@ -180,12 +187,14 @@ export const BUILTIN_PRESETS: Preset[] = [
   {
     id: 'shape-x-diagonal',
     name: 'X diagonal',
-    description: 'Duas diagonais formando X',
+    description: 'Duas diagonais formando X — top-left↘bottom-right e top-right↙bottom-left',
     category: 'shape',
     pattern: {
       keys: buildKeys([
-        ['Escape', '#ffaa00'], ['2', '#ffaa00'], ['W', '#ffaa00'], ['D', '#ffaa00'], ['V', '#ffaa00'],
-        ['Backspace', '#00aaff'], ['RBracket', '#00aaff'], ['O', '#00aaff'], ['K', '#00aaff'], ['Period', '#00aaff'],
+        // Diagonal 1: top-left → bottom-right (steps ~3 cols per row)
+        ['Escape', '#ffaa00'], ['3', '#ffaa00'], ['E', '#ffaa00'], ['F', '#ffaa00'], ['V', '#ffaa00'],
+        // Diagonal 2: top-right → bottom-left
+        ['Backspace', '#00aaff'], ['0', '#00aaff'], ['P', '#00aaff'], ['L', '#00aaff'], ['Period', '#00aaff'],
       ]),
       animType: 'solid',
       animSpeed: 0.5,
@@ -294,17 +303,30 @@ export const BUILTIN_PRESETS: Preset[] = [
   {
     id: 'theme-brazil',
     name: 'Brasil',
-    description: 'Verde base, amarelo diamante no centro, azul no Space',
+    description: 'Bandeira: verde base, losango amarelo, círculo azul no centro — animado flag-wave',
     category: 'theme',
     pattern: {
       keys: buildKeys([
-        ...uniform(ALL_KEYS_NAMES.filter((n) => n !== 'Space'), '#00aa00'),
-        ['T', '#ffdd00'], ['Y', '#ffdd00'], ['G', '#ffdd00'], ['H', '#ffdd00'],
-        ['F', '#ffdd00'], ['J', '#ffdd00'], ['V', '#ffdd00'], ['B', '#ffdd00'], ['N', '#ffdd00'],
-        ['Space', '#0033aa'],
+        // Green background — all keys not in rhombus or center
+        ...uniform(
+          ALL_KEYS_NAMES.filter(
+            (n) => !['6', '5', '7', 'R', 'T', 'Y', 'U', 'F', 'G', 'H', 'J', 'V', 'B', 'N'].includes(n),
+          ),
+          '#009c3b',
+        ),
+        // Yellow rhombus (diamond outline + fill, centered around G/H)
+        // Top apex: 6; upper sides: 5, 7; upper-mid: T, Y; further out: R, U; lower-mid: V, N; bottom apex: B
+        // F and J form the wide middle excluding the blue center
+        ['5', '#ffdf00'], ['6', '#ffdf00'], ['7', '#ffdf00'],
+        ['R', '#ffdf00'], ['T', '#ffdf00'], ['Y', '#ffdf00'], ['U', '#ffdf00'],
+        ['F', '#ffdf00'], ['J', '#ffdf00'],
+        ['V', '#ffdf00'], ['N', '#ffdf00'],
+        ['B', '#ffdf00'],
+        // Blue center circle (overrides yellow at G/H)
+        ['G', '#002776'], ['H', '#002776'],
       ]),
-      animType: 'solid',
-      animSpeed: 0.5,
+      animType: 'flag-wave',
+      animSpeed: 0.3,
     },
   },
   {

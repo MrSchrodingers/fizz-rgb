@@ -34,15 +34,17 @@ function saveUserPresets(presets: UserPreset[]) {
 export function PresetGallery({
   onApply,
 }: {
-  onApply: (preset: Preset | UserPreset) => void;
+  onApply: (preset: Preset | UserPreset, tintColor?: string) => void;
 }) {
   const [filter, setFilter] = useState<string>('all');
   const [userPresets, setUserPresets] = useState<UserPreset[]>(loadUserPresets);
+  const [tintEnabled, setTintEnabled] = useState(false);
 
   const keyColors = usePaintStore((s) => s.keyColors);
   const animType = usePaintStore((s) => s.animType);
   const animSpeed = usePaintStore((s) => s.animSpeed);
   const lastSequence = usePaintStore((s) => s.lastSequence);
+  const brushColor = usePaintStore((s) => s.brushColor);
 
   const categories = ['all', 'word', 'shape', 'pattern', 'gradient', 'theme', 'game', 'user'];
 
@@ -109,6 +111,24 @@ export function PresetGallery({
         </button>
       </div>
 
+      {/* Tint toggle */}
+      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-zinc-900 bg-zinc-950/40">
+        <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-zinc-400">
+          <input
+            type="checkbox"
+            checked={tintEnabled}
+            onChange={(e) => setTintEnabled(e.target.checked)}
+            className="accent-fuchsia-500"
+          />
+          Aplicar com cor do brush
+        </label>
+        <span
+          className="inline-block w-3.5 h-3.5 rounded border border-zinc-600 flex-shrink-0"
+          style={{ background: brushColor }}
+        />
+        <span className="font-mono text-xs text-zinc-500">{brushColor}</span>
+      </div>
+
       {/* Category filter */}
       <div className="flex flex-wrap gap-1 px-3 py-2 border-b border-zinc-900">
         {categories.map((c) => (
@@ -138,7 +158,7 @@ export function PresetGallery({
           <div
             key={preset.id}
             className="group flex items-start gap-2 px-2 py-2 rounded-lg hover:bg-zinc-800/50 transition cursor-pointer"
-            onClick={() => onApply(preset)}
+            onClick={() => onApply(preset, tintEnabled ? brushColor : undefined)}
           >
             <PresetThumbnail preset={preset} />
             <div className="flex-1 min-w-0">

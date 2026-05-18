@@ -31,6 +31,7 @@ export class EffectEngine {
       clearInterval(this.streamInterval);
       this.streamInterval = null;
       this.currentPattern = null;
+      log.info('stream stopped');
     }
   }
 
@@ -65,7 +66,7 @@ export class EffectEngine {
     // Per-key mode does not correspond to a named firmware effect; clear state.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.state = null; // caller owns per-key state; daemon tracks nothing for now
-    log.info({ keys: colors.size }, 'per-key colors set');
+    log.info({ keys: colors.size }, 'static frame sent (perkey.set)');
     this.notify();
   }
 
@@ -98,7 +99,7 @@ export class EffectEngine {
 
     log.info(
       { animType: pattern.animType, keys: Object.keys(pattern.keys).length, speed: pattern.animSpeed },
-      'pattern stream started',
+      'stream started (perkey.startPattern)',
     );
   }
 

@@ -236,7 +236,7 @@ export function PaintToolbar({ onSavePattern }: Props) {
       {/* Animation row */}
       <div className="flex items-center gap-3 px-4 py-2 bg-zinc-950/40 text-xs border-t border-zinc-900">
         <span className="text-zinc-500 uppercase tracking-wider">Pattern animation:</span>
-        {(['solid', 'blink', 'chase', 'wave', 'typewriter', 'marquee'] as const).map((t: AnimType) => (
+        {(['solid', 'blink', 'chase', 'wave', 'typewriter', 'marquee', 'flag-wave'] as const).map((t: AnimType) => (
           <button
             key={t}
             type="button"
@@ -246,7 +246,7 @@ export function PaintToolbar({ onSavePattern }: Props) {
               animType === t ? 'bg-fuchsia-500/20 text-fuchsia-200' : 'text-zinc-400 hover:bg-zinc-800',
             )}
           >
-            {t}
+            {t === 'flag-wave' ? 'flag' : t}
           </button>
         ))}
         <div className="flex items-center gap-2 ml-4">
