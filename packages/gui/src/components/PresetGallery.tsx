@@ -64,9 +64,18 @@ export function PresetGallery({
     return [...builtins, ...user];
   }, [filter, userPresets]);
 
+  // Game animations generate colors at runtime in the daemon — their pattern
+  // doesn't store keys. So "save current" must allow saving when the active
+  // animType is a stateful game even if keyColors is empty.
+  const STATEFUL_GAME_TYPES = [
+    'pong', 'snake', 'tetris', 'matrix-rain', 'breakout',
+    'fireworks', 'dvd', 'heart-rate', 'equalizer', 'rule30',
+  ];
+
   function saveCurrent() {
-    if (keyColors.size === 0) {
-      alert('Nada pintado pra salvar. Pinta umas teclas primeiro.');
+    const isStatefulGame = STATEFUL_GAME_TYPES.includes(animType);
+    if (keyColors.size === 0 && !isStatefulGame) {
+      alert('Nada pintado pra salvar. Pinta umas teclas primeiro ou aplica um preset.');
       return;
     }
     setNamePrompt({
@@ -78,10 +87,13 @@ export function PresetGallery({
         keyColors.forEach((hex, idx) => {
           keysObj[String(idx)] = hex;
         });
+        const description = isStatefulGame
+          ? `${animType} (game)`
+          : `${keyColors.size} keys, ${animType}`;
         const newPreset: UserPreset = {
           id: `user-${Date.now()}`,
           name,
-          description: `${keyColors.size} keys, ${animType}`,
+          description,
           category: 'user',
           pattern: {
             keys: keysObj,
