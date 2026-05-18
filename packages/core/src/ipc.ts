@@ -49,7 +49,7 @@ export const DeviceStatusSchema = z.object({
 });
 export type DeviceStatus = z.infer<typeof DeviceStatusSchema>;
 
-export const AnimTypeSchema = z.enum(['solid', 'blink', 'chase', 'wave', 'typewriter', 'marquee', 'flag-wave']);
+export const AnimTypeSchema = z.enum(['solid', 'blink', 'chase', 'wave', 'typewriter', 'marquee', 'flag-wave', 'pong', 'snake']);
 
 export const PatternSchema = z.object({
   keys: z.record(z.string(), HexColorSchema),

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeFrame } from '../src/animations.js';
+import { computeFrame, type AnimType } from '../src/animations.js';
 
 describe('computeFrame', () => {
   const basicPattern = {
@@ -100,5 +100,13 @@ describe('computeFrame', () => {
     expect(r0).toBeLessThanOrEqual(255);
     expect(r14).toBeGreaterThanOrEqual(0);
     expect(r14).toBeLessThanOrEqual(255);
+  });
+
+  it('pong and snake are valid animTypes (fallback to empty map)', () => {
+    // computeFrame is stateless — for game types it falls back to empty map
+    const p1 = computeFrame({ keys: {}, animType: 'pong' as AnimType, animSpeed: 0.5 }, 0, 61);
+    const p2 = computeFrame({ keys: {}, animType: 'snake' as AnimType, animSpeed: 0.5 }, 0, 61);
+    expect(p1.size).toBe(0);
+    expect(p2.size).toBe(0);
   });
 });
