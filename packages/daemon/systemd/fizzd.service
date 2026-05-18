@@ -1,0 +1,18 @@
+[Unit]
+Description=Fizz RGB controller daemon for Redragon K617
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/fizzd
+Restart=on-failure
+RestartSec=2
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.config/fizz %h/.cache/fizz %h/.local/state/fizz %t
+
+[Install]
+WantedBy=default.target
