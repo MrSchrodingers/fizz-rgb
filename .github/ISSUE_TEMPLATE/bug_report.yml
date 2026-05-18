@@ -1,0 +1,71 @@
+name: 🐞 Bug report
+description: Report something that does not work as expected.
+title: '[bug] '
+labels: [bug, triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! 🙏
+        Please fill in the fields below so we can reproduce and fix it.
+
+        Para reportar em português, vá direto pros campos abaixo — pode escrever em PT.
+  - type: input
+    id: version
+    attributes:
+      label: fizz-rgb version
+      description: Output of `fizz --version` (or commit SHA if running from source).
+      placeholder: '0.1.0 or commit abc1234'
+    validations:
+      required: true
+  - type: input
+    id: distro
+    attributes:
+      label: Distribution / kernel
+      description: Output of `cat /etc/os-release | head -2` and `uname -a`.
+      placeholder: 'Fedora 43, Linux 7.0.7-100.fc43.x86_64'
+    validations:
+      required: true
+  - type: input
+    id: usb
+    attributes:
+      label: lsusb line
+      description: Paste the output of `lsusb | grep 258a`.
+      placeholder: 'Bus 001 Device 005: ID 258a:0049 SINOWEALTH ...'
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal reproduction. Include exact CLI commands or GUI clicks.
+      placeholder: |
+        1. fizz daemon start
+        2. fizz effect run fw-rainbow
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual behavior
+      placeholder: |
+        Expected: rainbow effect appears on keyboard.
+        Actual:   keys stay dark, no error in logs.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Output of `fizz daemon logs --tail 100`. Wrap in triple backticks.
+      render: shell
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Confirmation
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: I am on the latest version (or a recent commit).
+          required: true
