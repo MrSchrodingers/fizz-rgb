@@ -15,6 +15,13 @@ export interface FizzApi {
   subscribeEffectChanged(handler: (cur: any) => void): () => void;
   subscribeDeviceChanged(handler: (s: any) => void): () => void;
   perkeySet(colors: Record<string, string>): Promise<void>;
+  perkeyStartPattern(pattern: {
+    keys: Record<string, string>;
+    animType: 'solid' | 'blink' | 'chase' | 'wave' | 'typewriter' | 'marquee';
+    animSpeed: number;
+    sequence?: number[];
+  }): Promise<void>;
+  perkeyStopPattern(): Promise<void>;
 }
 
 declare global {

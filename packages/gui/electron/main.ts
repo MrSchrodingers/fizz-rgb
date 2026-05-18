@@ -81,6 +81,10 @@ ipcMain.handle('fizz:profileDelete', (_e, name: string) =>
   daemon.call('profile.delete', { name }));
 ipcMain.handle('fizz:perkeySet', (_e, colors: Record<string, string>) =>
   daemon.call('perkey.set', { colors }));
+ipcMain.handle('fizz:perkeyStartPattern', (_e, pattern) =>
+  daemon.call('perkey.startPattern', pattern));
+ipcMain.handle('fizz:perkeyStopPattern', () =>
+  daemon.call('perkey.stopPattern', {}));
 
 // === Daemon notifications → forward to renderer ===
 daemon.on('effect.changed', (params) => {

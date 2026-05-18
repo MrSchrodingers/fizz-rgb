@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { K617_LAYOUT } from '@fizz/core';
 
-export type AnimType = 'solid' | 'blink' | 'chase' | 'wave';
+export type AnimType = 'solid' | 'blink' | 'chase' | 'wave' | 'typewriter' | 'marquee';
 
 function textCharToKeyName(ch: string): string | null {
   if (ch === ' ') return 'Space';
@@ -34,6 +34,8 @@ interface PaintState {
   brushColor: string;
   animType: AnimType;
   animSpeed: number;
+  /** Sequential order of keys last set via paintByText (for typewriter/marquee). */
+  lastSequence: number[];
   setMode: (m: 'effect' | 'paint') => void;
   toggleKey: (ledIndex: number, additive: boolean) => void;
   clearSelection: () => void;
@@ -53,6 +55,7 @@ export const usePaintStore = create<PaintState>((set, get) => ({
   brushColor: '#ff8800',
   animType: 'solid',
   animSpeed: 0.5,
+  lastSequence: [],
   setMode: (mode) => set({ mode, selected: new Set() }),
   toggleKey: (ledIndex, additive) =>
     set((s) => {
@@ -78,14 +81,16 @@ export const usePaintStore = create<PaintState>((set, get) => ({
   paintByText: (text) => {
     const { brushColor, keyColors } = get();
     const next = new Map(keyColors);
+    const sequence: number[] = [];
     for (const ch of text) {
       const keyName = textCharToKeyName(ch);
       if (!keyName) continue;
       const keyDef = K617_LAYOUT.keys.find((k) => k.name === keyName);
       if (!keyDef) continue;
       next.set(keyDef.ledIndex, brushColor);
+      sequence.push(keyDef.ledIndex);
     }
-    set({ keyColors: next });
+    set({ keyColors: next, lastSequence: sequence });
   },
   setAnimType: (animType) => set({ animType }),
   setAnimSpeed: (animSpeed) => set({ animSpeed }),
