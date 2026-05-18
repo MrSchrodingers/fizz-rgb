@@ -82,46 +82,48 @@ fizz-rgb/
 
 ## Task Overview
 
-| # | Task | Layer |
-|---|---|---|
-| T1 | Install system deps + udev rule | System |
-| T2 | npm workspaces scaffold | Setup |
-| T3 | TypeScript base configs | Setup |
-| T4 | ESLint + Prettier | Setup |
-| T5 | Vitest config + smoke test | Setup |
-| T6 | Download captures from OpenRGB issue #2172 | RE |
-| T7 | Packet extraction tool | RE |
-| T8 | Document protocol observations | RE |
-| T9 | Live replay sanity check | RE |
-| T10 | Color types + conversions | core |
-| T11 | K617 KeyLayout | core |
-| T12 | Protocol frame types + skeleton | core |
-| T13 | Firmware effect encoders | core |
-| T14 | IPC message schemas (Zod) | core |
-| T15 | HID wrapper with reconnect | daemon |
-| T16 | Fake HID mock | daemon |
-| T17 | EffectEngine (single-shot) | daemon |
-| T18 | ProfileManager | daemon |
-| T19 | IPC server (Unix socket + JSON-RPC) | daemon |
-| T20 | Daemon entry + systemd unit | daemon |
-| T21 | CLI IPC client | cli |
-| T22 | CLI core commands (status, set, effect) | cli |
-| T23 | CLI profile commands | cli |
-| T24 | CLI daemon-control commands | cli |
-| T25 | Install script + README | Integration |
-| T26 | End-to-end smoke test | Integration |
+| #   | Task                                       | Layer       |
+| --- | ------------------------------------------ | ----------- |
+| T1  | Install system deps + udev rule            | System      |
+| T2  | npm workspaces scaffold                    | Setup       |
+| T3  | TypeScript base configs                    | Setup       |
+| T4  | ESLint + Prettier                          | Setup       |
+| T5  | Vitest config + smoke test                 | Setup       |
+| T6  | Download captures from OpenRGB issue #2172 | RE          |
+| T7  | Packet extraction tool                     | RE          |
+| T8  | Document protocol observations             | RE          |
+| T9  | Live replay sanity check                   | RE          |
+| T10 | Color types + conversions                  | core        |
+| T11 | K617 KeyLayout                             | core        |
+| T12 | Protocol frame types + skeleton            | core        |
+| T13 | Firmware effect encoders                   | core        |
+| T14 | IPC message schemas (Zod)                  | core        |
+| T15 | HID wrapper with reconnect                 | daemon      |
+| T16 | Fake HID mock                              | daemon      |
+| T17 | EffectEngine (single-shot)                 | daemon      |
+| T18 | ProfileManager                             | daemon      |
+| T19 | IPC server (Unix socket + JSON-RPC)        | daemon      |
+| T20 | Daemon entry + systemd unit                | daemon      |
+| T21 | CLI IPC client                             | cli         |
+| T22 | CLI core commands (status, set, effect)    | cli         |
+| T23 | CLI profile commands                       | cli         |
+| T24 | CLI daemon-control commands                | cli         |
+| T25 | Install script + README                    | Integration |
+| T26 | End-to-end smoke test                      | Integration |
 
 ---
 
 ## T1: Install system dependencies + udev rule
 
 **Files:**
+
 - Create: `tools/install-udev.sh`
 - Create: `/etc/udev/rules.d/99-fizz-k617.rules` (system path, written by script)
 
 - [ ] **Step 1: Install hidapi-devel and libusb-devel via dnf**
 
 Run:
+
 ```bash
 sudo dnf install -y hidapi-devel libusb1-devel
 ```
@@ -131,6 +133,7 @@ Expected: packages installed. node-hid will use these when building from source 
 - [ ] **Step 2: Confirm node version is 22+ and node-hid will work**
 
 Run:
+
 ```bash
 node --version
 which node
@@ -141,6 +144,7 @@ Expected: `v22.x` or newer. If older, install via `dnf install nodejs` or `nvm i
 - [ ] **Step 3: Confirm user is in `plugdev` group (or create it)**
 
 Run:
+
 ```bash
 getent group plugdev || sudo groupadd plugdev
 id -nG | tr ' ' '\n' | grep -q '^plugdev$' && echo "already in group" || (sudo usermod -aG plugdev $USER && echo "ADDED — log out and back in")
@@ -184,6 +188,7 @@ chmod +x tools/install-udev.sh
 - [ ] **Step 5: Run the install script and verify access**
 
 Run:
+
 ```bash
 ./tools/install-udev.sh
 # Unplug and replug the keyboard physically.
@@ -210,6 +215,7 @@ git commit -m "feat(install): add udev rule installer for Redragon K617"
 ## T2: npm workspaces scaffold
 
 **Files:**
+
 - Create: `package.json` (workspace root)
 - Create: `packages/core/package.json`
 - Create: `packages/daemon/package.json`
@@ -324,6 +330,7 @@ Create `package.json`:
 - [ ] **Step 5: Install all deps**
 
 Run:
+
 ```bash
 npm install
 ```
@@ -342,6 +349,7 @@ git commit -m "feat: scaffold npm workspaces for core/daemon/cli"
 ## T3: TypeScript base configs
 
 **Files:**
+
 - Create: `tsconfig.base.json`
 - Create: `tsconfig.json` (root, project references)
 - Create: `packages/{core,daemon,cli}/tsconfig.json`
@@ -419,6 +427,7 @@ Save this same content to both `packages/daemon/tsconfig.json` and `packages/cli
 - [ ] **Step 5: Verify build works with stub entrypoints**
 
 Run:
+
 ```bash
 mkdir -p packages/core/src packages/daemon/src packages/cli/src
 printf 'export {};\n' > packages/core/src/index.ts
@@ -441,6 +450,7 @@ git commit -m "feat: add TypeScript project references and strict configs"
 ## T4: ESLint + Prettier
 
 **Files:**
+
 - Create: `.eslintrc.json`, `.prettierrc.json`, `.eslintignore`, `.prettierignore`
 
 - [ ] **Step 1: Write `.eslintrc.json`**
@@ -455,10 +465,7 @@ git commit -m "feat: add TypeScript project references and strict configs"
     "project": ["./packages/*/tsconfig.json"]
   },
   "plugins": ["@typescript-eslint"],
-  "extends": [
-    "eslint:recommended",
-    "plugin:@typescript-eslint/recommended-type-checked"
-  ],
+  "extends": ["eslint:recommended", "plugin:@typescript-eslint/recommended-type-checked"],
   "rules": {
     "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
     "@typescript-eslint/consistent-type-imports": "error",
@@ -484,6 +491,7 @@ git commit -m "feat: add TypeScript project references and strict configs"
 - [ ] **Step 3: Write ignores**
 
 `.eslintignore`:
+
 ```
 dist/
 node_modules/
@@ -492,6 +500,7 @@ docs/
 ```
 
 `.prettierignore`:
+
 ```
 dist/
 node_modules/
@@ -501,6 +510,7 @@ docs/reverse-engineering/captures/
 - [ ] **Step 4: Run linters to confirm clean baseline**
 
 Run:
+
 ```bash
 npm run lint
 npm run format -- --check
@@ -520,6 +530,7 @@ git commit -m "feat: configure ESLint and Prettier"
 ## T5: Vitest config + smoke test
 
 **Files:**
+
 - Create: `vitest.config.ts`
 - Create: `packages/core/test/smoke.test.ts`
 
@@ -559,6 +570,7 @@ describe('vitest smoke', () => {
 - [ ] **Step 3: Run tests**
 
 Run:
+
 ```bash
 npm test
 ```
@@ -577,6 +589,7 @@ git commit -m "feat: add vitest config and smoke test"
 ## T6: Download captures from OpenRGB issue #2172
 
 **Files:**
+
 - Create: `tools/download-captures.sh`
 - Output: `docs/reverse-engineering/captures/*` (gitignored)
 
@@ -626,6 +639,7 @@ ls -la "$DEST"
 ```
 
 Make executable:
+
 ```bash
 chmod +x tools/download-captures.sh
 ```
@@ -637,6 +651,7 @@ Download every `.pcapng` from the issue into `docs/reverse-engineering/captures/
 - [ ] **Step 4: Verify captures**
 
 Run:
+
 ```bash
 ls -la docs/reverse-engineering/captures/
 file docs/reverse-engineering/captures/*.pcapng
@@ -656,11 +671,13 @@ git commit -m "tools: add capture download helper for OpenRGB issue #2172"
 ## T7: Packet extraction tool
 
 **Files:**
+
 - Create: `tools/extract-packets.ts`
 
 - [ ] **Step 1: Install tshark (Wireshark CLI)**
 
 Run:
+
 ```bash
 sudo dnf install -y wireshark-cli
 which tshark && tshark --version | head -1
@@ -693,18 +710,30 @@ if (!file || !existsSync(file)) {
 // Capture both control transfers (SET_REPORT for feature reports) and
 // interrupt transfers, then we filter further downstream.
 const tsharkArgs = [
-  '-r', file,
-  '-Y', 'usb.transfer_type == 0x02 || usb.transfer_type == 0x01',
-  '-T', 'fields',
-  '-e', 'frame.number',
-  '-e', 'frame.time_relative',
-  '-e', 'usb.transfer_type',
-  '-e', 'usb.endpoint_address',
-  '-e', 'usb.setup.bRequest',
-  '-e', 'usb.setup.wValue',
-  '-e', 'usb.setup.wIndex',
-  '-e', 'usb.capdata',
-  '-E', 'separator=|',
+  '-r',
+  file,
+  '-Y',
+  'usb.transfer_type == 0x02 || usb.transfer_type == 0x01',
+  '-T',
+  'fields',
+  '-e',
+  'frame.number',
+  '-e',
+  'frame.time_relative',
+  '-e',
+  'usb.transfer_type',
+  '-e',
+  'usb.endpoint_address',
+  '-e',
+  'usb.setup.bRequest',
+  '-e',
+  'usb.setup.wValue',
+  '-e',
+  'usb.setup.wIndex',
+  '-e',
+  'usb.capdata',
+  '-E',
+  'separator=|',
 ];
 
 const out = execFileSync('tshark', tsharkArgs, { encoding: 'utf8' });
@@ -748,6 +777,7 @@ console.log(JSON.stringify(packets, null, 2));
 ```
 
 Make executable:
+
 ```bash
 chmod +x tools/extract-packets.ts
 ```
@@ -755,6 +785,7 @@ chmod +x tools/extract-packets.ts
 - [ ] **Step 3: Smoke-test extraction**
 
 Run:
+
 ```bash
 ./tools/extract-packets.ts docs/reverse-engineering/captures/Rainbow.pcapng | head -50
 ```
@@ -764,6 +795,7 @@ Expected: JSON array of packets, each with a `dataBytes` array (typically 64 num
 - [ ] **Step 4: Save extracted JSON for all captures**
 
 Run:
+
 ```bash
 mkdir -p docs/reverse-engineering/extracted
 for f in docs/reverse-engineering/captures/*.pcapng; do
@@ -779,6 +811,7 @@ Expected: one `.json` per capture.
 - [ ] **Step 5: Add extracted/ to gitignore**
 
 Edit `.gitignore`, append:
+
 ```
 docs/reverse-engineering/extracted/
 ```
@@ -795,11 +828,13 @@ git commit -m "tools: add tshark-based packet extractor"
 ## T8: Document protocol observations
 
 **Files:**
+
 - Create: `docs/reverse-engineering/protocol.md`
 
 - [ ] **Step 1: Analyze the Static-Red extracted JSON**
 
 Run:
+
 ```bash
 jq '.[] | select(.bRequest == "0x09") | {frame, dataBytes}' docs/reverse-engineering/extracted/Static-Red.json | head -100
 ```
@@ -809,6 +844,7 @@ Identify in the first few SET_REPORT packets: report ID (byte 0), common header 
 - [ ] **Step 2: Compare Static-Red vs Static-Green vs Static-Blue**
 
 Run:
+
 ```bash
 for c in Red Green Blue; do
   echo "=== Static-$c ==="
@@ -821,6 +857,7 @@ The bytes that change between captures are color bytes; the bytes that stay cons
 - [ ] **Step 3: Compare effect-mode opcodes**
 
 Run:
+
 ```bash
 for c in Rainbow RetroSnake Waterfall; do
   echo "=== $c (first SET_REPORT) ==="
@@ -850,27 +887,27 @@ Fill in actual hex values discovered above:
 
 ## Packet structure (general)
 
-Byte offset | Field | Notes
----|---|---
-0 | Report ID | `0xNN` (fill in)
-1 | Command opcode | See "Effect opcodes" below
-2 | Sub-command / param | varies per effect
-3 | Length / flags | varies
-4..N | Payload | effect-specific
-N..63 | Padding | `0x00`
+| Byte offset | Field               | Notes                      |
+| ----------- | ------------------- | -------------------------- |
+| 0           | Report ID           | `0xNN` (fill in)           |
+| 1           | Command opcode      | See "Effect opcodes" below |
+| 2           | Sub-command / param | varies per effect          |
+| 3           | Length / flags      | varies                     |
+| 4..N        | Payload             | effect-specific            |
+| N..63       | Padding             | `0x00`                     |
 
 ## Effect opcodes (observed)
 
-Effect | Opcode | Param bytes | Notes
----|---|---|---
-fw-static | `0xNN` | R, G, B at offsets X, Y, Z | covers Static-Red/Green/Blue
-fw-rainbow | `0xNN` | speed at offset W | …
-fw-snake | `0xNN` | speed, color at offsets … | RetroSnake.pcapng
-fw-sine-wave | `0xNN` | speed | SineWaveRGB.pcapng
-fw-star-twinkle | `0xNN` | density, color, speed | StarTwinkle.pcapng
-fw-rainbow-blossom | `0xNN` | speed | RainbowBlossom.pcapng
-fw-waterfall | `0xNN` | color, speed | Waterfall.pcapng
-fw-wheel | `0xNN` | speed, direction | Wheel.pcapng
+| Effect             | Opcode | Param bytes                | Notes                        |
+| ------------------ | ------ | -------------------------- | ---------------------------- |
+| fw-static          | `0xNN` | R, G, B at offsets X, Y, Z | covers Static-Red/Green/Blue |
+| fw-rainbow         | `0xNN` | speed at offset W          | …                            |
+| fw-snake           | `0xNN` | speed, color at offsets …  | RetroSnake.pcapng            |
+| fw-sine-wave       | `0xNN` | speed                      | SineWaveRGB.pcapng           |
+| fw-star-twinkle    | `0xNN` | density, color, speed      | StarTwinkle.pcapng           |
+| fw-rainbow-blossom | `0xNN` | speed                      | RainbowBlossom.pcapng        |
+| fw-waterfall       | `0xNN` | color, speed               | Waterfall.pcapng             |
+| fw-wheel           | `0xNN` | speed, direction           | Wheel.pcapng                 |
 
 ## Sequence
 
@@ -906,6 +943,7 @@ git commit -m "docs(re): document observed HID protocol for K617 firmware effect
 ## T9: Live replay sanity check
 
 **Files:**
+
 - Create: `tools/replay-packet.ts`
 
 - [ ] **Step 1: Write replay tool**
@@ -976,6 +1014,7 @@ if (!sent) {
 ```
 
 Make executable:
+
 ```bash
 chmod +x tools/replay-packet.ts
 ```
@@ -983,6 +1022,7 @@ chmod +x tools/replay-packet.ts
 - [ ] **Step 2: Install node-hid at workspace root for the standalone tools**
 
 Run:
+
 ```bash
 npm install --no-save node-hid
 ```
@@ -992,6 +1032,7 @@ Expected: node-hid installed at root `node_modules/` (without polluting the work
 - [ ] **Step 3: Replay the first SET_REPORT from Static-Red**
 
 Run:
+
 ```bash
 HEX=$(jq -r '[.[] | select(.bRequest == "0x09")][0].data' docs/reverse-engineering/extracted/Static-Red.json)
 echo "Sending: $HEX"
@@ -999,6 +1040,7 @@ echo "Sending: $HEX"
 ```
 
 Expected: the keyboard turns **solid red**. If not:
+
 1. Iterate over all SET_REPORT packets (some effects need multiple in sequence).
 2. Force a specific interface (modify the script).
 3. Confirm `ls -la /dev/hidraw*` shows `plugdev` group.
@@ -1006,6 +1048,7 @@ Expected: the keyboard turns **solid red**. If not:
 - [ ] **Step 4: Replay Rainbow**
 
 Run:
+
 ```bash
 for HEX in $(jq -r '.[] | select(.bRequest == "0x09") | .data' docs/reverse-engineering/extracted/Rainbow.json); do
   ./tools/replay-packet.ts "$HEX"
@@ -1031,6 +1074,7 @@ git commit -m "tools: add HID packet replay tool, validate protocol observations
 ## T10: Color types and conversions
 
 **Files:**
+
 - Create: `packages/core/src/color.ts`
 - Create: `packages/core/test/color.test.ts`
 
@@ -1080,6 +1124,7 @@ describe('Color', () => {
 - [ ] **Step 2: Run test, verify failure**
 
 Run:
+
 ```bash
 npx vitest run packages/core/test/color.test.ts
 ```
@@ -1123,15 +1168,36 @@ export function toHex(c: Color): string {
 /** HSV → RGB. h in [0, 360), s in [0, 1], v in [0, 1]. */
 export function hsvToRgb(h: number, s: number, v: number): Color {
   const c = v * s;
-  const hh = ((h % 360) + 360) % 360 / 60;
+  const hh = (((h % 360) + 360) % 360) / 60;
   const x = c * (1 - Math.abs((hh % 2) - 1));
-  let r1 = 0, g1 = 0, b1 = 0;
-  if (hh < 1)      { r1 = c; g1 = x; b1 = 0; }
-  else if (hh < 2) { r1 = x; g1 = c; b1 = 0; }
-  else if (hh < 3) { r1 = 0; g1 = c; b1 = x; }
-  else if (hh < 4) { r1 = 0; g1 = x; b1 = c; }
-  else if (hh < 5) { r1 = x; g1 = 0; b1 = c; }
-  else             { r1 = c; g1 = 0; b1 = x; }
+  let r1 = 0,
+    g1 = 0,
+    b1 = 0;
+  if (hh < 1) {
+    r1 = c;
+    g1 = x;
+    b1 = 0;
+  } else if (hh < 2) {
+    r1 = x;
+    g1 = c;
+    b1 = 0;
+  } else if (hh < 3) {
+    r1 = 0;
+    g1 = c;
+    b1 = x;
+  } else if (hh < 4) {
+    r1 = 0;
+    g1 = x;
+    b1 = c;
+  } else if (hh < 5) {
+    r1 = x;
+    g1 = 0;
+    b1 = c;
+  } else {
+    r1 = c;
+    g1 = 0;
+    b1 = x;
+  }
   const m = v - c;
   return {
     r: Math.round((r1 + m) * 255),
@@ -1144,6 +1210,7 @@ export function hsvToRgb(h: number, s: number, v: number): Color {
 - [ ] **Step 4: Run test, verify pass**
 
 Run:
+
 ```bash
 npx vitest run packages/core/test/color.test.ts
 ```
@@ -1162,6 +1229,7 @@ git commit -m "feat(core): add Color type, parseHex, toHex, hsvToRgb"
 ## T11: K617 KeyLayout
 
 **Files:**
+
 - Create: `packages/core/src/layout.ts`
 - Create: `packages/core/test/layout.test.ts`
 
@@ -1205,6 +1273,7 @@ describe('K617_LAYOUT', () => {
 - [ ] **Step 2: Run, verify failure**
 
 Run:
+
 ```bash
 npx vitest run packages/core/test/layout.test.ts
 ```
@@ -1226,38 +1295,81 @@ Create `packages/core/src/layout.ts`:
 export interface KeyDef {
   name: string;
   row: number;
-  col: number;   // float; standard keycap = 1.0u
+  col: number; // float; standard keycap = 1.0u
   width: number;
   ledIndex: number;
 }
 
 const ROW_0 = [
-  { name: 'Escape', w: 1 }, { name: '1', w: 1 }, { name: '2', w: 1 }, { name: '3', w: 1 },
-  { name: '4', w: 1 }, { name: '5', w: 1 }, { name: '6', w: 1 }, { name: '7', w: 1 },
-  { name: '8', w: 1 }, { name: '9', w: 1 }, { name: '0', w: 1 }, { name: 'Minus', w: 1 },
-  { name: 'Equal', w: 1 }, { name: 'Backspace', w: 2 },
+  { name: 'Escape', w: 1 },
+  { name: '1', w: 1 },
+  { name: '2', w: 1 },
+  { name: '3', w: 1 },
+  { name: '4', w: 1 },
+  { name: '5', w: 1 },
+  { name: '6', w: 1 },
+  { name: '7', w: 1 },
+  { name: '8', w: 1 },
+  { name: '9', w: 1 },
+  { name: '0', w: 1 },
+  { name: 'Minus', w: 1 },
+  { name: 'Equal', w: 1 },
+  { name: 'Backspace', w: 2 },
 ];
 const ROW_1 = [
-  { name: 'Tab', w: 1.5 }, { name: 'Q', w: 1 }, { name: 'W', w: 1 }, { name: 'E', w: 1 },
-  { name: 'R', w: 1 }, { name: 'T', w: 1 }, { name: 'Y', w: 1 }, { name: 'U', w: 1 },
-  { name: 'I', w: 1 }, { name: 'O', w: 1 }, { name: 'P', w: 1 }, { name: 'LBracket', w: 1 },
-  { name: 'RBracket', w: 1 }, { name: 'Backslash', w: 1.5 },
+  { name: 'Tab', w: 1.5 },
+  { name: 'Q', w: 1 },
+  { name: 'W', w: 1 },
+  { name: 'E', w: 1 },
+  { name: 'R', w: 1 },
+  { name: 'T', w: 1 },
+  { name: 'Y', w: 1 },
+  { name: 'U', w: 1 },
+  { name: 'I', w: 1 },
+  { name: 'O', w: 1 },
+  { name: 'P', w: 1 },
+  { name: 'LBracket', w: 1 },
+  { name: 'RBracket', w: 1 },
+  { name: 'Backslash', w: 1.5 },
 ];
 const ROW_2 = [
-  { name: 'CapsLock', w: 1.75 }, { name: 'A', w: 1 }, { name: 'S', w: 1 }, { name: 'D', w: 1 },
-  { name: 'F', w: 1 }, { name: 'G', w: 1 }, { name: 'H', w: 1 }, { name: 'J', w: 1 },
-  { name: 'K', w: 1 }, { name: 'L', w: 1 }, { name: 'Semicolon', w: 1 }, { name: 'Quote', w: 1 },
+  { name: 'CapsLock', w: 1.75 },
+  { name: 'A', w: 1 },
+  { name: 'S', w: 1 },
+  { name: 'D', w: 1 },
+  { name: 'F', w: 1 },
+  { name: 'G', w: 1 },
+  { name: 'H', w: 1 },
+  { name: 'J', w: 1 },
+  { name: 'K', w: 1 },
+  { name: 'L', w: 1 },
+  { name: 'Semicolon', w: 1 },
+  { name: 'Quote', w: 1 },
   { name: 'Enter', w: 2.25 },
 ];
 const ROW_3 = [
-  { name: 'LShift', w: 2.25 }, { name: 'Z', w: 1 }, { name: 'X', w: 1 }, { name: 'C', w: 1 },
-  { name: 'V', w: 1 }, { name: 'B', w: 1 }, { name: 'N', w: 1 }, { name: 'M', w: 1 },
-  { name: 'Comma', w: 1 }, { name: 'Period', w: 1 }, { name: 'Slash', w: 1 }, { name: 'RShift', w: 2.75 },
+  { name: 'LShift', w: 2.25 },
+  { name: 'Z', w: 1 },
+  { name: 'X', w: 1 },
+  { name: 'C', w: 1 },
+  { name: 'V', w: 1 },
+  { name: 'B', w: 1 },
+  { name: 'N', w: 1 },
+  { name: 'M', w: 1 },
+  { name: 'Comma', w: 1 },
+  { name: 'Period', w: 1 },
+  { name: 'Slash', w: 1 },
+  { name: 'RShift', w: 2.75 },
 ];
 const ROW_4 = [
-  { name: 'LCtrl', w: 1.25 }, { name: 'LSuper', w: 1.25 }, { name: 'LAlt', w: 1.25 },
+  { name: 'LCtrl', w: 1.25 },
+  { name: 'LSuper', w: 1.25 },
+  { name: 'LAlt', w: 1.25 },
   { name: 'Space', w: 6.25 },
-  { name: 'RAlt', w: 1.25 }, { name: 'Fn', w: 1.25 }, { name: 'Menu', w: 1.25 }, { name: 'RCtrl', w: 1.25 },
+  { name: 'RAlt', w: 1.25 },
+  { name: 'Fn', w: 1.25 },
+  { name: 'Menu', w: 1.25 },
+  { name: 'RCtrl', w: 1.25 },
 ];
 
 const ROWS = [ROW_0, ROW_1, ROW_2, ROW_3, ROW_4];
@@ -1290,6 +1402,7 @@ export function keyByName(name: string): KeyDef | undefined {
 - [ ] **Step 4: Run tests, verify pass**
 
 Run:
+
 ```bash
 npx vitest run packages/core/test/layout.test.ts
 ```
@@ -1308,6 +1421,7 @@ git commit -m "feat(core): add K617_LAYOUT with 61 keys mapped to LED indices"
 ## T12: Protocol frame types and skeleton
 
 **Files:**
+
 - Create: `packages/core/src/protocol.ts`
 
 - [ ] **Step 1: Write `protocol.ts` types-only skeleton**
@@ -1332,11 +1446,11 @@ export type FirmwareEffectName =
   | 'fw-wheel';
 
 export interface FirmwareEffectParams {
-  speed?: number;        // 0..255
-  brightness?: number;   // 0..255
+  speed?: number; // 0..255
+  brightness?: number; // 0..255
   direction?: 'forward' | 'reverse';
   color?: Color;
-  density?: number;      // for star-twinkle
+  density?: number; // for star-twinkle
 }
 
 /** Length of each HID feature report packet (bytes). */
@@ -1362,6 +1476,7 @@ export function encodeFirmwareEffect(
 - [ ] **Step 2: Build core**
 
 Run:
+
 ```bash
 npx tsc -b packages/core
 ```
@@ -1380,6 +1495,7 @@ git commit -m "feat(core): add protocol types and encoder skeleton"
 ## T13: Firmware effect encoders (validated against captures)
 
 **Files:**
+
 - Modify: `packages/core/src/protocol.ts`
 - Create: `packages/core/test/protocol.test.ts`
 - Create: `packages/core/test/fixtures/*.json`
@@ -1389,6 +1505,7 @@ Before this task, T9 MUST be complete (replay verified). Opcodes and offsets com
 - [ ] **Step 1: Copy fixtures from extracted captures**
 
 Run:
+
 ```bash
 mkdir -p packages/core/test/fixtures
 for c in Static-Red Static-Green Static-Blue Rainbow RetroSnake SineWaveRGB StarTwinkle RainbowBlossom Waterfall Wheel; do
@@ -1414,7 +1531,10 @@ import { join } from 'node:path';
 import { encodeFirmwareEffect } from '../src/protocol.ts';
 import { parseHex } from '../src/color.ts';
 
-interface Fixture { data: string; dataBytes: number[] }
+interface Fixture {
+  data: string;
+  dataBytes: number[];
+}
 
 function loadFixture(name: string): Fixture[] {
   const path = join(import.meta.dirname, 'fixtures', `${name}.json`);
@@ -1490,6 +1610,7 @@ describe('encodeFirmwareEffect', () => {
 - [ ] **Step 3: Run tests, verify failures**
 
 Run:
+
 ```bash
 npx vitest run packages/core/test/protocol.test.ts
 ```
@@ -1528,17 +1649,17 @@ export const PACKET_SIZE = 64;
 // === Constants discovered via reverse engineering (see protocol.md) ===
 // IMPORTANT: replace each placeholder below with the actual values from your
 // protocol.md before the tests will pass.
-const REPORT_ID = 0x04;       // TODO from protocol.md
+const REPORT_ID = 0x04; // TODO from protocol.md
 
 const OPCODE: Record<FirmwareEffectName, number> = {
-  'fw-static': 0x00,           // TODO
-  'fw-rainbow': 0x00,          // TODO
-  'fw-snake': 0x00,            // TODO
-  'fw-sine-wave': 0x00,        // TODO
-  'fw-star-twinkle': 0x00,     // TODO
-  'fw-rainbow-blossom': 0x00,  // TODO
-  'fw-waterfall': 0x00,        // TODO
-  'fw-wheel': 0x00,            // TODO
+  'fw-static': 0x00, // TODO
+  'fw-rainbow': 0x00, // TODO
+  'fw-snake': 0x00, // TODO
+  'fw-sine-wave': 0x00, // TODO
+  'fw-star-twinkle': 0x00, // TODO
+  'fw-rainbow-blossom': 0x00, // TODO
+  'fw-waterfall': 0x00, // TODO
+  'fw-wheel': 0x00, // TODO
 };
 
 // Byte offsets within the 64-byte packet — adjust to what protocol.md observed.
@@ -1568,7 +1689,8 @@ export function encodeFirmwareEffect(
 
   if (params.speed !== undefined) packet[OFFSET.speed] = params.speed & 0xff;
   if (params.brightness !== undefined) packet[OFFSET.brightness] = params.brightness & 0xff;
-  if (params.direction !== undefined) packet[OFFSET.direction] = params.direction === 'reverse' ? 1 : 0;
+  if (params.direction !== undefined)
+    packet[OFFSET.direction] = params.direction === 'reverse' ? 1 : 0;
   if (params.density !== undefined) packet[OFFSET.density] = params.density & 0xff;
 
   if (params.color) {
@@ -1586,6 +1708,7 @@ If protocol.md indicates an effect requires multiple packets, extend `encodeFirm
 - [ ] **Step 5: Run tests, verify they pass**
 
 Run:
+
 ```bash
 npx vitest run packages/core/test/protocol.test.ts
 ```
@@ -1605,6 +1728,7 @@ export * from './protocol.ts';
 - [ ] **Step 7: Build and commit**
 
 Run:
+
 ```bash
 npx tsc -b
 ```
@@ -1622,6 +1746,7 @@ git commit -m "feat(core): implement firmware effect encoders validated against 
 ## T14: IPC message schemas (Zod)
 
 **Files:**
+
 - Create: `packages/core/src/ipc.ts`
 
 - [ ] **Step 1: Write `ipc.ts`**
@@ -1697,11 +1822,13 @@ export const RpcMethods = {
   },
   'effect.current': {
     params: z.object({}).strict(),
-    result: z.object({
-      name: FirmwareEffectName,
-      params: FirmwareEffectParams,
-      startedAt: z.string().datetime(),
-    }).nullable(),
+    result: z
+      .object({
+        name: FirmwareEffectName,
+        params: FirmwareEffectParams,
+        startedAt: z.string().datetime(),
+      })
+      .nullable(),
   },
   'solid.set': {
     params: z.object({ color: HexColor }),
@@ -1798,6 +1925,7 @@ export * from './ipc.ts';
 ```
 
 Run:
+
 ```bash
 npx tsc -b packages/core
 ```
@@ -1816,6 +1944,7 @@ git commit -m "feat(core): add Zod schemas for JSON-RPC IPC contract"
 ## T15: HID wrapper with reconnect
 
 **Files:**
+
 - Create: `packages/daemon/src/log.ts`
 - Create: `packages/daemon/src/hid.ts`
 
@@ -1871,7 +2000,9 @@ export class NodeHidController implements HidController {
     this.tryOpen();
   }
 
-  isConnected(): boolean { return this.device !== null; }
+  isConnected(): boolean {
+    return this.device !== null;
+  }
 
   on(event: 'connect' | 'disconnect', handler: Listener): void {
     this.listeners[event].push(handler);
@@ -1893,7 +2024,10 @@ export class NodeHidController implements HidController {
       }
       const dev = new HID.HID(target.path);
       this.device = dev;
-      if (this.retryTimer) { clearTimeout(this.retryTimer); this.retryTimer = null; }
+      if (this.retryTimer) {
+        clearTimeout(this.retryTimer);
+        this.retryTimer = null;
+      }
       log.info({ path: target.path, interface: target.interface }, 'HID device opened');
       this.emit('connect');
       dev.on('error', (err) => {
@@ -1908,7 +2042,11 @@ export class NodeHidController implements HidController {
 
   private handleDisconnect() {
     if (this.device) {
-      try { this.device.close(); } catch { /* ignore */ }
+      try {
+        this.device.close();
+      } catch {
+        /* ignore */
+      }
       this.device = null;
       this.emit('disconnect');
     }
@@ -1933,8 +2071,18 @@ export class NodeHidController implements HidController {
   }
 
   close(): void {
-    if (this.retryTimer) { clearTimeout(this.retryTimer); this.retryTimer = null; }
-    if (this.device) { try { this.device.close(); } catch { /* ignore */ } this.device = null; }
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
+    if (this.device) {
+      try {
+        this.device.close();
+      } catch {
+        /* ignore */
+      }
+      this.device = null;
+    }
   }
 }
 ```
@@ -1942,6 +2090,7 @@ export class NodeHidController implements HidController {
 - [ ] **Step 3: Build to verify types compile**
 
 Run:
+
 ```bash
 npx tsc -b packages/daemon
 ```
@@ -1960,6 +2109,7 @@ git commit -m "feat(daemon): add HidController interface and node-hid implementa
 ## T16: Fake HID mock
 
 **Files:**
+
 - Create: `packages/daemon/src/hid-mock.ts`
 - Create: `packages/daemon/test/hid.test.ts`
 
@@ -1979,7 +2129,9 @@ export class FakeHidController implements HidController {
   private connected = true;
   private listeners: Record<'connect' | 'disconnect', Listener[]> = { connect: [], disconnect: [] };
 
-  isConnected(): boolean { return this.connected; }
+  isConnected(): boolean {
+    return this.connected;
+  }
 
   on(event: 'connect' | 'disconnect', handler: Listener): void {
     this.listeners[event].push(handler);
@@ -1998,11 +2150,22 @@ export class FakeHidController implements HidController {
     for (const f of frames) await this.sendFeatureReport(f);
   }
 
-  close(): void { this.connected = false; }
+  close(): void {
+    this.connected = false;
+  }
 
-  simulateDisconnect() { this.connected = false; this.emit('disconnect'); }
-  simulateReconnect()  { this.connected = true;  this.emit('connect'); }
-  reset() { this.sentFrames.length = 0; this.connected = true; }
+  simulateDisconnect() {
+    this.connected = false;
+    this.emit('disconnect');
+  }
+  simulateReconnect() {
+    this.connected = true;
+    this.emit('connect');
+  }
+  reset() {
+    this.sentFrames.length = 0;
+    this.connected = true;
+  }
 }
 ```
 
@@ -2045,6 +2208,7 @@ describe('FakeHidController', () => {
 - [ ] **Step 3: Run tests, verify pass**
 
 Run:
+
 ```bash
 npx vitest run packages/daemon/test/hid.test.ts
 ```
@@ -2063,6 +2227,7 @@ git commit -m "feat(daemon): add FakeHidController and tests"
 ## T17: EffectEngine (single-shot mode)
 
 **Files:**
+
 - Create: `packages/daemon/src/engine.ts`
 - Create: `packages/daemon/test/engine.test.ts`
 
@@ -2119,8 +2284,9 @@ describe('EffectEngine', () => {
 
   it('rejects gracefully when device disconnected', async () => {
     hid.simulateDisconnect();
-    await expect(engine.runEffect('fw-static', { color: { r: 1, g: 1, b: 1 } }))
-      .rejects.toThrow(/not connected/);
+    await expect(engine.runEffect('fw-static', { color: { r: 1, g: 1, b: 1 } })).rejects.toThrow(
+      /not connected/,
+    );
   });
 });
 ```
@@ -2128,6 +2294,7 @@ describe('EffectEngine', () => {
 - [ ] **Step 2: Run, verify failure**
 
 Run:
+
 ```bash
 npx vitest run packages/daemon/test/engine.test.ts
 ```
@@ -2158,9 +2325,13 @@ export class EffectEngine {
 
   constructor(private readonly hid: HidController) {}
 
-  current(): CurrentEffect | null { return this.state; }
+  current(): CurrentEffect | null {
+    return this.state;
+  }
 
-  onChange(listener: Listener): void { this.listeners.push(listener); }
+  onChange(listener: Listener): void {
+    this.listeners.push(listener);
+  }
 
   async runEffect(name: FirmwareEffectName, params: FirmwareEffectParams): Promise<void> {
     const frames = encodeFirmwareEffect(name, params);
@@ -2178,13 +2349,16 @@ export class EffectEngine {
     }
   }
 
-  private notify() { for (const l of this.listeners) l(this.state); }
+  private notify() {
+    for (const l of this.listeners) l(this.state);
+  }
 }
 ```
 
 - [ ] **Step 4: Run tests, verify pass**
 
 Run:
+
 ```bash
 npx vitest run packages/daemon/test/engine.test.ts
 ```
@@ -2203,6 +2377,7 @@ git commit -m "feat(daemon): add EffectEngine in single-shot mode"
 ## T18: ProfileManager
 
 **Files:**
+
 - Create: `packages/daemon/src/profiles.ts`
 - Create: `packages/daemon/test/profiles.test.ts`
 
@@ -2219,8 +2394,12 @@ import { ProfileManager } from '../src/profiles.ts';
 
 let dir: string;
 
-beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'fizz-profiles-')); });
-afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), 'fizz-profiles-'));
+});
+afterEach(() => {
+  rmSync(dir, { recursive: true, force: true });
+});
 
 describe('ProfileManager', () => {
   it('returns empty list when file does not exist', async () => {
@@ -2278,6 +2457,7 @@ describe('ProfileManager', () => {
 - [ ] **Step 2: Run, verify failure**
 
 Run:
+
 ```bash
 npx vitest run packages/daemon/test/profiles.test.ts
 ```
@@ -2317,17 +2497,29 @@ export class ProfileManager {
     try {
       this.data = FileSchema.parse(JSON.parse(raw));
     } catch (err) {
-      log.warn({ err: (err as Error).message }, 'profiles.json invalid; backing up and starting empty');
+      log.warn(
+        { err: (err as Error).message },
+        'profiles.json invalid; backing up and starting empty',
+      );
       renameSync(this.path, this.path + '.bak');
       this.data = { version: 1, active: null, profiles: {} };
     }
   }
 
-  list(): Profile[] { return Object.values(this.data.profiles); }
-  active(): string | null { return this.data.active; }
-  get(name: string): Profile | undefined { return this.data.profiles[name]; }
+  list(): Profile[] {
+    return Object.values(this.data.profiles);
+  }
+  active(): string | null {
+    return this.data.active;
+  }
+  get(name: string): Profile | undefined {
+    return this.data.profiles[name];
+  }
 
-  async save(key: string, profile: Omit<Profile, 'createdAt'> & { createdAt?: string }): Promise<void> {
+  async save(
+    key: string,
+    profile: Omit<Profile, 'createdAt'> & { createdAt?: string },
+  ): Promise<void> {
     const full: Profile = { ...profile, createdAt: profile.createdAt ?? new Date().toISOString() };
     ProfileSchema.parse(full);
     this.data.profiles[key] = full;
@@ -2357,6 +2549,7 @@ export class ProfileManager {
 - [ ] **Step 4: Run tests, verify pass**
 
 Run:
+
 ```bash
 npx vitest run packages/daemon/test/profiles.test.ts
 ```
@@ -2375,6 +2568,7 @@ git commit -m "feat(daemon): add ProfileManager with atomic writes and corruptio
 ## T19: IPC server (Unix socket + JSON-RPC)
 
 **Files:**
+
 - Create: `packages/daemon/src/ipc-server.ts`
 - Create: `packages/daemon/test/ipc-server.test.ts`
 
@@ -2426,7 +2620,11 @@ function call(method: string, params: unknown): Promise<any> {
       if (nl >= 0) {
         const line = buf.slice(0, nl);
         sock.end();
-        try { resolve(JSON.parse(line)); } catch (e) { reject(e); }
+        try {
+          resolve(JSON.parse(line));
+        } catch (e) {
+          reject(e);
+        }
       }
     });
     sock.on('error', reject);
@@ -2460,7 +2658,10 @@ describe('IpcServer', () => {
   });
 
   it('profile.list returns saved profiles', async () => {
-    await pm.save('default', { name: 'Default', effect: { name: 'fw-static', params: { color: '#ff0000' } } });
+    await pm.save('default', {
+      name: 'Default',
+      effect: { name: 'fw-static', params: { color: '#ff0000' } },
+    });
     const r = await call('profile.list', {});
     expect(r.result.map((p: any) => p.name)).toContain('Default');
   });
@@ -2470,6 +2671,7 @@ describe('IpcServer', () => {
 - [ ] **Step 2: Run, verify failure**
 
 Run:
+
 ```bash
 npx vitest run packages/daemon/test/ipc-server.test.ts
 ```
@@ -2483,12 +2685,7 @@ Create `packages/daemon/src/ipc-server.ts`:
 ```ts
 import { createServer, type Server, type Socket } from 'node:net';
 import { existsSync, unlinkSync, chmodSync } from 'node:fs';
-import {
-  RpcMethods,
-  RPC_ERR,
-  type RpcMethodName,
-  parseHex,
-} from '@fizz/core';
+import { RpcMethods, RPC_ERR, type RpcMethodName, parseHex } from '@fizz/core';
 import type { EffectEngine } from './engine.ts';
 import type { ProfileManager } from './profiles.ts';
 import type { HidController } from './hid.ts';
@@ -2530,7 +2727,11 @@ export class IpcServer {
       this.srv = null;
     }
     if (existsSync(this.opts.socketPath)) {
-      try { unlinkSync(this.opts.socketPath); } catch { /* ignore */ }
+      try {
+        unlinkSync(this.opts.socketPath);
+      } catch {
+        /* ignore */
+      }
     }
   }
 
@@ -2547,14 +2748,20 @@ export class IpcServer {
       }
     });
     sock.on('close', () => this.clients.delete(sock));
-    sock.on('error', (err) => { log.warn({ err }, 'client error'); this.clients.delete(sock); });
+    sock.on('error', (err) => {
+      log.warn({ err }, 'client error');
+      this.clients.delete(sock);
+    });
   }
 
   private async handleLine(sock: Socket, line: string): Promise<void> {
     if (!line.trim()) return;
     let req: { id?: unknown; method?: string; params?: unknown };
-    try { req = JSON.parse(line); }
-    catch { return this.writeError(sock, null, RPC_ERR.PARSE_ERROR, 'parse error'); }
+    try {
+      req = JSON.parse(line);
+    } catch {
+      return this.writeError(sock, null, RPC_ERR.PARSE_ERROR, 'parse error');
+    }
 
     const id = (req.id ?? null) as string | number | null;
     const method = req.method;
@@ -2584,7 +2791,7 @@ export class IpcServer {
       case 'device.status':
         return { connected: hid.isConnected(), vid: 0x258a, pid: 0x0049 };
       case 'effect.list':
-        return ([
+        return [
           ['fw-static', 'Solid firmware color (limited palette)'],
           ['fw-rainbow', 'Rainbow gradient (firmware)'],
           ['fw-snake', 'Snake (firmware)'],
@@ -2593,7 +2800,7 @@ export class IpcServer {
           ['fw-rainbow-blossom', 'Rainbow blossom (firmware)'],
           ['fw-waterfall', 'Waterfall (firmware)'],
           ['fw-wheel', 'Wheel (firmware)'],
-        ]).map(([name, description]) => ({ name, description }));
+        ].map(([name, description]) => ({ name, description }));
       case 'effect.run': {
         const p = params as { name: any; params: any };
         const fxParams: any = { ...(p.params ?? {}) };
@@ -2652,7 +2859,13 @@ export class IpcServer {
 
   private broadcast(method: string, params: unknown) {
     const line = JSON.stringify({ jsonrpc: '2.0', method, params }) + '\n';
-    for (const c of this.clients) { try { c.write(line); } catch { /* ignore */ } }
+    for (const c of this.clients) {
+      try {
+        c.write(line);
+      } catch {
+        /* ignore */
+      }
+    }
   }
 }
 ```
@@ -2660,6 +2873,7 @@ export class IpcServer {
 - [ ] **Step 4: Run tests, verify pass**
 
 Run:
+
 ```bash
 npx vitest run packages/daemon/test/ipc-server.test.ts
 ```
@@ -2678,6 +2892,7 @@ git commit -m "feat(daemon): add IPC server (Unix socket + JSON-RPC)"
 ## T20: Daemon entry + systemd unit
 
 **Files:**
+
 - Create: `packages/daemon/src/index.ts`
 - Create: `packages/daemon/systemd/fizzd.service`
 
@@ -2721,8 +2936,11 @@ async function main() {
     if (prof) {
       const fxParams: any = { ...prof.effect.params };
       if (typeof fxParams.color === 'string') fxParams.color = parseHex(fxParams.color);
-      try { await engine.runEffect(prof.effect.name, fxParams); }
-      catch (err) { log.warn({ err: (err as Error).message }, 'failed to restore profile on boot'); }
+      try {
+        await engine.runEffect(prof.effect.name, fxParams);
+      } catch (err) {
+        log.warn({ err: (err as Error).message }, 'failed to restore profile on boot');
+      }
     }
   }
 
@@ -2738,12 +2956,16 @@ async function main() {
   log.info('fizzd ready');
 }
 
-main().catch((err) => { log.fatal({ err }, 'fizzd crashed'); process.exit(1); });
+main().catch((err) => {
+  log.fatal({ err }, 'fizzd crashed');
+  process.exit(1);
+});
 ```
 
 - [ ] **Step 2: Build and smoke-test the daemon with fake HID**
 
 Run:
+
 ```bash
 npm run build -w fizzd
 node packages/daemon/dist/index.js --fake-hid &
@@ -2792,6 +3014,7 @@ git commit -m "feat(daemon): add entrypoint with profile restore and systemd uni
 ## T21: CLI IPC client
 
 **Files:**
+
 - Create: `packages/cli/src/ipc-client.ts`
 - Create: `packages/cli/test/ipc-client.test.ts`
 
@@ -2818,7 +3041,9 @@ beforeEach(async () => {
     sock.on('data', (chunk) => {
       const line = chunk.toString('utf8').trim();
       const req = JSON.parse(line);
-      sock.write(JSON.stringify({ jsonrpc: '2.0', id: req.id, result: { echoed: req.method } }) + '\n');
+      sock.write(
+        JSON.stringify({ jsonrpc: '2.0', id: req.id, result: { echoed: req.method } }) + '\n',
+      );
     });
   });
   await new Promise<void>((resolve) => server.listen(sockPath, () => resolve()));
@@ -2847,6 +3072,7 @@ describe('IpcClient', () => {
 - [ ] **Step 2: Run, verify failure**
 
 Run:
+
 ```bash
 npx vitest run packages/cli/test/ipc-client.test.ts
 ```
@@ -2864,7 +3090,10 @@ export class IpcClient {
   private id = 0;
   private sock: Socket | null = null;
   private buf = '';
-  private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
+  private pending = new Map<
+    number,
+    { resolve: (v: unknown) => void; reject: (e: Error) => void }
+  >();
   private connectPromise: Promise<void> | null = null;
 
   constructor(private readonly socketPath: string) {}
@@ -2898,8 +3127,12 @@ export class IpcClient {
       this.buf = this.buf.slice(nl + 1);
       if (!line.trim()) continue;
       let msg: any;
-      try { msg = JSON.parse(line); } catch { continue; }
-      if (msg.id === undefined) continue;     // notification: ignore here
+      try {
+        msg = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (msg.id === undefined) continue; // notification: ignore here
       const p = this.pending.get(msg.id);
       if (!p) continue;
       this.pending.delete(msg.id);
@@ -2911,7 +3144,13 @@ export class IpcClient {
   private failAll(err: Error) {
     for (const p of this.pending.values()) p.reject(err);
     this.pending.clear();
-    if (this.sock) { try { this.sock.destroy(); } catch { /* ignore */ } }
+    if (this.sock) {
+      try {
+        this.sock.destroy();
+      } catch {
+        /* ignore */
+      }
+    }
     this.sock = null;
   }
 
@@ -2924,13 +3163,16 @@ export class IpcClient {
     });
   }
 
-  close(): void { this.failAll(new Error('client closed')); }
+  close(): void {
+    this.failAll(new Error('client closed'));
+  }
 }
 ```
 
 - [ ] **Step 4: Run tests, verify pass**
 
 Run:
+
 ```bash
 npx vitest run packages/cli/test/ipc-client.test.ts
 ```
@@ -2949,6 +3191,7 @@ git commit -m "feat(cli): add IpcClient for talking to fizzd"
 ## T22: CLI core commands (status, set, effect)
 
 **Files:**
+
 - Create: `packages/cli/src/cmd/status.ts`, `set.ts`, `effect.ts`
 - Create: `packages/cli/src/index.ts`
 
@@ -2963,13 +3206,23 @@ import { IpcClient } from '../ipc-client.ts';
 export async function statusCmd(): Promise<void> {
   const client = new IpcClient(socketPath());
   try {
-    const status = await client.call('device.status', {}) as { connected: boolean; vid: number; pid: number };
-    const cur = await client.call('effect.current', {}) as { name: string; params: any } | null;
-    const ver = await client.call('daemon.version', {}) as { version: string };
-    console.log(`device:  ${status.connected ? 'connected' : 'disconnected'} (${status.vid.toString(16)}:${status.pid.toString(16)})`);
-    console.log(`effect:  ${cur ? cur.name : '(none)'}${cur ? ` ${JSON.stringify(cur.params)}` : ''}`);
+    const status = (await client.call('device.status', {})) as {
+      connected: boolean;
+      vid: number;
+      pid: number;
+    };
+    const cur = (await client.call('effect.current', {})) as { name: string; params: any } | null;
+    const ver = (await client.call('daemon.version', {})) as { version: string };
+    console.log(
+      `device:  ${status.connected ? 'connected' : 'disconnected'} (${status.vid.toString(16)}:${status.pid.toString(16)})`,
+    );
+    console.log(
+      `effect:  ${cur ? cur.name : '(none)'}${cur ? ` ${JSON.stringify(cur.params)}` : ''}`,
+    );
     console.log(`daemon:  v${ver.version}`);
-  } finally { client.close(); }
+  } finally {
+    client.close();
+  }
 }
 ```
 
@@ -2984,12 +3237,18 @@ import { IpcClient } from '../ipc-client.ts';
 export async function setCmd(color: string): Promise<void> {
   let hex = color.trim();
   const named: Record<string, string> = {
-    red: '#ff0000', green: '#00ff00', blue: '#0000ff',
-    white: '#ffffff', black: '#000000', off: '#000000',
+    red: '#ff0000',
+    green: '#00ff00',
+    blue: '#0000ff',
+    white: '#ffffff',
+    black: '#000000',
+    off: '#000000',
   };
   if (named[hex.toLowerCase()]) hex = named[hex.toLowerCase()]!;
   if (!/^#?[0-9a-fA-F]{6}$/.test(hex)) {
-    console.error(`Invalid color: ${color}. Use #RRGGBB or one of: ${Object.keys(named).join(', ')}`);
+    console.error(
+      `Invalid color: ${color}. Use #RRGGBB or one of: ${Object.keys(named).join(', ')}`,
+    );
     process.exit(2);
   }
   if (!hex.startsWith('#')) hex = '#' + hex;
@@ -2997,7 +3256,9 @@ export async function setCmd(color: string): Promise<void> {
   try {
     await client.call('solid.set', { color: hex });
     console.log(`set ${hex}`);
-  } finally { client.close(); }
+  } finally {
+    client.close();
+  }
 }
 ```
 
@@ -3012,9 +3273,14 @@ import { IpcClient } from '../ipc-client.ts';
 export async function effectListCmd(): Promise<void> {
   const client = new IpcClient(socketPath());
   try {
-    const effects = await client.call('effect.list', {}) as { name: string; description: string }[];
+    const effects = (await client.call('effect.list', {})) as {
+      name: string;
+      description: string;
+    }[];
     for (const e of effects) console.log(`${e.name.padEnd(20)} ${e.description}`);
-  } finally { client.close(); }
+  } finally {
+    client.close();
+  }
 }
 
 export async function effectRunCmd(name: string, opts: Record<string, string>): Promise<void> {
@@ -3029,7 +3295,9 @@ export async function effectRunCmd(name: string, opts: Record<string, string>): 
   try {
     await client.call('effect.run', { name, params });
     console.log(`effect ${name} started`);
-  } finally { client.close(); }
+  } finally {
+    client.close();
+  }
 }
 
 export async function effectStopCmd(): Promise<void> {
@@ -3037,7 +3305,9 @@ export async function effectStopCmd(): Promise<void> {
   try {
     await client.call('effect.stop', {});
     console.log('effect stopped');
-  } finally { client.close(); }
+  } finally {
+    client.close();
+  }
 }
 ```
 
@@ -3060,7 +3330,8 @@ program.command('set <color>').description('Set solid color (#RRGGBB or named)')
 
 const effect = program.command('effect').description('Manage effects');
 effect.command('list').description('List available effects').action(effectListCmd);
-effect.command('run <name>')
+effect
+  .command('run <name>')
   .description('Run a firmware effect')
   .option('--color <hex>', 'Color for effects that take one')
   .option('--speed <n>', 'Speed 0..255')
@@ -3076,6 +3347,7 @@ await program.parseAsync(process.argv);
 - [ ] **Step 5: Build and smoke-test against fake-hid daemon**
 
 Run:
+
 ```bash
 npm run build
 node packages/daemon/dist/index.js --fake-hid &
@@ -3103,6 +3375,7 @@ git commit -m "feat(cli): add status, set, and effect commands"
 ## T23: CLI profile commands
 
 **Files:**
+
 - Create: `packages/cli/src/cmd/profile.ts`
 - Modify: `packages/cli/src/index.ts`
 
@@ -3117,10 +3390,18 @@ import { IpcClient } from '../ipc-client.ts';
 export async function profileListCmd(): Promise<void> {
   const client = new IpcClient(socketPath());
   try {
-    const profiles = await client.call('profile.list', {}) as { name: string; effect: { name: string } }[];
-    if (profiles.length === 0) { console.log('(no profiles)'); return; }
+    const profiles = (await client.call('profile.list', {})) as {
+      name: string;
+      effect: { name: string };
+    }[];
+    if (profiles.length === 0) {
+      console.log('(no profiles)');
+      return;
+    }
     for (const p of profiles) console.log(`${p.name.padEnd(20)} ${p.effect.name}`);
-  } finally { client.close(); }
+  } finally {
+    client.close();
+  }
 }
 
 export async function profileActivateCmd(name: string): Promise<void> {
@@ -3128,12 +3409,22 @@ export async function profileActivateCmd(name: string): Promise<void> {
   try {
     await client.call('profile.activate', { name });
     console.log(`activated ${name}`);
-  } finally { client.close(); }
+  } finally {
+    client.close();
+  }
 }
 
 export async function profileSaveCmd(
   key: string,
-  opts: { name?: string; effect: string; color?: string; speed?: string; brightness?: string; direction?: string; density?: string },
+  opts: {
+    name?: string;
+    effect: string;
+    color?: string;
+    speed?: string;
+    brightness?: string;
+    direction?: string;
+    density?: string;
+  },
 ): Promise<void> {
   const params: Record<string, unknown> = {};
   if (opts.color) params.color = opts.color.startsWith('#') ? opts.color : '#' + opts.color;
@@ -3148,7 +3439,9 @@ export async function profileSaveCmd(
   try {
     await client.call('profile.save', { name: key, profile });
     console.log(`saved profile "${key}"`);
-  } finally { client.close(); }
+  } finally {
+    client.close();
+  }
 }
 
 export async function profileDeleteCmd(name: string): Promise<void> {
@@ -3156,7 +3449,9 @@ export async function profileDeleteCmd(name: string): Promise<void> {
   try {
     await client.call('profile.delete', { name });
     console.log(`deleted profile "${name}"`);
-  } finally { client.close(); }
+  } finally {
+    client.close();
+  }
 }
 ```
 
@@ -3165,12 +3460,18 @@ export async function profileDeleteCmd(name: string): Promise<void> {
 In `packages/cli/src/index.ts`, add the imports and commands **before** the final `await program.parseAsync(process.argv);` line:
 
 ```ts
-import { profileListCmd, profileActivateCmd, profileSaveCmd, profileDeleteCmd } from './cmd/profile.ts';
+import {
+  profileListCmd,
+  profileActivateCmd,
+  profileSaveCmd,
+  profileDeleteCmd,
+} from './cmd/profile.ts';
 
 const profile = program.command('profile').description('Manage profiles');
 profile.command('list').description('List saved profiles').action(profileListCmd);
 profile.command('activate <name>').description('Activate a profile').action(profileActivateCmd);
-profile.command('save <key>')
+profile
+  .command('save <key>')
   .description('Save current settings as a profile')
   .requiredOption('--effect <name>', 'Firmware effect name (fw-rainbow, fw-snake, etc.)')
   .option('--name <displayName>', 'Human-readable name (defaults to key)')
@@ -3186,6 +3487,7 @@ profile.command('delete <name>').description('Delete a profile').action(profileD
 - [ ] **Step 3: Build and smoke-test**
 
 Run:
+
 ```bash
 npm run build -w fizz
 node packages/daemon/dist/index.js --fake-hid &
@@ -3212,6 +3514,7 @@ git commit -m "feat(cli): add profile commands (list/activate/save/delete)"
 ## T24: CLI daemon-control commands
 
 **Files:**
+
 - Create: `packages/cli/src/cmd/daemon.ts`
 - Modify: `packages/cli/src/index.ts`
 
@@ -3227,13 +3530,25 @@ function systemctl(...args: string[]): number {
   return r.status ?? 1;
 }
 
-export function daemonStartCmd():   void { process.exit(systemctl('start',   'fizzd')); }
-export function daemonStopCmd():    void { process.exit(systemctl('stop',    'fizzd')); }
-export function daemonRestartCmd(): void { process.exit(systemctl('restart', 'fizzd')); }
-export function daemonEnableCmd():  void { process.exit(systemctl('enable',  '--now', 'fizzd')); }
-export function daemonDisableCmd(): void { process.exit(systemctl('disable', '--now', 'fizzd')); }
-export function daemonStatusCmd():  void { process.exit(systemctl('status',  'fizzd')); }
-export function daemonLogsCmd():    void {
+export function daemonStartCmd(): void {
+  process.exit(systemctl('start', 'fizzd'));
+}
+export function daemonStopCmd(): void {
+  process.exit(systemctl('stop', 'fizzd'));
+}
+export function daemonRestartCmd(): void {
+  process.exit(systemctl('restart', 'fizzd'));
+}
+export function daemonEnableCmd(): void {
+  process.exit(systemctl('enable', '--now', 'fizzd'));
+}
+export function daemonDisableCmd(): void {
+  process.exit(systemctl('disable', '--now', 'fizzd'));
+}
+export function daemonStatusCmd(): void {
+  process.exit(systemctl('status', 'fizzd'));
+}
+export function daemonLogsCmd(): void {
   const r = spawnSync('journalctl', ['--user', '-u', 'fizzd', '-f'], { stdio: 'inherit' });
   process.exit(r.status ?? 0);
 }
@@ -3245,8 +3560,13 @@ Add before the final `parseAsync`:
 
 ```ts
 import {
-  daemonStartCmd, daemonStopCmd, daemonRestartCmd,
-  daemonEnableCmd, daemonDisableCmd, daemonStatusCmd, daemonLogsCmd,
+  daemonStartCmd,
+  daemonStopCmd,
+  daemonRestartCmd,
+  daemonEnableCmd,
+  daemonDisableCmd,
+  daemonStatusCmd,
+  daemonLogsCmd,
 } from './cmd/daemon.ts';
 
 const daemon = program.command('daemon').description('Manage the fizzd systemd user service');
@@ -3262,6 +3582,7 @@ daemon.command('logs').description('Tail fizzd logs').action(daemonLogsCmd);
 - [ ] **Step 3: Build**
 
 Run:
+
 ```bash
 npm run build -w fizz
 ```
@@ -3280,6 +3601,7 @@ git commit -m "feat(cli): add daemon control commands (start/stop/enable/logs)"
 ## T25: Install script + README
 
 **Files:**
+
 - Create: `tools/install.sh`
 - Create: `README.md`
 
@@ -3322,13 +3644,14 @@ echo "  5. Try an effect:               fizz effect run fw-rainbow"
 ```
 
 Make executable:
+
 ```bash
 chmod +x tools/install.sh
 ```
 
 - [ ] **Step 2: Write `README.md`**
 
-```markdown
+````markdown
 # fizz-rgb
 
 Linux RGB controller for the **Redragon Fizz K617** (60% wired mechanical keyboard).
@@ -3357,6 +3680,7 @@ fizz daemon enable
 fizz status
 fizz effect run fw-rainbow
 ```
+````
 
 ## Commands
 
@@ -3377,49 +3701,54 @@ fizz daemon {start|stop|restart|enable|disable|status|logs}
 
 ## Available firmware effects (Phase 1)
 
-| Effect | Options |
-|---|---|
-| `fw-static` | `--color` (limited palette) |
-| `fw-rainbow` | `--speed`, `--brightness`, `--direction` |
-| `fw-snake` | `--color`, `--speed` |
-| `fw-sine-wave` | `--speed`, `--brightness` |
-| `fw-star-twinkle` | `--color`, `--density`, `--speed` |
-| `fw-rainbow-blossom` | `--speed` |
-| `fw-waterfall` | `--color`, `--speed` |
-| `fw-wheel` | `--speed`, `--direction` |
+| Effect               | Options                                  |
+| -------------------- | ---------------------------------------- |
+| `fw-static`          | `--color` (limited palette)              |
+| `fw-rainbow`         | `--speed`, `--brightness`, `--direction` |
+| `fw-snake`           | `--color`, `--speed`                     |
+| `fw-sine-wave`       | `--speed`, `--brightness`                |
+| `fw-star-twinkle`    | `--color`, `--density`, `--speed`        |
+| `fw-rainbow-blossom` | `--speed`                                |
+| `fw-waterfall`       | `--color`, `--speed`                     |
+| `fw-wheel`           | `--speed`, `--direction`                 |
 
 ## Troubleshooting
 
 **`fizz status` says daemon offline:**
+
 - `fizz daemon start` or `systemctl --user start fizzd`
 - Logs: `fizz daemon logs`
 
-**Permission denied on /dev/hidraw*:**
+**Permission denied on /dev/hidraw\*:**
+
 - Confirm you ran `./tools/install-udev.sh` and that you logged out/in after
   being added to `plugdev`.
 - Confirm: `ls -la /dev/hidraw*` shows `plugdev` group on the K617 entry.
 
 **Daemon can't find device:**
+
 - `lsusb | grep 258a` should show your K617.
 - If another process holds the hidraw node: `lsof /dev/hidrawN`.
 
 ## License
 
 MIT
-```
+
+````
 
 - [ ] **Step 3: Commit**
 
 ```bash
 git add tools/install.sh README.md
 git commit -m "docs: add install script and README"
-```
+````
 
 ---
 
 ## T26: End-to-end smoke test
 
 **Files:**
+
 - Create: `tools/e2e-smoke.sh`
 
 Manual test against the real keyboard (not run in CI).
@@ -3487,6 +3816,7 @@ echo "SMOKE TESTS PASSED."
 ```
 
 Make executable:
+
 ```bash
 chmod +x tools/e2e-smoke.sh
 ```
@@ -3494,6 +3824,7 @@ chmod +x tools/e2e-smoke.sh
 - [ ] **Step 2: Run smoke script against real hardware**
 
 Run:
+
 ```bash
 ./tools/e2e-smoke.sh
 ```
