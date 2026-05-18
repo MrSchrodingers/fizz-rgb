@@ -1,5 +1,6 @@
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Text } from '@react-three/drei';
+import { OrbitControls, Text, RoundedBox } from '@react-three/drei';
+import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import * as THREE from 'three';
 import { K617_LAYOUT } from '@fizz/core';
@@ -97,6 +98,9 @@ export function Keyboard3D() {
             maxDistance={30}
             target={[0, 0, 0]}
           />
+          <EffectComposer>
+            <Bloom intensity={0.6} luminanceThreshold={0.2} luminanceSmoothing={0.4} />
+          </EffectComposer>
         </Suspense>
       </Canvas>
     </div>
@@ -183,9 +187,11 @@ function Key({ keyDef, colorRGB, isSelected, onClick }: KeyProps) {
 
   return (
     <group position={[keyDef.x, 0, keyDef.z]}>
-      {/* Keycap body */}
-      <mesh
-        scale={[keyDef.bodyWidth, 1, UNIT]}
+      {/* Keycap body — RoundedBox for polished corners */}
+      <RoundedBox
+        args={[keyDef.bodyWidth, KEY_HEIGHT, UNIT]}
+        radius={0.08}
+        smoothness={3}
         castShadow
         receiveShadow
         onPointerOver={(e) => {
@@ -202,7 +208,6 @@ function Key({ keyDef, colorRGB, isSelected, onClick }: KeyProps) {
           onClick(e.shiftKey || e.metaKey || e.ctrlKey);
         }}
       >
-        <boxGeometry args={[1, KEY_HEIGHT, 1]} />
         <meshStandardMaterial
           color="#1a1a1f"
           emissive={emissiveColor}
@@ -211,7 +216,7 @@ function Key({ keyDef, colorRGB, isSelected, onClick }: KeyProps) {
           metalness={0.1}
           toneMapped={false}
         />
-      </mesh>
+      </RoundedBox>
 
       {/* Selection outline — wireframe slightly larger box */}
       {isSelected && (
