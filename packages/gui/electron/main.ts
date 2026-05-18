@@ -79,6 +79,8 @@ ipcMain.handle('fizz:profileSave', (_e, key: string, profile: unknown) =>
   daemon.call('profile.save', { name: key, profile }));
 ipcMain.handle('fizz:profileDelete', (_e, name: string) =>
   daemon.call('profile.delete', { name }));
+ipcMain.handle('fizz:perkeySet', (_e, colors: Record<string, string>) =>
+  daemon.call('perkey.set', { colors }));
 
 // === Daemon notifications → forward to renderer ===
 daemon.on('effect.changed', (params) => {
