@@ -7,6 +7,10 @@ interface Params {
   keyIndex: number;
   keyCount: number;
   time: number; // seconds since canvas init
+  // Paint mode
+  paintMode: boolean;
+  keyColors: Map<number, string>;
+  paintSelected: Set<number>;
 }
 
 interface RGB {
@@ -15,7 +19,7 @@ interface RGB {
   b: number;
 }
 
-function hexToRgb01(hex: string): RGB {
+export function hexToRgb01(hex: string): RGB {
   const m = /^#?([0-9a-fA-F]{6})$/.exec(hex);
   if (!m) return { r: 1, g: 1, b: 1 };
   const n = parseInt(m[1]!, 16);
@@ -70,6 +74,22 @@ const ANIMATED_NO_COLOR: FirmwareEffectName[] = [
 ];
 
 export function computeKeyColor(p: Params): RGB {
+  // Paint mode overrides all effects
+  if (p.paintMode) {
+    const painted = p.keyColors.get(p.keyIndex);
+    const base = painted ? hexToRgb01(painted) : { r: 0.05, g: 0.05, b: 0.08 };
+    if (p.paintSelected.has(p.keyIndex)) {
+      // Pulsing highlight: blend between base and white
+      const pulse = 0.5 + 0.5 * Math.sin(p.time * 6);
+      return {
+        r: base.r * 0.4 + pulse,
+        g: base.g * 0.4 + pulse,
+        b: base.b * 0.4 + pulse,
+      };
+    }
+    return base;
+  }
+
   if (p.selected === 'solid-color') {
     return hexToRgb01(p.solidColor);
   }

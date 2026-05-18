@@ -5,33 +5,39 @@ import * as THREE from 'three';
 import { K617_LAYOUT } from '@fizz/core';
 import type { KeyDef } from '@fizz/core';
 import { useEffectStore } from '../stores/effectStore.js';
+import { usePaintStore } from '../stores/paintStore.js';
 import { computeKeyColor } from './keyColors.js';
 
-const UNIT = 1.0; // keycap base size (1u)
-const GAP = 0.08; // gap between keycaps
+const UNIT = 1.0;  // base key size (1u)
+const GAP = 0.08;  // gap between keycaps
 const KEY_HEIGHT = 0.45;
+const KEY_PITCH = UNIT + GAP; // center-to-center spacing for 1u keys
 
 interface PositionedKey extends KeyDef {
   x: number;
   z: number;
-  scaleX: number;
+  bodyWidth: number;
 }
 
 function buildPositionedKeys(): PositionedKey[] {
-  // Center the layout around origin
-  const keys: PositionedKey[] = K617_LAYOUT.keys.map((k) => ({
-    ...k,
-    x: (k.col + k.width / 2) * (UNIT + GAP) * 0.5,
-    z: k.row * (UNIT + GAP),
-    scaleX: k.width,
-  }));
-  // Re-center: shift by mid X and mid Z
-  const minX = Math.min(...keys.map((k) => k.x - (k.scaleX * (UNIT + GAP)) / 4));
-  const maxX = Math.max(...keys.map((k) => k.x + (k.scaleX * (UNIT + GAP)) / 4));
+  const keys: PositionedKey[] = K617_LAYOUT.keys.map((k) => {
+    // col is the running unit-position (sum of previous widths in the row)
+    // centerX = (col + width/2) * pitch
+    const centerX = (k.col + k.width / 2) * KEY_PITCH;
+    const rowZ = k.row * KEY_PITCH;
+    // Body fills its unit-count minus one GAP so adjacent keys have a GAP gap between them
+    const bodyWidth = k.width * KEY_PITCH - GAP;
+    return { ...k, x: centerX, z: rowZ, bodyWidth };
+  });
+
+  // Re-center around origin
+  const minX = Math.min(...keys.map((k) => k.x - k.bodyWidth / 2));
+  const maxX = Math.max(...keys.map((k) => k.x + k.bodyWidth / 2));
   const midX = (minX + maxX) / 2;
-  const minZ = Math.min(...keys.map((k) => k.z));
-  const maxZ = Math.max(...keys.map((k) => k.z));
+  const minZ = Math.min(...keys.map((k) => k.z - UNIT / 2));
+  const maxZ = Math.max(...keys.map((k) => k.z + UNIT / 2));
   const midZ = (minZ + maxZ) / 2;
+
   return keys.map((k) => ({ ...k, x: k.x - midX, z: k.z - midZ }));
 }
 
@@ -88,12 +94,18 @@ function KeyboardKeys() {
   const solidColor = useEffectStore((s) => s.solidColor);
   const draftParams = useEffectStore((s) => s.draftParams);
 
+  const paintMode = usePaintStore((s) => s.mode);
+  const paintSelected = usePaintStore((s) => s.selected);
+  const keyColors = usePaintStore((s) => s.keyColors);
+  const toggleKey = usePaintStore((s) => s.toggleKey);
+
   useFrame(({ clock }) => {
     if (!meshRef.current) return;
     const t = clock.getElapsedTime();
     keys.forEach((k, i) => {
       dummy.position.set(k.x, 0, k.z);
-      dummy.scale.set(k.scaleX * (UNIT + GAP) * 0.5 * 0.9, 1, 0.9);
+      // Scale X to actual body width, Z to 1u (body depth), Y stays 1 (KEY_HEIGHT from geometry)
+      dummy.scale.set(k.bodyWidth, 1, UNIT);
       dummy.updateMatrix();
       meshRef.current!.setMatrixAt(i, dummy.matrix);
 
@@ -101,9 +113,12 @@ function KeyboardKeys() {
         selected,
         solidColor,
         draftColor: typeof draftParams.color === 'string' ? draftParams.color : undefined,
-        keyIndex: i,
+        keyIndex: k.ledIndex,
         keyCount: keys.length,
         time: t,
+        paintMode: paintMode === 'paint',
+        keyColors,
+        paintSelected,
       });
       color.setRGB(rgb.r, rgb.g, rgb.b);
       meshRef.current!.setColorAt(i, color);
@@ -118,14 +133,35 @@ function KeyboardKeys() {
       args={[undefined, undefined, keys.length]}
       castShadow
       receiveShadow
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        if (paintMode !== 'paint') return;
+        if (e.instanceId === undefined) return;
+        const additive = e.shiftKey || e.metaKey || e.ctrlKey;
+        toggleKey(keys[e.instanceId]!.ledIndex, additive);
+      }}
     >
       <boxGeometry args={[1, KEY_HEIGHT, 1]} />
       <meshStandardMaterial
+        color="#202028"
         emissive="#ffffff"
-        emissiveIntensity={2}
+        emissiveIntensity={1.0}
         roughness={0.35}
         metalness={0.05}
         toneMapped={false}
+        onBeforeCompile={(shader) => {
+          // Multiply the uniform emissive radiance by the per-instance color
+          // so each key glows with its own assigned color.
+          shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <emissivemap_fragment>',
+            `
+              #include <emissivemap_fragment>
+              #ifdef USE_INSTANCING_COLOR
+                totalEmissiveRadiance *= vInstanceColor;
+              #endif
+            `,
+          );
+        }}
       />
     </instancedMesh>
   );
