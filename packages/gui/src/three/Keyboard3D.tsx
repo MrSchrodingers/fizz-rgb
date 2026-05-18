@@ -1,6 +1,6 @@
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Text } from '@react-three/drei';
-import { Suspense, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import * as THREE from 'three';
 import { K617_LAYOUT } from '@fizz/core';
 import type { KeyDef } from '@fizz/core';
@@ -115,6 +115,11 @@ function KeyboardKeys() {
   const keyColors = usePaintStore((s) => s.keyColors);
   const toggleKey = usePaintStore((s) => s.toggleKey);
 
+  // Debug: log when paint state changes
+  useEffect(() => {
+    console.log('[KeyboardKeys] paintMode=', paintMode, 'selected.size=', paintSelected.size, 'keyColors.size=', keyColors.size);
+  }, [paintMode, paintSelected, keyColors]);
+
   // Per-frame color computation — stored in state so each key receives its current color
   const [time, setTime] = useState(0);
   useFrame(({ clock }) => {
@@ -220,7 +225,9 @@ function Key({ keyDef, colorRGB, isSelected, onClick }: KeyProps) {
         </mesh>
       )}
 
-      {/* Label on top face */}
+      {/* Label on top face. raycast={null} so clicks pass through to the
+          keycap mesh underneath — otherwise the text label intercepts
+          pointer events and selection silently fails. */}
       {label && (
         <Text
           position={[0, KEY_HEIGHT / 2 + 0.01, 0]}
@@ -230,6 +237,7 @@ function Key({ keyDef, colorRGB, isSelected, onClick }: KeyProps) {
           anchorX="center"
           anchorY="middle"
           maxWidth={keyDef.bodyWidth * 0.9}
+          raycast={() => null}
         >
           {label}
         </Text>
