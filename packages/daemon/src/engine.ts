@@ -211,6 +211,157 @@ class SnakeEngine {
   }
 }
 
+// ─── Tetris game engine ──────────────────────────────────────────────────────
+
+const TETROMINOES: Record<string, { cells: Array<[number, number]>; color: Color }> = {
+  I: { cells: [[0,0],[0,1],[0,2],[0,3]], color: { r: 0,   g: 200, b: 220 } },
+  O: { cells: [[0,0],[0,1],[1,0],[1,1]], color: { r: 220, g: 200, b: 0   } },
+  T: { cells: [[0,0],[0,1],[0,2],[1,1]], color: { r: 180, g: 0,   b: 220 } },
+  S: { cells: [[0,1],[0,2],[1,0],[1,1]], color: { r: 0,   g: 220, b: 0   } },
+  Z: { cells: [[0,0],[0,1],[1,1],[1,2]], color: { r: 220, g: 0,   b: 0   } },
+  L: { cells: [[0,0],[0,1],[0,2],[1,0]], color: { r: 220, g: 100, b: 0   } },
+  J: { cells: [[0,0],[0,1],[0,2],[1,2]], color: { r: 0,   g: 0,   b: 220 } },
+};
+
+class TetrisEngine {
+  // field[col][row] = color or null
+  private field: Array<Array<Color | null>> = Array.from({ length: 14 }, () => Array(5).fill(null));
+  private current: { shape: string; x: number; y: number; color: Color; cells: Array<[number, number]> } | null = null;
+  private tickCounter = 0;
+  private readonly TICKS_PER_FALL = 6; // gravity tick = ~5 Hz (move every 6 frames at 30fps)
+  private flashFrames = 0; // line clear flash counter
+  private flashCols: number[] = [];
+
+  constructor() {
+    this.spawnPiece();
+  }
+
+  private spawnPiece(): void {
+    const shapeNames = Object.keys(TETROMINOES);
+    const shape = shapeNames[Math.floor(Math.random() * shapeNames.length)]!;
+    const tet = TETROMINOES[shape]!;
+    // Spawn at right edge — find a Y position that doesn't immediately collide
+    const maxY = 5 - Math.max(...tet.cells.map(([, dy]) => dy)) - 1;
+    const y = Math.floor(Math.random() * Math.max(1, maxY + 1));
+    this.current = {
+      shape,
+      x: 13, // right edge
+      y,
+      color: tet.color,
+      cells: tet.cells,
+    };
+    // If spawn collides with existing stack, game over → reset field
+    if (this.collides(this.current.x, this.current.y, this.current.cells)) {
+      this.field = Array.from({ length: 14 }, () => Array(5).fill(null));
+      this.current = { ...this.current, x: 13, y };
+    }
+  }
+
+  private collides(x: number, y: number, cells: Array<[number, number]>): boolean {
+    for (const [dx, dy] of cells) {
+      const cx = x - dx; // moving LEFT means subtracting dx
+      const cy = y + dy;
+      if (cx < 0 || cy < 0 || cy >= 5) return true;
+      if (this.field[cx]![cy] !== null) return true;
+    }
+    return false;
+  }
+
+  private lockPiece(): void {
+    if (!this.current) return;
+    for (const [dx, dy] of this.current.cells) {
+      const cx = this.current.x - dx;
+      const cy = this.current.y + dy;
+      if (cx >= 0 && cx < 14 && cy >= 0 && cy < 5) {
+        this.field[cx]![cy] = this.current.color;
+      }
+    }
+    // Check for full columns (a "line" in sideways Tetris)
+    const fullCols: number[] = [];
+    for (let cx = 0; cx < 14; cx++) {
+      if (this.field[cx]!.every((cell) => cell !== null)) fullCols.push(cx);
+    }
+    if (fullCols.length > 0) {
+      this.flashCols = fullCols;
+      this.flashFrames = 6; // flash for 6 frames before removing
+    }
+    this.current = null;
+  }
+
+  private clearFullCols(): void {
+    if (this.flashCols.length === 0) return;
+    // Remove the full columns and shift the rest toward the right (stack grows from left)
+    const newField: Array<Array<Color | null>> = Array.from({ length: 14 }, () => Array(5).fill(null));
+    let writeCol = 13;
+    for (let readCol = 13; readCol >= 0; readCol--) {
+      if (this.flashCols.includes(readCol)) continue; // skip cleared
+      newField[writeCol] = this.field[readCol]!;
+      writeCol--;
+    }
+    this.field = newField;
+    this.flashCols = [];
+  }
+
+  step(): void {
+    this.tickCounter++;
+    if (this.flashFrames > 0) {
+      this.flashFrames--;
+      if (this.flashFrames === 0) {
+        this.clearFullCols();
+        this.spawnPiece();
+      }
+      return;
+    }
+    if (this.tickCounter < this.TICKS_PER_FALL) return;
+    this.tickCounter = 0;
+
+    if (!this.current) {
+      this.spawnPiece();
+      return;
+    }
+
+    // Try moving leftward
+    const newX = this.current.x - 1;
+    if (this.collides(newX, this.current.y, this.current.cells)) {
+      // Lock in place
+      this.lockPiece();
+    } else {
+      this.current.x = newX;
+    }
+  }
+
+  render(): Map<number, Color> {
+    const out = new Map<number, Color>();
+    // Draw locked field
+    for (let cx = 0; cx < 14; cx++) {
+      for (let cy = 0; cy < 5; cy++) {
+        const cell = this.field[cx]![cy];
+        if (cell != null) {
+          // If this col is flashing, alternate bright white
+          const isFlashing = this.flashCols.includes(cx);
+          const intensity: Color = isFlashing && this.flashFrames % 2 === 0
+            ? { r: 255, g: 255, b: 255 }
+            : cell;
+          const led = gridToLed(cx, cy);
+          if (led !== null) out.set(led, intensity);
+        }
+      }
+    }
+    // Draw active piece
+    if (this.current && this.flashFrames === 0) {
+      for (const [dx, dy] of this.current.cells) {
+        const cx = this.current.x - dx;
+        const cy = this.current.y + dy;
+        if (cx >= 0 && cx < 14 && cy >= 0 && cy < 5) {
+          const led = gridToLed(cx, cy);
+          if (led !== null) out.set(led, this.current.color);
+        }
+      }
+    }
+    return out;
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export class EffectEngine {
@@ -330,6 +481,17 @@ export class EffectEngine {
         this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
       }, 1000 / 30);
       log.info('snake stream started');
+      return;
+    }
+
+    if (pattern.animType === 'tetris') {
+      const game = new TetrisEngine();
+      this.streamInterval = setInterval(() => {
+        game.step();
+        const frame = encodePerKeyFrame(game.render());
+        this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
+      }, 1000 / 30);
+      log.info('tetris stream started');
       return;
     }
 
