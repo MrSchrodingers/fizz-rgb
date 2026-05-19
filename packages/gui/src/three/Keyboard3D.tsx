@@ -228,6 +228,18 @@ function KeyboardKeys() {
   });
 
   const handlePointerDown = (ledIndex: number, e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean; button?: number }) => {
+    // Interactive Pong: clicking the left-edge paddle keys sends the slot to
+    // the daemon, regardless of paint mode. Match by ledIndex via the layout
+    // so the mapping survives K617 row geometry tweaks.
+    if (animType === 'pong-interactive' && window.fizz) {
+      const PADDLE_KEY_NAMES = ['Tab', 'CapsLock', 'LShift', 'LCtrl'] as const;
+      const def = K617_LAYOUT.keys.find((x) => x.ledIndex === ledIndex);
+      const slot = def ? PADDLE_KEY_NAMES.indexOf(def.name as (typeof PADDLE_KEY_NAMES)[number]) : -1;
+      if (slot >= 0) {
+        window.fizz.perkeyGameInput(slot).catch(() => {});
+        return;
+      }
+    }
     if (paintMode !== 'paint') return;
     if (tapToTestMode && window.fizz) {
       // Flash the physical key for 250ms with the brush color, then revert

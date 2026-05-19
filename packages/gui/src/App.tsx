@@ -461,13 +461,15 @@ export default function App() {
         console.log('[applyPreset] → perkeySet (solid)');
         try { await window.fizz.perkeySet(colors); } catch (err) { console.warn(err); }
       } else {
-        console.log('[applyPreset] → perkeyStartPattern (animated)', preset.pattern.animType);
+        const vibrancy = (preset.pattern as { vibrancy?: number }).vibrancy;
+        console.log('[applyPreset] → perkeyStartPattern (animated)', preset.pattern.animType, vibrancy ? `vibrancy=${vibrancy}` : '');
         try {
           await window.fizz.perkeyStartPattern({
             keys: colors,
             animType: preset.pattern.animType as AnimType,
             animSpeed: preset.pattern.animSpeed,
             ...(preset.pattern.sequence != null ? { sequence: preset.pattern.sequence } : {}),
+            ...(vibrancy !== undefined && vibrancy !== 1 ? { vibrancy } : {}),
           });
         } catch (err) { console.warn(err); }
       }

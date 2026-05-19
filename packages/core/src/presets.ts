@@ -986,6 +986,15 @@ export const BUILTIN_PRESETS: Preset[] = [
     pattern: { keys: {}, animType: 'cpu-thermal', animSpeed: 0.5 },
   },
 
+  // ── Interactive games ────────────────────────────────────────────────────
+  {
+    id: 'game-pong-interactive',
+    name: 'Pong (you vs AI)',
+    description: 'Você joga no lado esquerdo (Tab/Caps/Shift/Ctrl). Placar na fileira 1-9. Vermelho = você, azul = AI',
+    category: 'game',
+    pattern: { keys: {}, animType: 'pong-interactive', animSpeed: 0.5 },
+  },
+
   // ── Themed cycles (host-streamed, layout-aware) ──────────────────────────
   {
     id: 'theme-minecraft',

@@ -109,6 +109,8 @@ ipcMain.handle('fizz:perkeyStartPattern', (_e, pattern) =>
 ipcMain.handle('fizz:perkeyStopPattern', () =>
   daemon.call('perkey.stopPattern', {}));
 ipcMain.handle('fizz:perkeyCurrent', () => daemon.call('perkey.current', {}));
+ipcMain.handle('fizz:perkeyGameInput', (_e, slot: number) =>
+  daemon.call('perkey.gameInput', { paddleSlot: slot }));
 
 // === Daemon notifications → forward to renderer ===
 daemon.on('effect.changed', (params) => {

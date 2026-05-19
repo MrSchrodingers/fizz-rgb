@@ -189,6 +189,11 @@ export class IpcServer {
       case 'perkey.current': {
         return engine.currentPerkey();
       }
+      case 'perkey.gameInput': {
+        const p = params as { paddleSlot?: number };
+        if (typeof p.paddleSlot === 'number') engine.setGamePaddleSlot(p.paddleSlot);
+        return { ok: true };
+      }
     }
   }
 

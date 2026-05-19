@@ -56,45 +56,58 @@ function hslToRgb(h: number, s: number, l: number): { r: number; g: number; b: n
   };
 }
 
+/**
+ * Apply vibrancy to RGB directly — much more visible than HSL massaging.
+ *   v < 1: linear dim (full → black scale).
+ *   v > 1: push the dominant channel(s) toward 255 and pull the weak ones
+ *          toward 0, increasing saturation; mostly pure-channel at v=2.
+ */
+function applyVibrancyRgb(r: number, g: number, b: number, v: number): { r: number; g: number; b: number } {
+  if (v <= 1) {
+    return { r: r * v, g: g * v, b: b * v };
+  }
+  const max = Math.max(r, g, b);
+  const boost = Math.min(1, v - 1); // 0..1 for v in 1..2
+  const isMax = (c: number) => c >= max - 1;
+  return {
+    r: isMax(r) ? r + (255 - r) * boost : r * (1 - boost * 0.5),
+    g: isMax(g) ? g + (255 - g) * boost : g * (1 - boost * 0.5),
+    b: isMax(b) ? b + (255 - b) * boost : b * (1 - boost * 0.5),
+  };
+}
+
 function transformOne(hex: string, style: Style, vibrancy: number, monoTint: string): string {
   const { r, g, b } = hexRgb(hex);
-  const { h, s, l } = rgbToHsl(r, g, b);
 
-  let nh = h, ns = s, nl = l;
+  // Style first (in HSL space, where it's natural), then vibrancy on RGB.
+  let { h: nh, s: ns, l: nl } = rgbToHsl(r, g, b);
   switch (style) {
     case 'original': break;
     case 'vivid':
-      ns = Math.min(1, s * 1.4 + 0.15);
-      nl = l < 0.2 ? Math.min(0.45, l * 2) : l; // lift the very-dark colors
+      // Maximum contrast — push saturation to 1 and luminance into the
+      // sweet spot for pure-channel display.
+      ns = 1;
+      nl = nl < 0.25 ? 0.4 : nl > 0.75 ? 0.6 : nl;
       break;
     case 'neon':
       ns = 1;
-      nl = Math.max(0.45, Math.min(0.65, l));
+      nl = 0.55;
       break;
     case 'pastel':
-      ns = Math.max(0.25, s * 0.6);
-      nl = Math.min(0.85, Math.max(0.6, l + 0.2));
+      ns = Math.max(0.2, ns * 0.5);
+      nl = Math.min(0.82, Math.max(0.6, nl + 0.2));
       break;
     case 'mono': {
-      // Lock hue to monoTint, keep original luminance.
-      const { h: th } = rgbToHsl(...Object.values(hexRgb(monoTint)) as [number, number, number]);
-      nh = th;
-      ns = 0.7;
+      const tintRgb = hexRgb(monoTint);
+      const tintHsl = rgbToHsl(tintRgb.r, tintRgb.g, tintRgb.b);
+      nh = tintHsl.h;
+      ns = Math.max(0.6, tintHsl.s);
       break;
     }
   }
-  // Apply vibrancy as a saturation + value multiplier (clamped).
-  ns = Math.max(0, Math.min(1, ns * vibrancy));
-  if (vibrancy < 1) {
-    // dimmer
-    nl = Math.max(0, l * vibrancy);
-  } else if (vibrancy > 1) {
-    // brighter, but cap so we don't crush highlights
-    nl = Math.min(0.85, l + (vibrancy - 1) * 0.2);
-  }
-
-  const { r: nr, g: ng, b: nb } = hslToRgb(nh, ns, nl);
-  return rgbHex(nr, ng, nb);
+  const styled = hslToRgb(nh, ns, nl);
+  const final = applyVibrancyRgb(styled.r, styled.g, styled.b, vibrancy);
+  return rgbHex(final.r, final.g, final.b);
 }
 
 export interface StyleOptions {

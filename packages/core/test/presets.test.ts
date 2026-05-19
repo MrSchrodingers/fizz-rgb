@@ -17,7 +17,7 @@ describe('BUILTIN_PRESETS', () => {
     const statefulAnimTypes = [
       'pong', 'snake', 'tetris', 'matrix-rain', 'breakout',
       'fireworks', 'dvd', 'heart-rate', 'equalizer', 'rule30',
-      'cpu-thermal', 'minecraft-day', 'aquarium',
+      'cpu-thermal', 'minecraft-day', 'aquarium', 'pong-interactive',
     ];
     for (const p of BUILTIN_PRESETS) {
       if (statefulAnimTypes.includes(p.pattern.animType)) continue;

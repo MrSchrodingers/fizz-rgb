@@ -22,8 +22,10 @@ export interface FizzApi {
     animType: AnimType;
     animSpeed: number;
     sequence?: number[];
+    vibrancy?: number;
   }): Promise<void>;
   perkeyStopPattern(): Promise<void>;
+  perkeyGameInput(slot: number): Promise<void>;
 }
 
 export type PerkeyState =

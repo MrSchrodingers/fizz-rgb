@@ -26,6 +26,37 @@ export type PerkeyState =
 
 type PerkeyListener = (state: PerkeyState) => void;
 
+/**
+ * Apply the user's vibrancy multiplier to every color in a frame. Called by
+ * the stream loops right before encoding so the global tonality slider on
+ * the GUI affects stateful animations too — without this, Minecraft / games
+ * / Aquarium ignored vibrancy completely (they generate colors from internal
+ * state and never touched the client-side transform).
+ */
+function applyVibrancyInPlace(colors: Map<number, Color>, v: number): void {
+  if (v === 1) return;
+  if (v <= 1) {
+    colors.forEach((c, k) => {
+      colors.set(k, {
+        r: Math.round(c.r * v),
+        g: Math.round(c.g * v),
+        b: Math.round(c.b * v),
+      });
+    });
+    return;
+  }
+  const boost = Math.min(1, v - 1);
+  colors.forEach((c, k) => {
+    const max = Math.max(c.r, c.g, c.b);
+    const isMax = (n: number) => n >= max - 1;
+    colors.set(k, {
+      r: Math.round(isMax(c.r) ? c.r + (255 - c.r) * boost : c.r * (1 - boost * 0.5)),
+      g: Math.round(isMax(c.g) ? c.g + (255 - c.g) * boost : c.g * (1 - boost * 0.5)),
+      b: Math.round(isMax(c.b) ? c.b + (255 - c.b) * boost : c.b * (1 - boost * 0.5)),
+    });
+  });
+}
+
 function colorMapToHexRecord(colors: Map<number, Color>): Record<string, string> {
   const out: Record<string, string> = {};
   colors.forEach((c, idx) => {
@@ -1231,6 +1262,165 @@ class AquariumEngine {
   }
 }
 
+// ─── Interactive Pong (player vs forgiving AI) ──────────────────────────────
+
+/**
+ * Pong variant where the LEFT paddle is the player and the RIGHT paddle is
+ * a deliberately fallible AI. Layout on the K617:
+ *   - Number row (1-9):       scoreboard. Left half (1-4) = player (red),
+ *                             right half (6-9) = AI (blue). Key 5 = center.
+ *   - Left edge (Tab/Caps/LShift/LCtrl): player paddle slots 0..3
+ *   - Col 13 (Backslash/Enter area): AI paddle (col 13, follows ball)
+ *   - Middle play area (rows 1-3): ball bounces here
+ *
+ * Player input flows in via `setPaddleSlot(0..3)` from the IPC handler.
+ * "Permissible" AI: each tick when the ball is heading right, the AI moves
+ * toward it but with a configurable miss rate so the player can actually
+ * score.
+ */
+class PongInteractiveEngine {
+  private paddleSlot = 1; // player slot 0..3 (Tab/Caps/LShift/LCtrl)
+  private aiY = 1.5; // AI paddle vertical position (continuous)
+  private ballX = 7;
+  private ballY = 1.5;
+  private ballVX = 1;
+  private ballVY = 0.6;
+  private scorePlayer = 0;
+  private scoreAi = 0;
+  private resetCountdown = 0; // frames remaining before next ball serve
+  private tickCounter = 0;
+  private readonly TICKS_PER_STEP = 4; // ~7.5Hz ball motion at 30fps
+  private readonly AI_MISS_RATE = 0.35;
+  private readonly PLAY_TOP = 1;     // ball constrained rows 1..3 (row 0 is scoreboard)
+  private readonly PLAY_BOTTOM = 3;
+
+  setPaddleSlot(slot: number): void {
+    if (Number.isInteger(slot) && slot >= 0 && slot <= 3) this.paddleSlot = slot;
+  }
+
+  step(): void {
+    if (this.resetCountdown > 0) { this.resetCountdown--; return; }
+    this.tickCounter++;
+    if (this.tickCounter < this.TICKS_PER_STEP) return;
+    this.tickCounter = 0;
+
+    this.ballX += this.ballVX;
+    this.ballY += this.ballVY;
+
+    // Bounce top/bottom (within play area)
+    if (this.ballY <= this.PLAY_TOP) { this.ballY = this.PLAY_TOP; this.ballVY = Math.abs(this.ballVY); }
+    if (this.ballY >= this.PLAY_BOTTOM) { this.ballY = this.PLAY_BOTTOM; this.ballVY = -Math.abs(this.ballVY); }
+
+    // AI motion: tracks ball when it's heading right, with random miss bias.
+    if (this.ballVX > 0) {
+      // Predict ball Y at column 13 using simple linear (good enough for short distances).
+      const stepsToReach = Math.max(1, 13 - this.ballX);
+      const predicted = this.ballY + this.ballVY * stepsToReach;
+      const target = Math.max(this.PLAY_TOP, Math.min(this.PLAY_BOTTOM, predicted));
+      // Forgiving AI: most ticks we lag by 1 row, sometimes more.
+      const miss = Math.random() < this.AI_MISS_RATE ? (Math.random() - 0.5) * 2 : 0;
+      const aiTarget = target + miss;
+      const dy = aiTarget - this.aiY;
+      this.aiY += Math.sign(dy) * Math.min(Math.abs(dy), 0.35); // speed cap
+      this.aiY = Math.max(this.PLAY_TOP, Math.min(this.PLAY_BOTTOM, this.aiY));
+    }
+
+    // Player paddle: paddleSlot maps to a Y in the play area. Slot 0..3 → row 0..3,
+    // but ball lives in rows 1..3, so we clamp to that range with a 2-row paddle.
+    const playerCenter = Math.max(this.PLAY_TOP, Math.min(this.PLAY_BOTTOM, this.paddleSlot));
+
+    // Left wall hit
+    if (this.ballX <= 1) {
+      this.ballX = 1;
+      if (Math.abs(this.ballY - playerCenter) < 1.2) {
+        // Reflect, with a small angle nudge based on contact offset.
+        this.ballVX = Math.abs(this.ballVX);
+        this.ballVY = (this.ballY - playerCenter) * 0.5;
+      } else {
+        this.scoreAi = Math.min(9, this.scoreAi + 1);
+        this.resetServe(1);
+      }
+    }
+    // Right wall hit
+    if (this.ballX >= 12) {
+      this.ballX = 12;
+      if (Math.abs(this.ballY - this.aiY) < 1.2) {
+        this.ballVX = -Math.abs(this.ballVX);
+        this.ballVY = (this.ballY - this.aiY) * 0.5;
+      } else {
+        this.scorePlayer = Math.min(9, this.scorePlayer + 1);
+        this.resetServe(-1);
+      }
+    }
+  }
+
+  private resetServe(dir: -1 | 1): void {
+    this.ballX = 7;
+    this.ballY = 2;
+    this.ballVX = dir;
+    this.ballVY = (Math.random() - 0.5) * 1.4;
+    this.resetCountdown = 18; // ~0.6s pause for visual punctuation
+    // Reset run when someone hits 9
+    if (this.scorePlayer === 9 || this.scoreAi === 9) {
+      this.scorePlayer = 0;
+      this.scoreAi = 0;
+    }
+  }
+
+  render(): Map<number, Color> {
+    const out = new Map<number, Color>();
+    const RED: Color = { r: 255, g: 30, b: 30 };
+    const BLUE: Color = { r: 30, g: 80, b: 255 };
+    const WHITE: Color = { r: 255, g: 255, b: 255 };
+    const DIM_RED: Color = { r: 60, g: 0, b: 0 };
+    const DIM_BLUE: Color = { r: 0, g: 0, b: 60 };
+
+    // Scoreboard on the keyboard's TOP row (digits 1..9).
+    // Number-row ledIndex maps via key names: '1'..'9'.
+    const NUMS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
+    for (let i = 0; i < NUMS.length; i++) {
+      const k = K617_LAYOUT.keys.find((x) => x.name === NUMS[i]);
+      if (!k) continue;
+      // Slots 0..3 represent player score (lit up to scorePlayer-1),
+      // slots 5..8 represent AI (lit when (i - 5) < scoreAi).
+      if (i < 4) {
+        out.set(k.ledIndex, i < this.scorePlayer ? RED : DIM_RED);
+      } else if (i === 4) {
+        // Middle "5" key: serve indicator (white pulse) or neutral.
+        out.set(k.ledIndex, this.resetCountdown > 0 ? WHITE : { r: 25, g: 25, b: 25 });
+      } else {
+        const aiIdx = i - 5;
+        out.set(k.ledIndex, aiIdx < this.scoreAi ? BLUE : DIM_BLUE);
+      }
+    }
+
+    // Player paddle on the left edge keys (Tab/Caps/LShift/LCtrl).
+    const PLAYER_KEYS = ['Tab', 'CapsLock', 'LShift', 'LCtrl'];
+    for (let i = 0; i < PLAYER_KEYS.length; i++) {
+      const k = K617_LAYOUT.keys.find((x) => x.name === PLAYER_KEYS[i]);
+      if (!k) continue;
+      out.set(k.ledIndex, i === this.paddleSlot ? RED : DIM_RED);
+    }
+
+    // AI paddle on the right edge (Backslash/Enter/RShift/RCtrl).
+    const AI_KEYS = ['Backslash', 'Enter', 'RShift', 'RCtrl'];
+    const aiSlot = Math.max(0, Math.min(3, Math.round(this.aiY)));
+    for (let i = 0; i < AI_KEYS.length; i++) {
+      const k = K617_LAYOUT.keys.find((x) => x.name === AI_KEYS[i]);
+      if (!k) continue;
+      out.set(k.ledIndex, i === aiSlot ? BLUE : DIM_BLUE);
+    }
+
+    // Ball — render on the closest grid cell in the play area (rows 1..3).
+    const bx = Math.max(1, Math.min(13, Math.round(this.ballX)));
+    const by = Math.max(this.PLAY_TOP, Math.min(this.PLAY_BOTTOM, Math.round(this.ballY)));
+    const ballLed = gridToLed(bx, by);
+    if (ballLed !== null) out.set(ballLed, WHITE);
+
+    return out;
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export class EffectEngine {
@@ -1239,6 +1429,9 @@ export class EffectEngine {
   private streamInterval: ReturnType<typeof setInterval> | null = null;
   private streamStart = 0;
   private currentPattern: Pattern | null = null;
+  /** Reference to the currently-active interactive engine, if any. Allows
+   *  IPC handlers (perkey.gameInput) to forward player input. */
+  private interactiveEngine: PongInteractiveEngine | null = null;
 
   // Persistent state for reconnect restoration — mutually exclusive
   private lastPattern: Pattern | null = null;
@@ -1291,9 +1484,16 @@ export class EffectEngine {
       clearInterval(this.streamInterval);
       this.streamInterval = null;
       this.currentPattern = null;
+      this.interactiveEngine = null;
       log.info('stream stopped');
       this.notifyPerkey({ mode: 'off' });
     }
+  }
+
+  /** Forward a player input to the active interactive engine. No-op if no
+   *  interactive game is running. */
+  setGamePaddleSlot(slot: number): void {
+    if (this.interactiveEngine) this.interactiveEngine.setPaddleSlot(slot);
   }
 
   async runEffect(name: FirmwareEffectName, params: FirmwareEffectParams): Promise<void> {
@@ -1358,7 +1558,7 @@ export class EffectEngine {
       const game = new PongEngine();
       this.streamInterval = setInterval(() => {
         game.step();
-        const frame = encodePerKeyFrame(game.render());
+        const colors = game.render(); applyVibrancyInPlace(colors, this.currentPattern?.vibrancy ?? 1); const frame = encodePerKeyFrame(colors);
         this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
       }, 1000 / 30);
       log.info('pong stream started');
@@ -1369,7 +1569,7 @@ export class EffectEngine {
       const game = new SnakeEngine();
       this.streamInterval = setInterval(() => {
         game.step();
-        const frame = encodePerKeyFrame(game.render());
+        const colors = game.render(); applyVibrancyInPlace(colors, this.currentPattern?.vibrancy ?? 1); const frame = encodePerKeyFrame(colors);
         this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
       }, 1000 / 30);
       log.info('snake stream started');
@@ -1380,7 +1580,7 @@ export class EffectEngine {
       const game = new TetrisEngine();
       this.streamInterval = setInterval(() => {
         game.step();
-        const frame = encodePerKeyFrame(game.render());
+        const colors = game.render(); applyVibrancyInPlace(colors, this.currentPattern?.vibrancy ?? 1); const frame = encodePerKeyFrame(colors);
         this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
       }, 1000 / 30);
       log.info('tetris stream started');
@@ -1391,7 +1591,7 @@ export class EffectEngine {
       const game = new MatrixRainEngine();
       this.streamInterval = setInterval(() => {
         game.step();
-        const frame = encodePerKeyFrame(game.render());
+        const colors = game.render(); applyVibrancyInPlace(colors, this.currentPattern?.vibrancy ?? 1); const frame = encodePerKeyFrame(colors);
         this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
       }, 1000 / 30);
       log.info('Matrix Rain stream started');
@@ -1402,7 +1602,7 @@ export class EffectEngine {
       const game = new BreakoutEngine();
       this.streamInterval = setInterval(() => {
         game.step();
-        const frame = encodePerKeyFrame(game.render());
+        const colors = game.render(); applyVibrancyInPlace(colors, this.currentPattern?.vibrancy ?? 1); const frame = encodePerKeyFrame(colors);
         this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
       }, 1000 / 30);
       log.info('Breakout stream started');
@@ -1413,7 +1613,7 @@ export class EffectEngine {
       const game = new FireworksEngine();
       this.streamInterval = setInterval(() => {
         game.step();
-        const frame = encodePerKeyFrame(game.render());
+        const colors = game.render(); applyVibrancyInPlace(colors, this.currentPattern?.vibrancy ?? 1); const frame = encodePerKeyFrame(colors);
         this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
       }, 1000 / 30);
       log.info('Fireworks stream started');
@@ -1424,7 +1624,7 @@ export class EffectEngine {
       const game = new DvdBouncerEngine();
       this.streamInterval = setInterval(() => {
         game.step();
-        const frame = encodePerKeyFrame(game.render());
+        const colors = game.render(); applyVibrancyInPlace(colors, this.currentPattern?.vibrancy ?? 1); const frame = encodePerKeyFrame(colors);
         this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
       }, 1000 / 30);
       log.info('DVD bouncer stream started');
@@ -1435,7 +1635,7 @@ export class EffectEngine {
       const game = new HeartRateEngine();
       this.streamInterval = setInterval(() => {
         game.step();
-        const frame = encodePerKeyFrame(game.render());
+        const colors = game.render(); applyVibrancyInPlace(colors, this.currentPattern?.vibrancy ?? 1); const frame = encodePerKeyFrame(colors);
         this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
       }, 1000 / 30);
       log.info('Heart rate stream started');
@@ -1446,7 +1646,7 @@ export class EffectEngine {
       const game = new EqualizerEngine();
       this.streamInterval = setInterval(() => {
         game.step();
-        const frame = encodePerKeyFrame(game.render());
+        const colors = game.render(); applyVibrancyInPlace(colors, this.currentPattern?.vibrancy ?? 1); const frame = encodePerKeyFrame(colors);
         this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
       }, 1000 / 30);
       log.info('Equalizer stream started');
@@ -1457,7 +1657,7 @@ export class EffectEngine {
       const game = new Rule30Engine();
       this.streamInterval = setInterval(() => {
         game.step();
-        const frame = encodePerKeyFrame(game.render());
+        const colors = game.render(); applyVibrancyInPlace(colors, this.currentPattern?.vibrancy ?? 1); const frame = encodePerKeyFrame(colors);
         this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
       }, 1000 / 30);
       log.info('Rule 30 stream started');
@@ -1468,7 +1668,7 @@ export class EffectEngine {
       const eng = new CpuThermalEngine();
       this.streamInterval = setInterval(() => {
         eng.step();
-        const frame = encodePerKeyFrame(eng.render());
+        const colors = eng.render(); applyVibrancyInPlace(colors, this.currentPattern?.vibrancy ?? 1); const frame = encodePerKeyFrame(colors);
         this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
       }, 1000 / 30);
       log.info('CPU thermal stream started');
@@ -1479,10 +1679,24 @@ export class EffectEngine {
       const eng = new MinecraftDayEngine();
       this.streamInterval = setInterval(() => {
         eng.step();
-        const frame = encodePerKeyFrame(eng.render());
+        const colors = eng.render(); applyVibrancyInPlace(colors, this.currentPattern?.vibrancy ?? 1); const frame = encodePerKeyFrame(colors);
         this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
       }, 1000 / 30);
       log.info('Minecraft day/night stream started');
+      return;
+    }
+
+    if (pattern.animType === 'pong-interactive') {
+      const eng = new PongInteractiveEngine();
+      this.interactiveEngine = eng;
+      this.streamInterval = setInterval(() => {
+        eng.step();
+        const colors = eng.render();
+        applyVibrancyInPlace(colors, this.currentPattern?.vibrancy ?? 1);
+        const frame = encodePerKeyFrame(colors);
+        this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
+      }, 1000 / 30);
+      log.info('Pong interactive stream started');
       return;
     }
 
@@ -1490,7 +1704,7 @@ export class EffectEngine {
       const eng = new AquariumEngine();
       this.streamInterval = setInterval(() => {
         eng.step();
-        const frame = encodePerKeyFrame(eng.render());
+        const colors = eng.render(); applyVibrancyInPlace(colors, this.currentPattern?.vibrancy ?? 1); const frame = encodePerKeyFrame(colors);
         this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
       }, 1000 / 30);
       log.info('Aquarium stream started');

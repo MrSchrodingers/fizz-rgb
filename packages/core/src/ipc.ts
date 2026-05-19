@@ -53,7 +53,7 @@ export const ALL_ANIM_TYPES = [
   'solid', 'blink', 'chase', 'wave', 'typewriter', 'marquee', 'flag-wave',
   'pong', 'snake', 'tetris', 'matrix-rain', 'breakout',
   'fireworks', 'dvd', 'heart-rate', 'equalizer', 'rule30',
-  'cpu-thermal', 'minecraft-day', 'aquarium',
+  'cpu-thermal', 'minecraft-day', 'aquarium', 'pong-interactive',
 ] as const;
 export const AnimTypeSchema = z.enum(ALL_ANIM_TYPES);
 /** Single source of truth for animation type names — derived from the Zod
@@ -86,6 +86,11 @@ export const PatternSchema = z.object({
   animType: AnimTypeSchema,
   animSpeed: z.number().min(0).max(1),
   sequence: z.array(z.number().int().min(0).max(60)).optional(),
+  /** 0.4..2.0, default 1. Daemon-side vibrancy multiplier applied to every
+   *  rendered color. Lets stateful animations (Minecraft, Aquarium, games)
+   *  honour the global tonality slider that already affects color-bearing
+   *  presets via client-side transformation. */
+  vibrancy: z.number().min(0.1).max(3).optional(),
 });
 export type Pattern = z.infer<typeof PatternSchema>;
 /** @deprecated use Pattern */
@@ -157,6 +162,18 @@ export const RpcMethods = {
   },
   'perkey.stopPattern': {
     params: z.object({}).strict(),
+    result: z.object({ ok: z.literal(true) }),
+  },
+  /**
+   * Send a game input to whatever interactive engine is currently streaming.
+   * Right now only pong-interactive cares — slot 0..3 maps to the player's
+   * paddle Y position (top to bottom on the left edge of the K617:
+   * Tab=0, Caps=1, LShift=2, LCtrl=3).
+   */
+  'perkey.gameInput': {
+    params: z.object({
+      paddleSlot: z.number().int().min(0).max(3).optional(),
+    }),
     result: z.object({ ok: z.literal(true) }),
   },
   'perkey.current': {

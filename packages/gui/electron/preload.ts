@@ -31,6 +31,7 @@ const fizz = {
   perkeySet: (colors: Record<string, string>) => ipcRenderer.invoke('fizz:perkeySet', colors),
   perkeyStartPattern: (pattern: any) => ipcRenderer.invoke('fizz:perkeyStartPattern', pattern),
   perkeyStopPattern: () => ipcRenderer.invoke('fizz:perkeyStopPattern'),
+  perkeyGameInput: (slot: number) => ipcRenderer.invoke('fizz:perkeyGameInput', slot),
 };
 
 contextBridge.exposeInMainWorld('fizz', fizz);

@@ -64,11 +64,18 @@ export function PresetGallery({
   const setGlobalStyle = useStyleStore((s) => s.setStyle);
   const setGlobalVibrancy = useStyleStore((s) => s.setVibrancy);
 
-  // Wrap the parent onApply so the global tonality always applies. Pre-edit
-  // the keys map before forwarding — daemon never sees the raw preset when
-  // a non-Original style is selected.
+  // Wrap the parent onApply so the global tonality always applies.
+  //
+  // For NON-stateful presets we bake the style+vibrancy into the keys map
+  // client-side — the daemon's computeFrameInto path doesn't re-multiply.
+  //
+  // For STATEFUL presets (Minecraft, Aquarium, games) the keys map is
+  // empty so transformKeys is a no-op — we instead pass the vibrancy via
+  // pattern.vibrancy so the daemon engines (which generate colors from
+  // internal state) can apply it before encoding.
   function applyWithStyle(p: Preset | UserPreset, tint?: string) {
-    if (globalStyle === 'original' && globalVibrancy === 1) {
+    const noChange = globalStyle === 'original' && globalVibrancy === 1;
+    if (noChange) {
       onApply(p, tint);
       return;
     }
@@ -82,6 +89,7 @@ export function PresetGallery({
         }),
         animType: p.pattern.animType,
         animSpeed: p.pattern.animSpeed,
+        vibrancy: globalVibrancy,
         ...(p.pattern.sequence ? { sequence: p.pattern.sequence } : {}),
       },
     } as Preset | UserPreset;
