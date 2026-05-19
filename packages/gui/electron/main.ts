@@ -6,6 +6,14 @@ import { DaemonClient } from './daemon-client.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+// Force Wayland/X11 app_id + WM_CLASS so the window matches the .desktop file's
+// StartupWMClass and KWin picks up the installed icon instead of the default
+// Electron "atom" logo. Must run before app.whenReady().
+app.setName('fizz-rgb');
+
+const ICON_PATH = join(__dirname, '..', 'resources', 'icon.png');
+const TRAY_ICON_PATH = join(__dirname, '..', 'resources', 'icon-22.png');
+
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
@@ -18,6 +26,8 @@ async function createWindow() {
     width: 1280,
     height: 800,
     show: !startHidden,
+    icon: ICON_PATH,
+    title: 'Fizz RGB',
     backgroundColor: '#0e0e12',
     webPreferences: {
       preload: join(__dirname, 'preload.js'),
@@ -108,17 +118,12 @@ daemon.on('device.changed', (params) => {
 });
 
 function setupTray() {
-  // Minimal 16x16 magenta PNG for the tray icon — replace with a real asset later.
-  const iconBuffer = Buffer.from(
-    'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAOUlEQVR42mNk+M9Q/x8DjMzAxIDOZmJk+M+ABgZ1AyMTw1AaGRkY/jMy/v//n4GBgYGRkRHbAACWAQqp1ZGqGAAAAABJRU5ErkJggg==',
-    'base64',
-  );
-
   let icon: Electron.NativeImage;
   try {
-    icon = nativeImage.createFromBuffer(iconBuffer);
-  } catch {
-    // Fallback: empty image — tray still works on Linux via tooltip+menu
+    icon = nativeImage.createFromPath(TRAY_ICON_PATH);
+    if (icon.isEmpty()) throw new Error('empty tray image');
+  } catch (err) {
+    console.warn('[fizzd-gui] tray icon load failed, falling back to empty image:', (err as Error).message);
     icon = nativeImage.createEmpty();
   }
 

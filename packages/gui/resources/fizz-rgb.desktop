@@ -9,5 +9,5 @@ Icon=fizz-rgb
 Terminal=false
 Categories=Utility;Settings;HardwareSettings;
 StartupNotify=true
-StartupWMClass=Fizz RGB
+StartupWMClass=fizz-rgb
 Keywords=rgb;keyboard;redragon;k617;fizz;

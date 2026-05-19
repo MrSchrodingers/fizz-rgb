@@ -80,6 +80,20 @@ fi
 APPIMAGE_DEST="$HOME/.local/bin/fizz-rgb.AppImage"
 
 if [[ "$WITH_GUI" == "1" ]]; then
+  # Regenerate raster icons from SVG when the toolchain is available, so any
+  # icon.svg change propagates without committing 12 PNGs.
+  if command -v rsvg-convert >/dev/null 2>&1 \
+      && [[ -f "$ROOT/packages/gui/resources/icon.svg" ]]; then
+    echo "==> Rendering icons from icon.svg..."
+    for size in 16 22 24 32 48 64 96 128 192 256 384 512; do
+      rsvg-convert -w "$size" -h "$size" \
+        "$ROOT/packages/gui/resources/icon.svg" \
+        -o "$ROOT/packages/gui/resources/icon-${size}.png"
+    done
+    cp "$ROOT/packages/gui/resources/icon-512.png" \
+       "$ROOT/packages/gui/resources/icon.png"
+  fi
+
   echo "==> Building Electron GUI AppImage (may take a couple of minutes)..."
   npm run build:appimage -w fizz-gui
 
@@ -92,10 +106,18 @@ if [[ "$WITH_GUI" == "1" ]]; then
   echo "==> Installing AppImage to $APPIMAGE_DEST"
   install -m 755 "$APPIMAGE_SRC" "$APPIMAGE_DEST"
 
-  echo "==> Installing icon to ~/.local/share/icons/hicolor/256x256/apps/"
-  mkdir -p "$HOME/.local/share/icons/hicolor/256x256/apps"
-  install -m 644 "$ROOT/packages/gui/resources/icon.png" \
-    "$HOME/.local/share/icons/hicolor/256x256/apps/fizz-rgb.png"
+  echo "==> Installing icons across hicolor theme sizes..."
+  # Ensure hicolor theme index exists so gtk-update-icon-cache can build a cache.
+  if [[ ! -f "$HOME/.local/share/icons/hicolor/index.theme" && -f /usr/share/icons/hicolor/index.theme ]]; then
+    mkdir -p "$HOME/.local/share/icons/hicolor"
+    cp /usr/share/icons/hicolor/index.theme "$HOME/.local/share/icons/hicolor/index.theme"
+  fi
+  for size in 16 22 24 32 48 64 96 128 192 256 384 512; do
+    src="$ROOT/packages/gui/resources/icon-${size}.png"
+    [[ -f "$src" ]] || continue
+    mkdir -p "$HOME/.local/share/icons/hicolor/${size}x${size}/apps"
+    install -m 644 "$src" "$HOME/.local/share/icons/hicolor/${size}x${size}/apps/fizz-rgb.png"
+  done
 
   echo "==> Installing application menu entry..."
   mkdir -p "$HOME/.local/share/applications"

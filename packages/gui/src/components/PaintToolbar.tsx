@@ -272,22 +272,24 @@ export function PaintToolbar({ onSavePattern }: Props) {
       </div>
 
       {/* Animation row */}
-      <div className="flex items-center gap-3 px-4 py-2 bg-zinc-950/40 text-xs border-t border-zinc-900">
-        <span className="text-zinc-500 uppercase tracking-wider">Pattern animation:</span>
-        {(['solid', 'blink', 'chase', 'wave', 'typewriter', 'marquee', 'flag-wave', 'pong', 'snake', 'tetris', 'matrix-rain', 'breakout', 'fireworks', 'dvd', 'heart-rate', 'equalizer', 'rule30'] as const).map((t: AnimType) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => void handleAnimTypeChange(t)}
-            className={cn(
-              'px-3 py-1 rounded-md transition',
-              animType === t ? 'bg-fuchsia-500/20 text-fuchsia-200' : 'text-zinc-400 hover:bg-zinc-800',
-            )}
-          >
-            {t === 'flag-wave' ? 'flag' : t}
-          </button>
-        ))}
-        <div className="flex items-center gap-2 ml-4">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2 bg-zinc-950/40 text-xs border-t border-zinc-900">
+        <span className="text-zinc-500 uppercase tracking-wider shrink-0">Pattern animation:</span>
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
+          {(['solid', 'blink', 'chase', 'wave', 'typewriter', 'marquee', 'flag-wave', 'pong', 'snake', 'tetris', 'matrix-rain', 'breakout', 'fireworks', 'dvd', 'heart-rate', 'equalizer', 'rule30'] as const).map((t: AnimType) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => void handleAnimTypeChange(t)}
+              className={cn(
+                'px-3 py-1 rounded-md transition shrink-0',
+                animType === t ? 'bg-fuchsia-500/20 text-fuchsia-200' : 'text-zinc-400 hover:bg-zinc-800',
+              )}
+            >
+              {t === 'flag-wave' ? 'flag' : t}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2 ml-auto shrink-0">
           <span className="text-zinc-500">Speed</span>
           <input
             type="range"
@@ -296,8 +298,9 @@ export function PaintToolbar({ onSavePattern }: Props) {
             step={0.05}
             value={animSpeed}
             onChange={(e) => void handleSpeedChange(Number(e.target.value))}
-            className="accent-fuchsia-500"
+            className="accent-fuchsia-500 w-32"
           />
+          <span className="text-zinc-400 font-mono w-10 text-right">{animSpeed.toFixed(2)}</span>
         </div>
       </div>
     </div>

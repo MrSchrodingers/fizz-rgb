@@ -20,6 +20,8 @@
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
+      "resources/icon.png",
+      "resources/icon-22.png",
       "node_modules/@fizz/core/dist/**/*",
       "node_modules/@fizz/core/package.json"
     ],
