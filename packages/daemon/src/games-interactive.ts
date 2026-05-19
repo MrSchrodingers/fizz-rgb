@@ -669,7 +669,10 @@ export class DoomEngine {
         this.ammo = Math.min(this.MAX_AMMO, this.ammo + 1); // ammo refund on kill
         log.info({ kills: this.kills, remaining: this.enemies.length }, 'doom: kill');
         if (this.enemies.length === 0) {
-          this.hp = Math.min(this.MAX_HP, this.hp + 2); // health pickup on round clear
+          // Round clear — reset the per-round kill bar in the HUD and refill
+          // ammo. Spawn a fresh wave with one more imp than before so it
+          // ramps up over time.
+          this.kills = 0;
           this.ammo = this.MAX_AMMO;
           this.spawnEnemies();
         }
@@ -689,26 +692,21 @@ export class DoomEngine {
     if (this.tickCounter < this.ticksPerStep) return;
     this.tickCounter = 0;
 
-    // Enemy AI: move toward player; damage on contact.
-    for (let i = this.enemies.length - 1; i >= 0; i--) {
-      const e = this.enemies[i]!;
+    // Enemy AI: shuffle around the room slowly, but DON'T damage the player
+    // on contact — turret mode (user request: "eles não atacarem, pois fica
+    // muito difícil no teclado"). The enemies still move so they're a
+    // moving target, but stop short of the player to avoid blocking shots.
+    for (const e of this.enemies) {
       const dx = this.px - e.x;
       const dy = this.py - e.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < 0.55) {
-        this.hp--;
-        this.damageFlash = 8;
-        if (this.hp <= 0) {
-          this.deathScreen = 30;
-          log.info({ kills: this.kills }, 'doom: died');
-          return;
-        }
-      } else {
-        const nx = e.x + (dx / dist) * this.ENEMY_SPEED;
-        const ny = e.y + (dy / dist) * this.ENEMY_SPEED;
-        if (!this.isWall(nx, e.y)) e.x = nx;
-        if (!this.isWall(e.x, ny)) e.y = ny;
-      }
+      // Keep at least 1.2 cells from the player — close enough to be visible,
+      // far enough that they don't crowd the camera.
+      if (dist < 1.2) continue;
+      const nx = e.x + (dx / dist) * this.ENEMY_SPEED;
+      const ny = e.y + (dy / dist) * this.ENEMY_SPEED;
+      if (!this.isWall(nx, e.y)) e.x = nx;
+      if (!this.isWall(e.x, ny)) e.y = ny;
     }
   }
 
@@ -739,13 +737,14 @@ export class DoomEngine {
     if (escLed !== null) {
       out.set(escLed, this.ammo > 0 ? CYAN : { r: 80, g: 40, b: 0 });
     }
-    // 1..7 = HP bar
-    const HP_KEYS = ['1', '2', '3', '4', '5', '6', '7'];
-    for (let i = 0; i < this.hp && i < HP_KEYS.length; i++) {
-      const led = findKeyLed(HP_KEYS[i]!);
-      if (led !== null) out.set(led, RED);
+    // 1..7 = kill counter for the current round (was HP — enemies don't
+    // damage the player anymore, so HP was always full and uninformative).
+    const KILL_KEYS = ['1', '2', '3', '4', '5', '6', '7'];
+    for (let i = 0; i < this.kills && i < KILL_KEYS.length; i++) {
+      const led = findKeyLed(KILL_KEYS[i]!);
+      if (led !== null) out.set(led, GREEN);
     }
-    // 8 = muzzle flash / kill flash
+    // 8 = muzzle flash
     if (this.muzzleFlash > 0) {
       const led = findKeyLed('8');
       if (led !== null) out.set(led, WHITE);
@@ -833,12 +832,19 @@ export class DoomEngine {
  */
 export class MinecraftCloudsEngine {
   private tickCounter = 0;
-  // Three clouds drifting at independent speeds so they overlap interestingly.
+  // Five clouds drifting at independent speeds so the sky looks lively
+  // (was three at very slow rates — barely visible motion). Each tick is
+  // one frame at 30fps; CLOUD_CYCLE controls how long a cloud takes to
+  // cross the keyboard end-to-end.
   private readonly clouds = [
     { offset: 0.00, rate: 1.0, row: 0 },
-    { offset: 0.35, rate: 1.3, row: 1 },
-    { offset: 0.70, rate: 0.7, row: 0 },
+    { offset: 0.25, rate: 1.4, row: 1 },
+    { offset: 0.50, rate: 0.8, row: 0 },
+    { offset: 0.75, rate: 1.1, row: 1 },
+    { offset: 0.15, rate: 1.7, row: 0 },
   ];
+  // ~10s per slowest cloud crossing — clearly animated motion.
+  private readonly CLOUD_CYCLE = 300;
 
   step(): void { this.tickCounter++; }
 
@@ -852,8 +858,8 @@ export class MinecraftCloudsEngine {
     const GRASS: Color = { r: 0, g: 255, b: 40 };
     const SUN: Color = { r: 255, g: 220, b: 0 };
 
-    // Continuous cloud drift parameter — bigger denominator = slower drift.
-    const phase = (this.tickCounter / 900) % 1;
+    // Continuous cloud drift parameter.
+    const phase = (this.tickCounter / this.CLOUD_CYCLE) % 1;
     const cloudPositions = this.clouds.map((c) => ({
       col: ((phase * c.rate + c.offset) * 16) % 16 - 1,
       row: c.row,

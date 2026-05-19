@@ -106,10 +106,11 @@ export default function App() {
 
   function hydrateFromPerkeyState(state: import('./types/window.js').PerkeyState) {
     if (state.mode === 'off') {
-      // Don't wipe local edits on a transient 'off' — daemon emits this
-      // when streaming stops, but the user may still be authoring. Just
-      // clear the activePresetId flag.
-      usePaintStore.setState({ activePresetId: null });
+      // Don't touch activePresetId here — startPattern() in the daemon
+      // emits a transient 'off' notification before the 'pattern' one
+      // when restarting a stream, which would otherwise blow away the
+      // user's active preset selection mid-transition. The activePresetId
+      // is cleared explicitly when the user diverges via paint/reset/etc.
       return;
     }
     if (state.mode === 'static') {
