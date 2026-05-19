@@ -22,6 +22,7 @@ import { useMediaQuery } from './lib/useMediaQuery.js';
 import { StatusBar } from './components/StatusBar.js';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { Preset, Profile } from '@fizz/core';
+import { ALL_ANIM_TYPES } from '@fizz/core';
 
 export default function App() {
   const setDeviceStatus = useDeviceStore((s) => s.setStatus);
@@ -124,7 +125,7 @@ export default function App() {
     // 'pattern'
     const next = new Map<number, string>();
     for (const [k, v] of Object.entries(state.pattern.keys)) next.set(Number(k), v);
-    const validAnimTypes: AnimType[] = ['solid', 'blink', 'chase', 'wave', 'typewriter', 'marquee', 'flag-wave', 'pong', 'snake', 'tetris', 'matrix-rain', 'breakout', 'fireworks', 'dvd', 'heart-rate', 'equalizer', 'rule30'];
+    const validAnimTypes: readonly AnimType[] = ALL_ANIM_TYPES;
     const animType: AnimType = validAnimTypes.includes(state.pattern.animType as AnimType)
       ? (state.pattern.animType as AnimType)
       : 'solid';
@@ -181,7 +182,7 @@ export default function App() {
       const next = new Map<number, string>(
         Object.entries(data.keys).map(([k, v]) => [Number(k), v]),
       );
-      const validAnimTypes: AnimType[] = ['solid', 'blink', 'chase', 'wave', 'typewriter', 'marquee', 'flag-wave', 'pong', 'snake', 'tetris', 'matrix-rain', 'breakout', 'fireworks', 'dvd', 'heart-rate', 'equalizer', 'rule30'];
+      const validAnimTypes: readonly AnimType[] = ALL_ANIM_TYPES;
       const animType: AnimType = validAnimTypes.includes(data.animType as AnimType)
         ? (data.animType as AnimType)
         : 'solid';
@@ -283,7 +284,7 @@ export default function App() {
         };
         if (isNew) {
           const p = pattern as NewPattern;
-          const validAnimTypes: AnimType[] = ['solid', 'blink', 'chase', 'wave', 'typewriter', 'marquee', 'flag-wave', 'pong', 'snake', 'tetris', 'matrix-rain', 'breakout', 'fireworks', 'dvd', 'heart-rate', 'equalizer', 'rule30'];
+          const validAnimTypes: readonly AnimType[] = ALL_ANIM_TYPES;
           if (p.animType && validAnimTypes.includes(p.animType as AnimType)) {
             stateUpdate.animType = p.animType as AnimType;
           }

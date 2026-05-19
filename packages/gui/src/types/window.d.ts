@@ -1,4 +1,4 @@
-import type { DeviceStatus, FirmwareEffectName, FirmwareEffectParams, Profile } from '@fizz/core';
+import type { DeviceStatus, FirmwareEffectName, FirmwareEffectParams, Profile, AnimType } from '@fizz/core';
 
 export interface FizzApi {
   daemonVersion(): Promise<{ version: string; buildHash: string }>;
@@ -19,7 +19,7 @@ export interface FizzApi {
   perkeySet(colors: Record<string, string>): Promise<void>;
   perkeyStartPattern(pattern: {
     keys: Record<string, string>;
-    animType: 'solid' | 'blink' | 'chase' | 'wave' | 'typewriter' | 'marquee' | 'flag-wave' | 'pong' | 'snake' | 'tetris' | 'matrix-rain' | 'breakout' | 'fireworks' | 'dvd' | 'heart-rate' | 'equalizer' | 'rule30';
+    animType: AnimType;
     animSpeed: number;
     sequence?: number[];
   }): Promise<void>;

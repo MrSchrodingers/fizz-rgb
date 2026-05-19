@@ -1,21 +1,11 @@
 import type { Color } from './color.js';
 import { parseHex } from './color.js';
-
-export type AnimType = 'solid' | 'blink' | 'chase' | 'wave' | 'typewriter' | 'marquee' | 'flag-wave'
-  | 'pong' | 'snake' | 'tetris' | 'matrix-rain' | 'breakout'
-  | 'fireworks' | 'dvd' | 'heart-rate' | 'equalizer' | 'rule30';
-
-export interface Pattern {
-  /** ledIndex (0..60) → hex color. Keys not in the map are "off" (black). */
-  keys: Record<string, string>;
-  animType: AnimType;
-  /** 0..1, speed multiplier (1 = max speed). */
-  animSpeed: number;
-  /** Ordered list of ledIndex for sequential animations (typewriter, marquee).
-   *  When provided, animations that need ordering (typewriter, marquee) use
-   *  this sequence instead of sorted ledIndex order. */
-  sequence?: number[];
-}
+// AnimType + Pattern are now derived from the Zod schema in ipc.ts. Anyone
+// extending the animation set only needs to add the new type to
+// AnimTypeSchema in ipc.ts — both the runtime validator and the TS type
+// pick it up automatically.
+import type { Pattern, AnimType } from './ipc.js';
+export type { Pattern, AnimType };
 
 const BLACK: Color = { r: 0, g: 0, b: 0 };
 
@@ -29,12 +19,13 @@ function scaleColor(c: Color, factor: number): Color {
 }
 
 /**
- * Compute the color array for a single animation frame at time t (seconds).
- * Returns a Map<ledIndex, Color> with one entry per K617 key (61 total).
- * Unset keys = black.
+ * In-place version of computeFrame that mutates the passed Map instead of
+ * allocating a new one. Use this on the daemon hot path (30fps stream) to
+ * avoid GC pressure — keep one Map per stream and call computeFrameInto
+ * every tick.
  */
-export function computeFrame(p: Pattern, t: number, _keyCount: number): Map<number, Color> {
-  const out = new Map<number, Color>();
+export function computeFrameInto(p: Pattern, t: number, out: Map<number, Color>): Map<number, Color> {
+  out.clear();
   const allKeys = Object.keys(p.keys).map(Number).sort((a, b) => a - b);
   const sequence = p.sequence ?? allKeys;
   const speed = 0.5 + p.animSpeed * 4; // map 0..1 → 0.5..4.5
@@ -140,5 +131,13 @@ export function computeFrame(p: Pattern, t: number, _keyCount: number): Map<numb
     out.set(Number(k), hexToColor(hex));
   }
   return out;
+}
+
+/**
+ * Allocating wrapper kept for tests/CLI/external callers. The daemon's hot
+ * loop should call computeFrameInto with a reused buffer instead.
+ */
+export function computeFrame(p: Pattern, t: number, _keyCount: number): Map<number, Color> {
+  return computeFrameInto(p, t, new Map<number, Color>());
 }
 

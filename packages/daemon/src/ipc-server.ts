@@ -99,7 +99,13 @@ export class IpcServer {
       return;
     }
     try {
-      const result = await this.dispatch(method as RpcMethodName, parsed.data);
+      // Per-request timeout — if a handler hangs (HID stall, etc.), the
+      // client should hear about it instead of waiting forever.
+      const result = await Promise.race([
+        this.dispatch(method as RpcMethodName, parsed.data),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`handler timeout (5s): ${method}`)), 5000)),
+      ]);
       this.writeResult(sock, id, result);
     } catch (err) {
       log.error({ err, method }, 'handler threw');
@@ -196,6 +202,23 @@ export class IpcServer {
 
   private broadcast(method: string, params: unknown): void {
     const line = JSON.stringify({ jsonrpc: '2.0', method, params }) + '\n';
-    for (const c of this.clients) { try { c.write(line); } catch { /* ignore */ } }
+    for (const c of this.clients) {
+      try {
+        // .write returns false when the kernel buffer is full; under healthy
+        // load on a Unix socket this never happens, but a slow/hung client
+        // that doesn't read could grow the buffer unboundedly. Cap at 1 MB
+        // worth of pending data and disconnect the offender instead of
+        // letting the daemon's memory blow up silently.
+        if (c.writableLength > 1_000_000) {
+          log.warn({ writableLength: c.writableLength, method }, 'slow client; dropping');
+          c.destroy();
+          this.clients.delete(c);
+          continue;
+        }
+        c.write(line);
+      } catch (err) {
+        log.warn({ err: (err as Error).message, method }, 'broadcast write failed');
+      }
+    }
   }
 }

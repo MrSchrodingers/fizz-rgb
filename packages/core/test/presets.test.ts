@@ -12,7 +12,7 @@ describe('BUILTIN_PRESETS', () => {
   });
 
   it('all non-game presets have non-empty key maps', () => {
-    const gameOnlyAnimTypes = ['pong', 'snake', 'tetris', 'matrix-rain', 'breakout', 'fireworks', 'dvd', 'heart-rate', 'equalizer', 'rule30'];
+    const gameOnlyAnimTypes = ['pong', 'snake', 'tetris', 'matrix-rain', 'breakout', 'fireworks', 'dvd', 'heart-rate', 'equalizer', 'rule30', 'cpu-thermal'];
     for (const p of BUILTIN_PRESETS) {
       if (p.category === 'game' && gameOnlyAnimTypes.includes(p.pattern.animType)) continue;
       expect(Object.keys(p.pattern.keys).length).toBeGreaterThan(0);

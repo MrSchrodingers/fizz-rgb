@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Brush, Trash2, MousePointer2, CheckSquare, Save, Zap, StopCircle, Undo2, Redo2, PenLine, Radio } from 'lucide-react';
+import { ALL_ANIM_TYPES } from '@fizz/core';
 import { usePaintStore } from '../stores/paintStore.js';
 import { useHistoryStore } from '../stores/historyStore.js';
 import { ColorPickerField } from './ColorPickerField.js';
@@ -377,7 +378,7 @@ export function PaintToolbar({ onSavePattern }: Props) {
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2 bg-zinc-950/40 text-xs border-t border-zinc-900">
         <span className="text-zinc-500 uppercase tracking-wider shrink-0">Pattern animation:</span>
         <div className="flex flex-wrap items-center gap-2 min-w-0">
-          {(['solid', 'blink', 'chase', 'wave', 'typewriter', 'marquee', 'flag-wave', 'pong', 'snake', 'tetris', 'matrix-rain', 'breakout', 'fireworks', 'dvd', 'heart-rate', 'equalizer', 'rule30'] as const).map((t: AnimType) => (
+          {ALL_ANIM_TYPES.map((t: AnimType) => (
             <button
               key={t}
               type="button"

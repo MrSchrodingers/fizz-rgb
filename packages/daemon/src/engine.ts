@@ -1,6 +1,6 @@
 import { encodeFirmwareEffect, encodePerKeyFrame } from '@fizz/core/encoder';
 import type { FirmwareEffectName, FirmwareEffectParams } from '@fizz/core';
-import { computeFrame } from '@fizz/core';
+import { computeFrameInto } from '@fizz/core';
 import type { Color, Pattern } from '@fizz/core';
 import type { HidController } from './hid.js';
 import { log } from './log.js';
@@ -871,6 +871,85 @@ class Rule30Engine {
   }
 }
 
+// ─── CPU thermal heatmap ─────────────────────────────────────────────────────
+
+/**
+ * Reads each `/sys/class/thermal/thermal_zone{N}/temp` once per second and
+ * paints the keyboard with a heat gradient (cool blue → warm yellow → hot red).
+ *
+ * No external dependency: Linux exposes thermals as plain text under /sys.
+ * If we can't read any zones we keep the seeded value so the user still sees
+ * something instead of a dark keyboard.
+ */
+class CpuThermalEngine {
+  private temp = 40; // °C, seeded warm so the first frame doesn't look "off"
+  private cursor = 0;
+  private readonly GRADIENT: Color[] = [
+    { r: 0, g: 80, b: 255 },     // < 35°C
+    { r: 0, g: 200, b: 200 },    // 35-50°C
+    { r: 0, g: 230, b: 80 },     // 50-65°C
+    { r: 255, g: 200, b: 0 },    // 65-75°C
+    { r: 255, g: 100, b: 0 },    // 75-85°C
+    { r: 255, g: 30, b: 30 },    // > 85°C
+  ];
+
+  step(): void {
+    this.cursor = (this.cursor + 1) % 30;
+    if (this.cursor !== 0) return; // only sample once per second at 30fps
+    try {
+      // Lazy require so the daemon can still boot if /sys isn't present.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const fs = require('node:fs') as typeof import('node:fs');
+      const zonesDir = '/sys/class/thermal';
+      let maxTempC = -Infinity;
+      for (const entry of fs.readdirSync(zonesDir)) {
+        if (!entry.startsWith('thermal_zone')) continue;
+        try {
+          const raw = fs.readFileSync(`${zonesDir}/${entry}/temp`, 'utf8').trim();
+          const milliC = Number(raw);
+          if (!Number.isFinite(milliC)) continue;
+          const c = milliC / 1000;
+          if (c > maxTempC) maxTempC = c;
+        } catch { /* zone unreadable, skip */ }
+      }
+      if (maxTempC > -Infinity) this.temp = maxTempC;
+    } catch (err) {
+      log.warn({ err: (err as Error).message }, 'thermal sample failed');
+    }
+  }
+
+  private colorForTemp(c: number): Color {
+    if (c < 35) return this.GRADIENT[0]!;
+    if (c < 50) return this.GRADIENT[1]!;
+    if (c < 65) return this.GRADIENT[2]!;
+    if (c < 75) return this.GRADIENT[3]!;
+    if (c < 85) return this.GRADIENT[4]!;
+    return this.GRADIENT[5]!;
+  }
+
+  render(): Map<number, Color> {
+    const out = new Map<number, Color>();
+    const base = this.colorForTemp(this.temp);
+    // Brightness ramp from low rows (cool) to top row (hot) so spike is visible
+    const heat = Math.min(1, Math.max(0, (this.temp - 30) / 60));
+    for (let x = 0; x < 14; x++) {
+      for (let y = 0; y < GRID_HEIGHT; y++) {
+        // Top rows brighter when hot, bottom rows brighter when cool
+        const rowHeat = (GRID_HEIGHT - 1 - y) / (GRID_HEIGHT - 1);
+        const intensity = 0.25 + 0.75 * (rowHeat < heat ? 1 : 0.3);
+        const c: Color = {
+          r: Math.round(base.r * intensity),
+          g: Math.round(base.g * intensity),
+          b: Math.round(base.b * intensity),
+        };
+        const led = gridToLed(x, y);
+        if (led !== null) out.set(led, c);
+      }
+    }
+    return out;
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export class EffectEngine {
@@ -1104,23 +1183,43 @@ export class EffectEngine {
       return;
     }
 
+    if (pattern.animType === 'cpu-thermal') {
+      const eng = new CpuThermalEngine();
+      this.streamInterval = setInterval(() => {
+        eng.step();
+        const frame = encodePerKeyFrame(eng.render());
+        this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
+      }, 1000 / 30);
+      log.info('CPU thermal stream started');
+      return;
+    }
+
     if (pattern.animType === 'solid') {
       // Just send one frame, no loop needed
-      const colors = computeFrame(pattern, 0, 61);
+      const colors = new Map<number, Color>();
+      computeFrameInto(pattern, 0, colors);
       const frame = encodePerKeyFrame(colors);
       await this.hid.sendFeatureReport(frame);
       log.info({ animType: 'solid', keys: Object.keys(pattern.keys).length }, 'pattern (solid) applied');
       return;
     }
 
-    // Start 30fps stream
+    // Start 30fps stream. Reuse a single Map across ticks — animations.ts'
+    // computeFrameInto mutates it in place, avoiding ~30 allocations/sec.
     const tickIntervalMs = 1000 / 30;
+    const frameBuf = new Map<number, Color>();
+    let pendingSend = false; // simple backpressure flag
     this.streamInterval = setInterval(() => {
       if (!this.currentPattern) return;
+      if (pendingSend) return; // last frame still in-flight; skip this tick
       const t = (performance.now() - this.streamStart) / 1000;
-      const colors = computeFrame(this.currentPattern, t, 61);
-      const frame = encodePerKeyFrame(colors);
-      this.hid.sendFeatureReport(frame).catch((err) => {
+      computeFrameInto(this.currentPattern, t, frameBuf);
+      const frame = encodePerKeyFrame(frameBuf);
+      pendingSend = true;
+      this.hid.sendFeatureReport(frame).then(() => {
+        pendingSend = false;
+      }).catch((err) => {
+        pendingSend = false;
         log.warn({ err: (err as Error).message }, 'frame send failed; stopping stream (will auto-resume on reconnect via lastPattern)');
         this.stopStreamLoop();
       });

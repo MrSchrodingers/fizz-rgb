@@ -5,7 +5,7 @@ export interface Preset {
   id: string;
   name: string;
   description: string;
-  category: 'shape' | 'pattern' | 'gradient' | 'theme' | 'game' | 'word';
+  category: 'shape' | 'pattern' | 'gradient' | 'theme' | 'game' | 'word' | 'brasil' | 'productivity';
   pattern: Pattern;
 }
 
@@ -537,6 +537,355 @@ export const BUILTIN_PRESETS: Preset[] = [
     description: 'Autômato 1D de Wolfram — padrões caóticos a partir de uma semente',
     category: 'game',
     pattern: { keys: {}, animType: 'rule30', animSpeed: 0.5 },
+  },
+
+  // ── Cinematic / cultural themes ──────────────────────────────────────────
+  {
+    id: 'theme-cyberpunk',
+    name: 'Cyberpunk',
+    description: 'Magenta e ciano com flicker neon — Night City vibe',
+    category: 'theme',
+    pattern: {
+      keys: buildKeys(ALL_KEYS_NAMES.map((n, i) => [n, i % 3 === 0 ? '#ff00ff' : i % 3 === 1 ? '#00f0ff' : '#fcee0a'] as [string, string])),
+      animType: 'blink',
+      animSpeed: 0.65,
+    },
+  },
+  {
+    id: 'theme-vaporwave',
+    name: 'Vaporwave',
+    description: 'Pink + roxo + ciano — A E S T H E T I C',
+    category: 'theme',
+    pattern: {
+      keys: buildKeys(ALL_KEYS_NAMES.map((n, i) => {
+        const palette = ['#ff71ce', '#b967ff', '#01cdfe', '#05ffa1', '#fffb96'];
+        return [n, palette[i % palette.length]!] as [string, string];
+      })),
+      animType: 'wave',
+      animSpeed: 0.3,
+    },
+  },
+  {
+    id: 'theme-synthwave',
+    name: 'Synthwave',
+    description: 'Gradient sunset rosa-laranja-roxo',
+    category: 'theme',
+    pattern: {
+      keys: (() => {
+        const entries: Array<[string, string]> = [];
+        const palette = ['#3a86ff', '#8338ec', '#ff006e', '#fb5607', '#ffbe0b'];
+        for (const k of _layout.keys) {
+          const idx = Math.min(palette.length - 1, Math.floor((k.row / _maxRow) * palette.length));
+          entries.push([k.name, palette[idx]!]);
+        }
+        return buildKeys(entries);
+      })(),
+      animType: 'wave',
+      animSpeed: 0.4,
+    },
+  },
+  {
+    id: 'theme-tron',
+    name: 'Tron Grid',
+    description: 'Linhas ciano correndo na grade — light cycle trail',
+    category: 'theme',
+    pattern: {
+      keys: buildKeys(ALL_KEYS_NAMES.map((n) => [n, '#00f0ff'] as [string, string])),
+      animType: 'chase',
+      animSpeed: 0.7,
+    },
+  },
+  {
+    id: 'theme-aurora',
+    name: 'Aurora Boreal',
+    description: 'Ondas verdes/teal/roxas — northern lights',
+    category: 'theme',
+    pattern: {
+      keys: (() => {
+        const entries: Array<[string, string]> = [];
+        const palette = ['#0a3d3a', '#1abc9c', '#3ddc97', '#5b8def', '#a16ae8'];
+        for (const k of _layout.keys) {
+          // k.col can be fractional (modifiers span 1.25, 1.5 etc.), so floor
+          // before modding so the result stays integer in [0, palette.length).
+          const idx = Math.abs(Math.floor(k.col) + Math.floor(k.row)) % palette.length;
+          entries.push([k.name, palette[idx]!]);
+        }
+        return buildKeys(entries);
+      })(),
+      animType: 'wave',
+      animSpeed: 0.25,
+    },
+  },
+  {
+    id: 'theme-forest-fire',
+    name: 'Forest Fire',
+    description: 'Chamas amarelo→laranja→vermelho subindo',
+    category: 'theme',
+    pattern: {
+      keys: (() => {
+        const entries: Array<[string, string]> = [];
+        const palette = ['#ffeaa7', '#fdcb6e', '#fab1a0', '#e17055', '#d63031'];
+        for (const k of _layout.keys) {
+          const heat = (_maxRow - k.row) / _maxRow;
+          const idx = Math.min(palette.length - 1, Math.floor(heat * palette.length));
+          entries.push([k.name, palette[idx]!]);
+        }
+        return buildKeys(entries);
+      })(),
+      animType: 'wave',
+      animSpeed: 0.55,
+    },
+  },
+
+  // ── Brasil ───────────────────────────────────────────────────────────────
+  {
+    id: 'brasil-flag',
+    name: 'Bandeira do Brasil',
+    description: 'Verde + amarelo (losango) + azul (círculo central)',
+    category: 'brasil',
+    pattern: {
+      keys: (() => {
+        const entries: Array<[string, string]> = [];
+        for (const k of _layout.keys) {
+          // Distance from center of keyboard for the "circle" inside the losango
+          const cx = _maxCol / 2;
+          const cy = _maxRow / 2;
+          const dx = (k.col + k.width / 2) - cx;
+          const dy = k.row - cy;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          // Approximate diamond by max(|dx|, |dy|*aspect)
+          const aspect = _maxCol / _maxRow / 2;
+          const diamond = Math.max(Math.abs(dx) / aspect, Math.abs(dy)) <= 1.6;
+          let color = '#009c3b'; // verde
+          if (diamond) color = '#ffdf00'; // amarelo
+          if (dist < 1.6) color = '#002776'; // azul
+          entries.push([k.name, color]);
+        }
+        return buildKeys(entries);
+      })(),
+      animType: 'solid',
+      animSpeed: 0.5,
+    },
+  },
+  {
+    id: 'brasil-carnaval',
+    name: 'Carnaval',
+    description: 'Multi-cor pulsando em batida de samba (~130 BPM)',
+    category: 'brasil',
+    pattern: {
+      keys: buildKeys(ALL_KEYS_NAMES.map((n, i) => {
+        const palette = ['#ff006e', '#ffbe0b', '#3a86ff', '#8338ec', '#06ffa5', '#fb5607'];
+        return [n, palette[i % palette.length]!] as [string, string];
+      })),
+      animType: 'blink',
+      // 130 BPM = ~2.17 Hz. animSpeed maps 0..1 → 0.5..4.5 internal, so set
+      // accordingly to hit roughly the right tempo.
+      animSpeed: 0.42,
+    },
+  },
+  {
+    id: 'brasil-festa-junina',
+    name: 'Festa Junina',
+    description: 'Laranja + amarelo flicker estilo fogueira',
+    category: 'brasil',
+    pattern: {
+      keys: buildKeys(ALL_KEYS_NAMES.map((n, i) => [n, i % 2 === 0 ? '#ff7518' : '#ffd23f'] as [string, string])),
+      animType: 'blink',
+      animSpeed: 0.7,
+    },
+  },
+  {
+    id: 'brasil-independencia',
+    name: '7 de Setembro',
+    description: 'Verde + amarelo em wave vertical patriótica',
+    category: 'brasil',
+    pattern: {
+      keys: (() => {
+        const entries: Array<[string, string]> = [];
+        for (const k of _layout.keys) {
+          entries.push([k.name, k.row % 2 === 0 ? '#009c3b' : '#ffdf00']);
+        }
+        return buildKeys(entries);
+      })(),
+      animType: 'wave',
+      animSpeed: 0.4,
+    },
+  },
+  {
+    id: 'brasil-halloween',
+    name: 'Halloween',
+    description: 'Laranja + roxo com flicker fantasmagórico',
+    category: 'brasil',
+    pattern: {
+      keys: buildKeys(ALL_KEYS_NAMES.map((n, i) => [n, i % 2 === 0 ? '#ff7518' : '#7d2eff'] as [string, string])),
+      animType: 'blink',
+      animSpeed: 0.45,
+    },
+  },
+
+  // ── Productivity / coding ────────────────────────────────────────────────
+  {
+    id: 'prod-vim',
+    name: 'Vim Mode',
+    description: 'HJKL + Esc + : destacados, resto dim',
+    category: 'productivity',
+    pattern: {
+      keys: (() => {
+        const dim: Array<[string, string]> = ALL_KEYS_NAMES.map((n) => [n, '#101015']);
+        const highlight: Array<[string, string]> = [
+          ['H', '#3ddc97'], ['J', '#3ddc97'], ['K', '#3ddc97'], ['L', '#3ddc97'],
+          ['Escape', '#ff5c5c'],
+          ['Semicolon', '#ffd60a'], // : key
+          ['I', '#0a84ff'], // insert
+          ['V', '#bf5af2'], // visual
+        ];
+        return buildKeys([...dim, ...highlight]);
+      })(),
+      animType: 'solid',
+      animSpeed: 0.5,
+    },
+  },
+  {
+    id: 'prod-wasd',
+    name: 'WASD Gaming',
+    description: 'WASD vibrante, ESDF dim, Space red, Shift cyan',
+    category: 'productivity',
+    pattern: {
+      keys: (() => {
+        const dim: Array<[string, string]> = ALL_KEYS_NAMES.map((n) => [n, '#0a0a10']);
+        const highlight: Array<[string, string]> = [
+          ['W', '#ff006e'], ['A', '#ff006e'], ['S', '#ff006e'], ['D', '#ff006e'],
+          ['Space', '#ff5c5c'],
+          ['LShift', '#00f0ff'], ['LCtrl', '#00f0ff'],
+          ['1', '#ffd60a'], ['2', '#ffd60a'], ['3', '#ffd60a'], ['4', '#ffd60a'], ['5', '#ffd60a'],
+          ['Q', '#bf5af2'], ['E', '#bf5af2'], ['R', '#bf5af2'], ['F', '#bf5af2'],
+        ];
+        return buildKeys([...dim, ...highlight]);
+      })(),
+      animType: 'solid',
+      animSpeed: 0.5,
+    },
+  },
+  {
+    id: 'prod-vscode',
+    name: 'VS Code',
+    description: 'Modifiers + shortcuts comuns iluminados',
+    category: 'productivity',
+    pattern: {
+      keys: (() => {
+        const dim: Array<[string, string]> = ALL_KEYS_NAMES.map((n) => [n, '#0a0a14']);
+        const highlight: Array<[string, string]> = [
+          ['LCtrl', '#0a84ff'], ['RCtrl', '#0a84ff'],
+          ['LShift', '#0a84ff'], ['RShift', '#0a84ff'],
+          ['LAlt', '#0a84ff'],
+          ['P', '#34c759'], // Ctrl+P quick open
+          ['S', '#34c759'], // Ctrl+S save
+          ['F', '#34c759'], // Ctrl+F find
+          ['T', '#34c759'], // Ctrl+T tab
+          ['Slash', '#ffd60a'], // Ctrl+/ comment
+          ['Escape', '#ff5c5c'],
+        ];
+        return buildKeys([...dim, ...highlight]);
+      })(),
+      animType: 'solid',
+      animSpeed: 0.5,
+    },
+  },
+  {
+    id: 'prod-touch-typing',
+    name: 'Touch Typing',
+    description: 'Home row verde · top yellow · bottom red',
+    category: 'productivity',
+    pattern: {
+      keys: (() => {
+        const entries: Array<[string, string]> = [];
+        const homeRow = ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', 'Semicolon', 'Quote'];
+        const topRow = ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', 'LBracket', 'RBracket'];
+        const bottomRow = ['Z', 'X', 'C', 'V', 'B', 'N', 'M', 'Comma', 'Period', 'Slash'];
+        for (const n of homeRow) entries.push([n, '#34c759']);
+        for (const n of topRow) entries.push([n, '#ffd60a']);
+        for (const n of bottomRow) entries.push([n, '#ff5c5c']);
+        // Index finger anchors brighter
+        entries.push(['F', '#06ffa5']);
+        entries.push(['J', '#06ffa5']);
+        return buildKeys(entries);
+      })(),
+      animType: 'solid',
+      animSpeed: 0.5,
+    },
+  },
+
+  // ── Pattern visuals (host-streamed simple anims) ─────────────────────────
+  {
+    id: 'pattern-dna-helix',
+    name: 'DNA Helix',
+    description: 'Dupla hélice rotating em wave',
+    category: 'pattern',
+    pattern: {
+      keys: (() => {
+        const entries: Array<[string, string]> = [];
+        for (const k of _layout.keys) {
+          // Two helical strands phase-shifted: row+col parity controls which color
+          const strand = ((k.col + k.row) % 2) === 0;
+          entries.push([k.name, strand ? '#00f0ff' : '#ff006e']);
+        }
+        return buildKeys(entries);
+      })(),
+      animType: 'wave',
+      animSpeed: 0.55,
+    },
+  },
+  {
+    id: 'pattern-plasma',
+    name: 'Plasma Fluid',
+    description: 'Blob colorido fluindo entre as teclas',
+    category: 'pattern',
+    pattern: {
+      keys: (() => {
+        const entries: Array<[string, string]> = [];
+        const palette = ['#5e60ce', '#7400b8', '#c77dff', '#ff5d8f', '#ff8fab'];
+        for (const k of _layout.keys) {
+          const idx = Math.abs(Math.floor(k.col) + Math.floor(k.row) * 3) % palette.length;
+          entries.push([k.name, palette[idx]!]);
+        }
+        return buildKeys(entries);
+      })(),
+      animType: 'wave',
+      animSpeed: 0.35,
+    },
+  },
+  {
+    id: 'pattern-heart-pulse',
+    name: 'Heart Pulse',
+    description: 'Rosa/vermelho pulsando em ritmo cardíaco (~60 BPM)',
+    category: 'pattern',
+    pattern: {
+      keys: buildKeys(ALL_KEYS_NAMES.map((n) => [n, '#ff3b6f'] as [string, string])),
+      // 60 BPM = 1 Hz. animSpeed 0..1 → 0.5..4.5 speed internal → target ~1 cycle/s.
+      animType: 'blink',
+      animSpeed: 0.18,
+    },
+  },
+  {
+    id: 'pattern-typewriter-hello',
+    name: '"Hello" typewriter',
+    description: 'H-E-L-L-O aparece letra por letra em loop',
+    category: 'pattern',
+    pattern: {
+      keys: buildKeys([['H', '#ff5e9f'], ['E', '#5eaaff'], ['L', '#5effb1'], ['O', '#ffea5e']]),
+      animType: 'typewriter',
+      animSpeed: 0.4,
+      sequence: seqFromNames(['H', 'E', 'L', 'L', 'O']),
+    },
+  },
+
+  // ── System / live data ───────────────────────────────────────────────────
+  {
+    id: 'game-cpu-thermal',
+    name: 'CPU Thermal',
+    description: 'Heatmap em tempo real lendo /sys/class/thermal — azul=frio, vermelho=quente',
+    category: 'game',
+    pattern: { keys: {}, animType: 'cpu-thermal', animSpeed: 0.5 },
   },
 ];
 

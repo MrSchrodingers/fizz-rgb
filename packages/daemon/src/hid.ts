@@ -77,13 +77,27 @@ export class NodeHidController implements HidController {
 
   async sendFeatureReport(frame: ProtocolFrame): Promise<void> {
     if (!this.device) throw new Error('device not connected');
-    try {
-      this.device.sendFeatureReport(Array.from(frame));
-    } catch (err) {
-      log.warn({ err: (err as Error).message }, 'sendFeatureReport failed — assuming device disconnected, scheduling reconnect');
-      this.handleDisconnect();
-      throw err;
+    // Two retry attempts before declaring the device gone — transient USB
+    // stalls (suspend, brief bandwidth contention) shouldn't tear the whole
+    // session down. After 3 failures the device is treated as disconnected.
+    let lastErr: Error | undefined;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        this.device.sendFeatureReport(Array.from(frame));
+        return;
+      } catch (err) {
+        lastErr = err as Error;
+        if (attempt < 2) {
+          // Tight retry — 5ms is enough to clear most kernel-side hiccups
+          // without bloating frame latency.
+          await new Promise((r) => setTimeout(r, 5));
+          continue;
+        }
+      }
     }
+    log.warn({ err: lastErr?.message }, 'sendFeatureReport failed after retries — treating as disconnect');
+    this.handleDisconnect();
+    throw lastErr ?? new Error('sendFeatureReport failed');
   }
 
   async sendFrames(frames: ProtocolFrame[]): Promise<void> {

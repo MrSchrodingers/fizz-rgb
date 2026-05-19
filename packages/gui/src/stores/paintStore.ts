@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import { K617_LAYOUT } from '@fizz/core';
+import type { AnimType as CoreAnimType } from '@fizz/core';
 import { useHistoryStore, type PaintSnapshot } from './historyStore.js';
 import { useColorHistoryStore } from './colorHistoryStore.js';
 
-export type AnimType = 'solid' | 'blink' | 'chase' | 'wave' | 'typewriter' | 'marquee' | 'flag-wave' | 'pong' | 'snake' | 'tetris' | 'matrix-rain' | 'breakout' | 'fireworks' | 'dvd' | 'heart-rate' | 'equalizer' | 'rule30';
+export type AnimType = CoreAnimType;
 
 function textCharToKeyName(ch: string): string | null {
   if (ch === ' ') return 'Space';

@@ -49,17 +49,47 @@ export const DeviceStatusSchema = z.object({
 });
 export type DeviceStatus = z.infer<typeof DeviceStatusSchema>;
 
-export const AnimTypeSchema = z.enum(['solid', 'blink', 'chase', 'wave', 'typewriter', 'marquee', 'flag-wave', 'pong', 'snake', 'tetris', 'matrix-rain', 'breakout', 'fireworks', 'dvd', 'heart-rate', 'equalizer', 'rule30']);
+export const ALL_ANIM_TYPES = [
+  'solid', 'blink', 'chase', 'wave', 'typewriter', 'marquee', 'flag-wave',
+  'pong', 'snake', 'tetris', 'matrix-rain', 'breakout',
+  'fireworks', 'dvd', 'heart-rate', 'equalizer', 'rule30',
+  'cpu-thermal',
+] as const;
+export const AnimTypeSchema = z.enum(ALL_ANIM_TYPES);
+/** Single source of truth for animation type names — derived from the Zod
+ *  schema so adding a new type only requires editing ALL_ANIM_TYPES. */
+export type AnimType = z.infer<typeof AnimTypeSchema>;
+
+// K617 has 61 keys with ledIndex 0..60. Reject keys outside that range so a
+// rogue client can't corrupt the per-key Map with bogus indexes. We validate
+// the record's keys via superRefine because zod 3's z.record() does not
+// validate keys against a refined schema directly.
+function validateLedIndexKeys(rec: Record<string, unknown>, ctx: z.RefinementCtx): void {
+  for (const k of Object.keys(rec)) {
+    const n = Number(k);
+    if (!Number.isInteger(n) || n < 0 || n > 60) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [k],
+        message: `ledIndex key must be an integer in [0, 60], got "${k}"`,
+      });
+    }
+  }
+}
+
+export const KeysSchema = z.record(HexColorSchema).superRefine((rec, ctx) => {
+  validateLedIndexKeys(rec, ctx);
+});
 
 export const PatternSchema = z.object({
-  keys: z.record(z.string(), HexColorSchema),
+  keys: KeysSchema,
   animType: AnimTypeSchema,
   animSpeed: z.number().min(0).max(1),
   sequence: z.array(z.number().int().min(0).max(60)).optional(),
 });
-// IpcPattern is the Zod-validated shape of a Pattern over the wire.
-// The canonical Pattern interface lives in animations.ts.
-export type IpcPattern = z.infer<typeof PatternSchema>;
+export type Pattern = z.infer<typeof PatternSchema>;
+/** @deprecated use Pattern */
+export type IpcPattern = Pattern;
 
 export const RpcMethods = {
   'device.status': {
@@ -116,8 +146,8 @@ export const RpcMethods = {
   },
   'perkey.set': {
     params: z.object({
-      // ledIndex (as string) → #RRGGBB hex color
-      colors: z.record(z.string(), HexColorSchema),
+      // ledIndex (as string) → #RRGGBB hex color. Keys validated to be 0..60.
+      colors: KeysSchema,
     }),
     result: z.object({ ok: z.literal(true) }),
   },
@@ -135,7 +165,7 @@ export const RpcMethods = {
       z.object({ mode: z.literal('off') }),
       z.object({
         mode: z.literal('static'),
-        colors: z.record(z.string(), HexColorSchema),
+        colors: KeysSchema,
       }),
       z.object({
         mode: z.literal('pattern'),

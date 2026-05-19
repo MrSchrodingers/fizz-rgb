@@ -67,7 +67,7 @@ export function PresetGallery({
     if (active) onApply(active, brushColor);
   }, [brushColor, tintEnabled, activePresetId, userPresets, onApply]);
 
-  const categories = ['all', 'word', 'shape', 'pattern', 'gradient', 'theme', 'game', 'user'];
+  const categories = ['all', 'theme', 'brasil', 'productivity', 'pattern', 'gradient', 'shape', 'word', 'game', 'user'];
 
   const allPresets = useMemo(() => {
     const builtins = (BUILTIN_PRESETS as (Preset | UserPreset)[]).filter(

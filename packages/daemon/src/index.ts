@@ -8,6 +8,7 @@ import { FakeHidController } from './hid-mock.js';
 import { EffectEngine } from './engine.js';
 import { ProfileManager } from './profiles.js';
 import { IpcServer } from './ipc-server.js';
+import { Scheduler } from './scheduler.js';
 import type { HidController } from './hid.js';
 import { log } from './log.js';
 
@@ -27,6 +28,13 @@ async function main(): Promise<void> {
   const server = new IpcServer({ socketPath: sock, engine, profiles, hid });
   await server.start();
 
+  // Time-of-day scheduler — opt-in via ~/.config/fizz/schedule.json. Missing
+  // file = disabled; daemon boots normally without one.
+  const schedulePath = `${homedir()}/.config/fizz/schedule.json`;
+  const scheduler = new Scheduler(schedulePath, engine, profiles);
+  await scheduler.load();
+  scheduler.start();
+
   // Restore last-active profile
   const active = profiles.active();
   if (active) {
@@ -39,6 +47,7 @@ async function main(): Promise<void> {
 
   const shutdown = async (sig: string): Promise<void> => {
     log.info({ sig }, 'shutting down');
+    scheduler.stop();
     await server.stop();
     hid.close();
     process.exit(0);
