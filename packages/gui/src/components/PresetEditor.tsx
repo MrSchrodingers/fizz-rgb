@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Save, X, RotateCcw } from 'lucide-react';
 import { HexColorPicker } from 'react-colorful';
 import type { Preset } from '@fizz/core';
@@ -39,6 +40,37 @@ export function PresetEditor({ preset, onPreview, onSaveAs, onClose }: Props) {
   const colors = uniqueColors(preset.pattern.keys);
   const statefulSlots = useMemo(() => STATEFUL_PALETTES[preset.pattern.animType] ?? null, [preset.pattern.animType]);
   const isStateful = colors.length === 0;
+
+  // Position the palette-slot picker via a portal so it escapes the
+  // sidebar's overflow-hidden. The popover is anchored to the swatch button
+  // and placed to the LEFT (or right if there's no room).
+  const slotSwatchRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [slotPickerPos, setSlotPickerPos] = useState<{ left: number; top: number } | null>(null);
+  useEffect(() => {
+    if (!editingSlot) { setSlotPickerPos(null); return; }
+    const el = slotSwatchRefs.current[editingSlot];
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const PICKER_W = 220;
+    const GAP = 12;
+    // Prefer left side; if it goes off the screen, fall back to right.
+    let left = rect.left - PICKER_W - GAP;
+    if (left < 8) left = rect.right + GAP;
+    // Clamp vertically too — keep within viewport.
+    const PICKER_H = 220;
+    let top = rect.top;
+    if (top + PICKER_H > window.innerHeight - 8) top = window.innerHeight - PICKER_H - 8;
+    if (top < 8) top = 8;
+    setSlotPickerPos({ left, top });
+  }, [editingSlot]);
+
+  // Dismiss the slot picker when user clicks outside or hits Esc.
+  useEffect(() => {
+    if (!editingSlot) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setEditingSlot(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editingSlot]);
 
   // Apply the current transformation and notify the host whenever any knob
   // changes — drives the live preview on hardware.
@@ -211,7 +243,7 @@ export function PresetEditor({ preset, onPreview, onSaveAs, onClose }: Props) {
       )}
 
       {isStateful && statefulSlots && (
-        <div className="flex flex-col gap-1.5 relative">
+        <div className="flex flex-col gap-1.5">
           <span className="text-[10px] uppercase tracking-wider text-zinc-500">
             Paleta do preset ({statefulSlots.length} cores)
           </span>
@@ -220,9 +252,10 @@ export function PresetEditor({ preset, onPreview, onSaveAs, onClose }: Props) {
               const effective = paletteOverrides[s.slot] ?? s.default;
               const isEditing = editingSlot === s.slot;
               return (
-                <div key={s.slot} className="flex items-center gap-2 relative">
+                <div key={s.slot} className="flex items-center gap-2">
                   <button
                     type="button"
+                    ref={(el) => { slotSwatchRefs.current[s.slot] = el; }}
                     onClick={() => setEditingSlot(isEditing ? null : s.slot)}
                     title={`${s.label} (${effective})`}
                     aria-label={`Edit ${s.label}`}
@@ -250,50 +283,58 @@ export function PresetEditor({ preset, onPreview, onSaveAs, onClose }: Props) {
                       ↺
                     </button>
                   )}
-                  {isEditing && (
-                    // Popover opens to the LEFT of the swatch so it doesn't
-                    // overflow off the right edge of the screen (PresetEditor
-                    // lives in the right sidebar). Width 200px + small gap.
-                    <div
-                      className="absolute z-50 right-full mr-2 top-0 bg-zinc-900 border border-zinc-700 rounded-lg p-2 shadow-2xl flex flex-col gap-2 animate-fade-in"
-                      style={{ width: 220 }}
-                    >
-                      <HexColorPicker
-                        color={effective}
-                        onChange={(c) => setPaletteOverrides((prev) => ({ ...prev, [s.slot]: c }))}
-                        style={{ width: '100%', height: 140 }}
-                      />
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={effective}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            if (/^#?[0-9a-fA-F]{6}$/.test(v)) {
-                              setPaletteOverrides((prev) => ({
-                                ...prev,
-                                [s.slot]: v.startsWith('#') ? v : '#' + v,
-                              }));
-                            }
-                          }}
-                          className="flex-1 px-2 py-1 text-xs rounded bg-zinc-950 border border-zinc-700 focus:outline-none focus:border-fuchsia-500 font-mono"
-                          aria-label="Hex color"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setEditingSlot(null)}
-                          className="px-2 py-1 text-xs rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200"
-                        >
-                          OK
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
               );
             })}
           </div>
         </div>
+      )}
+
+      {/* Portal-rendered picker — escapes the sidebar overflow-hidden so it
+          can sit anywhere on the viewport. Backdrop dismisses on click. */}
+      {isStateful && statefulSlots && editingSlot && slotPickerPos && createPortal(
+        <>
+          <div
+            onClick={() => setEditingSlot(null)}
+            className="fixed inset-0 z-40"
+            aria-hidden="true"
+          />
+          <div
+            className="fixed z-50 bg-zinc-900 border border-zinc-700 rounded-lg p-2 shadow-2xl flex flex-col gap-2 animate-fade-in"
+            style={{ left: slotPickerPos.left, top: slotPickerPos.top, width: 220 }}
+          >
+            <HexColorPicker
+              color={paletteOverrides[editingSlot] ?? statefulSlots.find((x) => x.slot === editingSlot)?.default ?? '#ffffff'}
+              onChange={(c) => setPaletteOverrides((prev) => ({ ...prev, [editingSlot]: c }))}
+              style={{ width: '100%', height: 140 }}
+            />
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={paletteOverrides[editingSlot] ?? statefulSlots.find((x) => x.slot === editingSlot)?.default ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (/^#?[0-9a-fA-F]{6}$/.test(v)) {
+                    setPaletteOverrides((prev) => ({
+                      ...prev,
+                      [editingSlot]: v.startsWith('#') ? v : '#' + v,
+                    }));
+                  }
+                }}
+                className="flex-1 px-2 py-1 text-xs rounded bg-zinc-950 border border-zinc-700 focus:outline-none focus:border-fuchsia-500 font-mono"
+                aria-label="Hex color"
+              />
+              <button
+                type="button"
+                onClick={() => setEditingSlot(null)}
+                className="px-2 py-1 text-xs rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </>,
+        document.body,
       )}
 
       {isStateful && !statefulSlots && (
