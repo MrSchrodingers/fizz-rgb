@@ -49,6 +49,28 @@ export const KEY_P = 25;      // top-right
 export const KEY_Z = 44;      // bottom-left
 export const KEY_SLASH = 53;  // bottom-right (KEY_Q=16 is the top-left)
 
+/**
+ * evdev keycode for each K617 key, keyed by the layout name (see
+ * core/src/layout.ts). Used by Genius to turn arbitrary keys into "pads".
+ * Fn is omitted — it's handled in hardware and emits no evdev event.
+ */
+export const KEYCODE_BY_NAME: Record<string, number> = {
+  // Row 0
+  Escape: 1, '1': 2, '2': 3, '3': 4, '4': 5, '5': 6, '6': 7, '7': 8, '8': 9,
+  '9': 10, '0': 11, Minus: 12, Equal: 13, Backspace: 14,
+  // Row 1
+  Tab: 15, Q: 16, W: 17, E: 18, R: 19, T: 20, Y: 21, U: 22, I: 23, O: 24,
+  P: 25, LBracket: 26, RBracket: 27, Backslash: 43,
+  // Row 2
+  CapsLock: 58, A: 30, S: 31, D: 32, F: 33, G: 34, H: 35, J: 36, K: 37, L: 38,
+  Semicolon: 39, Quote: 40, Enter: 28,
+  // Row 3
+  LShift: 42, Z: 44, X: 45, C: 46, V: 47, B: 48, N: 49, M: 50, Comma: 51,
+  Period: 52, Slash: 53, RShift: 54,
+  // Row 4
+  LCtrl: 29, LSuper: 125, LAlt: 56, Space: 57, RAlt: 100, Menu: 127, RCtrl: 97,
+};
+
 /** Original PongInteractive paddle map (Tab/Caps/LShift/LCtrl → slot 0..3). */
 export const PADDLE_KEYCODES: Record<number, number> = {
   [KEY_TAB]: 0,

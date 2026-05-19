@@ -63,13 +63,6 @@ export const STATEFUL_PALETTES: Record<string, PaletteSlot[]> = {
     { slot: 'flag',     label: 'Bandeira',  default: '#00ff32' },
     { slot: 'sky',      label: 'Céu',       default: '#000000' },
   ],
-  // Genius / Simon — the four quadrant colours.
-  'genius': [
-    { slot: 'q1', label: 'Verde (sup-esq)',    default: '#00ff28' },
-    { slot: 'q2', label: 'Vermelho (sup-dir)', default: '#ff0000' },
-    { slot: 'q3', label: 'Amarelo (inf-esq)',  default: '#ffd200' },
-    { slot: 'q4', label: 'Azul (inf-dir)',     default: '#005aff' },
-  ],
 };
 
 /** Quick check for the PresetEditor: does this animType have editable

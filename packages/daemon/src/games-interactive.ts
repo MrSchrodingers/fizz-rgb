@@ -20,7 +20,7 @@ import {
   KEY_BACKSLASH, KEY_ENTER, KEY_RIGHTSHIFT, KEY_RIGHTCTRL,
   KEY_W, KEY_A, KEY_S, KEY_D, KEY_SPACE,
   KEY_1, KEY_2, KEY_3, KEY_4, KEY_5,
-  KEY_Q, KEY_P, KEY_Z, KEY_SLASH,
+  KEYCODE_BY_NAME,
 } from './key-capture.js';
 
 const RED: Color = { r: 255, g: 0, b: 0 };
@@ -1698,32 +1698,32 @@ export class MarioEngine {
   }
 }
 
-// ─── Genius / Simon (memory game) ────────────────────────────────────────────
+// ─── Genius / Simon (per-key memory game) ────────────────────────────────────
 
 /**
- * Genius (the Brazilian "Simon"): the keyboard splits into four coloured
- * quadrants and flashes a growing sequence; the player repeats it by
- * pressing the corner key in each quadrant. One correct full repeat grows
- * the sequence by one — the score is the longest sequence reached.
+ * Genius (the Brazilian "Simon"), played on individual keys instead of
+ * regions. A pool of well-spread keys ("pads") light up dim; the game
+ * flashes a growing random sequence over them and the player repeats it by
+ * pressing those exact keys. Each pad has its own hue so colour + position
+ * both aid memory. One correct full repeat grows the sequence by one.
  *
- *   Quadrants & keys:
- *     Q = top-left (green)      P = top-right (red)
- *     Z = bottom-left (yellow)  / = bottom-right (blue)
- *
- * Difficulty 1-5 (chosen at the start) sets playback speed. A wrong press
- * flashes red and restarts the sequence.
- *
- * Palette slots: q1, q2, q3, q4 (the four quadrant colours).
+ * Difficulty 1-5 (chosen at start) sets BOTH the pad-pool size (more keys =
+ * more randomness) and the playback speed. A wrong press flashes red and
+ * restarts; the score is the longest sequence reached.
  */
 export class GeniusEngine {
   private difficulty = 0;
+  // Pads in play this game: each is a physical key with a colour.
+  private pads: Array<{ led: number; keycode: number; color: Color }> = [];
+  private keyToPad = new Map<number, number>();
+
   private sequence: number[] = [];
   private mode: 'show' | 'input' | 'fail' | 'levelup' = 'show';
   private showIndex = 0;
   private showTimer = 0;
   private showOn = false;
   private inputIndex = 0;
-  private flashQuad = -1;
+  private flashPad = -1;
   private flashTimer = 0;
   private failTimer = 0;
   private levelupTimer = 0;
@@ -1731,42 +1731,64 @@ export class GeniusEngine {
   private pulse = 0;
   private overrides: Record<string, string> = {};
 
-  private readonly KEY_QUAD: Record<number, number> = {
-    [KEY_Q]: 0, [KEY_P]: 1, [KEY_Z]: 2, [KEY_SLASH]: 3,
-  };
+  // Master pad pool, ordered so the first N stay nicely spread across the
+  // whole keyboard. Difficulty selects how many are live (6..20).
+  private readonly POOL_NAMES = [
+    'G', 'Q', 'Slash', 'P', 'Z', 'Space',
+    '5', 'Enter', 'A', 'I', 'T', 'M',
+    'V', 'LCtrl', 'RCtrl', 'Minus',
+    '2', '8', 'F', 'K',
+  ];
+  private readonly POOL_SIZE = [6, 9, 12, 16, 20];
 
   constructor() { /* wait in difficulty menu */ }
 
   setColorOverrides(o: Record<string, string>): void { this.overrides = o ?? {}; }
-  private color(slot: string, fb: Color): Color { const h = this.overrides[slot]; return h ? parseHex(h) : fb; }
   setAnimSpeed(s: number): void { void s; }
 
   private get diff(): number { return this.difficulty > 0 ? this.difficulty : 1; }
-  private onTicks(): number { return Math.max(10, 30 - this.diff * 3); }
+  private onTicks(): number { return Math.max(9, 30 - this.diff * 3); }
   private gapTicks(): number { return Math.max(5, (this.onTicks() / 2) | 0); }
 
-  private quadColor(q: number): Color {
-    const def = [
-      { r: 0,   g: 255, b: 40  }, // green
-      { r: 255, g: 0,   b: 0   }, // red
-      { r: 255, g: 210, b: 0   }, // yellow
-      { r: 0,   g: 90,  b: 255 }, // blue
-    ][q]!;
-    return this.color(`q${q + 1}`, def);
+  // Distinct vivid hue per pad index.
+  private hueColor(i: number, n: number): Color {
+    const h = (i / Math.max(1, n)) * 360;
+    const s = 1, v = 1;
+    const c = v * s;
+    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+    let r = 0, g = 0, b = 0;
+    if (h < 60) { r = c; g = x; }
+    else if (h < 120) { r = x; g = c; }
+    else if (h < 180) { g = c; b = x; }
+    else if (h < 240) { g = x; b = c; }
+    else if (h < 300) { r = x; b = c; }
+    else { r = c; b = x; }
+    return { r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255) };
   }
 
-  private quadOf(row: number, cx: number): number {
-    const top = row <= 2 ? 0 : 2;
-    const left = cx < 7.5 ? 0 : 1;
-    return top + left;
+  private buildPads(): void {
+    const n = this.POOL_SIZE[Math.min(4, Math.max(0, this.diff - 1))]!;
+    this.pads = [];
+    this.keyToPad.clear();
+    for (let i = 0; i < n; i++) {
+      const name = this.POOL_NAMES[i]!;
+      const keycode = KEYCODE_BY_NAME[name];
+      const led = findKeyLed(name);
+      if (keycode === undefined || led === null) continue;
+      const idx = this.pads.length;
+      this.pads.push({ led, keycode, color: this.hueColor(idx, n) });
+      this.keyToPad.set(keycode, idx);
+    }
   }
 
   private startGame(): void {
-    this.sequence = [Math.floor(Math.random() * 4)];
+    this.buildPads();
+    this.sequence = [this.randPad()];
     this.score = 0;
     this.inputIndex = 0;
     this.beginShow();
   }
+  private randPad(): number { return Math.floor(Math.random() * this.pads.length); }
   private beginShow(): void {
     this.mode = 'show';
     this.showIndex = 0;
@@ -1782,11 +1804,11 @@ export class GeniusEngine {
       return;
     }
     if (this.mode !== 'input') return;
-    const q = this.KEY_QUAD[keycode];
-    if (q === undefined) return;
-    this.flashQuad = q;
+    const pad = this.keyToPad.get(keycode);
+    if (pad === undefined) return; // not a pad key — ignore
+    this.flashPad = pad;
     this.flashTimer = 8;
-    if (q === this.sequence[this.inputIndex]) {
+    if (pad === this.sequence[this.inputIndex]) {
       this.inputIndex++;
       if (this.inputIndex >= this.sequence.length) {
         this.score = this.sequence.length;
@@ -1812,7 +1834,7 @@ export class GeniusEngine {
     }
     if (this.mode === 'levelup') {
       if (--this.levelupTimer <= 0) {
-        this.sequence.push(Math.floor(Math.random() * 4));
+        this.sequence.push(this.randPad());
         this.inputIndex = 0;
         this.beginShow();
       }
@@ -1835,41 +1857,37 @@ export class GeniusEngine {
         }
       }
     }
-    // 'input' mode is untimed — the player presses at their own pace.
+    // 'input' is untimed — the player presses at their own pace.
   }
 
   render(): Map<number, Color> {
     if (this.difficulty === 0) return renderDifficultyMenu(this.pulse);
     const out = new Map<number, Color>();
 
-    let activeQuad = -1;
-    if (this.mode === 'show' && this.showOn) activeQuad = this.sequence[this.showIndex]!;
-    else if (this.flashTimer > 0) activeQuad = this.flashQuad;
+    if (this.mode === 'fail') {
+      const f = this.failTimer % 8 < 4 ? 1 : 0.2;
+      for (const p of this.pads) out.set(p.led, { r: Math.round(220 * f), g: 0, b: 0 });
+      return out;
+    }
+    if (this.mode === 'levelup') {
+      const f = this.levelupTimer % 6 < 3 ? 1 : 0.3;
+      for (const p of this.pads) out.set(p.led, { r: 0, g: Math.round(220 * f), b: 30 });
+      return out;
+    }
 
-    const fail = this.mode === 'fail';
-    const levelup = this.mode === 'levelup';
-    // Idle brightness: brighter while it's the player's turn so they know.
+    let activePad = -1;
+    if (this.mode === 'show' && this.showOn) activePad = this.sequence[this.showIndex]!;
+    else if (this.flashTimer > 0) activePad = this.flashPad;
+
+    // Pads glow dim so the player knows which keys are live; brighter while
+    // it's the player's turn; the active pad blazes at full.
     const idle = this.mode === 'input'
-      ? 0.22 + 0.12 * Math.abs(Math.sin(this.pulse * 0.4))
+      ? 0.20 + 0.10 * Math.abs(Math.sin(this.pulse * 0.4))
       : 0.10;
-
-    for (const rowKeys of KEY_MATRIX) {
-      for (const cell of rowKeys) {
-        let c: Color;
-        if (fail) {
-          const f = this.failTimer % 8 < 4 ? 1 : 0.2;
-          c = { r: Math.round(220 * f), g: 0, b: 0 };
-        } else if (levelup) {
-          const f = this.levelupTimer % 6 < 3 ? 1 : 0.3;
-          c = { r: 0, g: Math.round(220 * f), b: 30 };
-        } else {
-          const q = this.quadOf(cell.row, cell.cx);
-          const base = this.quadColor(q);
-          const b = q === activeQuad ? 1 : idle;
-          c = { r: Math.round(base.r * b), g: Math.round(base.g * b), b: Math.round(base.b * b) };
-        }
-        out.set(cell.led, c);
-      }
+    for (let i = 0; i < this.pads.length; i++) {
+      const p = this.pads[i]!;
+      const b = i === activePad ? 1 : idle;
+      out.set(p.led, { r: Math.round(p.color.r * b), g: Math.round(p.color.g * b), b: Math.round(p.color.b * b) });
     }
     return out;
   }

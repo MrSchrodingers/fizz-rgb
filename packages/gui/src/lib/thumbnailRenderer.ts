@@ -626,19 +626,34 @@ function renderMario(t: number): string[] {
 
 function renderGenius(t: number): string[] {
   const out: string[] = [];
-  // Four quadrants; one lights up at a time, cycling like a Simon sequence.
-  const quadColors = ['#00ff28', '#ff0000', '#ffd200', '#005aff'];
-  const active = Math.floor(t * 1.5) % 4;
-  for (let gy = 0; gy < THUMB_ROWS; gy++) {
-    for (let gx = 0; gx < THUMB_COLS; gx++) {
-      const top = gy <= 1 ? 0 : 2;            // rows 0-1 top, 2-4 bottom-ish
-      const left = gx < THUMB_COLS / 2 ? 0 : 1;
-      const q = top + left;
-      const qc = quadColors[q] ?? '#000000';
-      out.push(q === active ? qc : lerpHex(qc, '#000000', 0.82));
-    }
+  // Per-key memory game: a handful of scattered "pads" glow dim, one
+  // flashing bright at a time like a Simon sequence. Each pad has its own
+  // hue (position in the cell list → hue) so colour aids memory.
+  const pads = [2, 5, 9, 12, 16, 19, 22, 27]; // spread cell indices in a 6x5 grid
+  const active = pads[Math.floor(t * 1.6) % pads.length];
+  const TOTAL = THUMB_COLS * THUMB_ROWS;
+  for (let i = 0; i < TOTAL; i++) {
+    const padPos = pads.indexOf(i);
+    if (padPos < 0) { out.push('#000000'); continue; }
+    const hue = (padPos / pads.length) * 360;
+    const c = hsvHex(hue, 1, 1);
+    out.push(i === active ? c : lerpHex(c, '#000000', 0.82));
   }
   return out;
+}
+
+function hsvHex(h: number, s: number, v: number): string {
+  const c = v * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  let r = 0, g = 0, b = 0;
+  if (h < 60) { r = c; g = x; }
+  else if (h < 120) { r = x; g = c; }
+  else if (h < 180) { g = c; b = x; }
+  else if (h < 240) { g = x; b = c; }
+  else if (h < 300) { r = x; b = c; }
+  else { r = c; b = x; }
+  const to = (n: number) => Math.round(n * 255).toString(16).padStart(2, '0');
+  return `#${to(r)}${to(g)}${to(b)}`;
 }
 
 // ─── Main entry point ────────────────────────────────────────────────────────
