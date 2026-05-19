@@ -626,18 +626,14 @@ function renderMario(t: number): string[] {
 
 function renderGenius(t: number): string[] {
   const out: string[] = [];
-  // Per-key memory game: a handful of scattered "pads" glow dim, one
-  // flashing bright at a time like a Simon sequence. Each pad has its own
-  // hue (position in the cell list → hue) so colour aids memory.
-  const pads = [2, 5, 9, 12, 16, 19, 22, 27]; // spread cell indices in a 6x5 grid
-  const active = pads[Math.floor(t * 1.6) % pads.length];
+  // Whole-keyboard memory game: the board is dark and one key flashes at a
+  // time (its own hue), cycling like a Simon sequence.
   const TOTAL = THUMB_COLS * THUMB_ROWS;
+  // Pseudo-random sequence of cells over the whole grid.
+  const seq = [3, 11, 22, 7, 18, 26, 1, 14, 29, 9, 20];
+  const active = seq[Math.floor(t * 1.8) % seq.length];
   for (let i = 0; i < TOTAL; i++) {
-    const padPos = pads.indexOf(i);
-    if (padPos < 0) { out.push('#000000'); continue; }
-    const hue = (padPos / pads.length) * 360;
-    const c = hsvHex(hue, 1, 1);
-    out.push(i === active ? c : lerpHex(c, '#000000', 0.82));
+    out.push(i === active ? hsvHex((i / TOTAL) * 360, 1, 1) : '#000000');
   }
   return out;
 }

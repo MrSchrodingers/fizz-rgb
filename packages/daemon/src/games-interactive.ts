@@ -1698,22 +1698,22 @@ export class MarioEngine {
   }
 }
 
-// ─── Genius / Simon (per-key memory game) ────────────────────────────────────
+// ─── Genius / Simon (whole-keyboard memory game) ─────────────────────────────
 
 /**
- * Genius (the Brazilian "Simon"), played on individual keys instead of
- * regions. A pool of well-spread keys ("pads") light up dim; the game
- * flashes a growing random sequence over them and the player repeats it by
- * pressing those exact keys. Each pad has its own hue so colour + position
- * both aid memory. One correct full repeat grows the sequence by one.
+ * Genius (the Brazilian "Simon"): the whole keyboard is dark, then a growing
+ * random sequence FLASHES across it — any key can light up. The player
+ * repeats the sequence by pressing those exact keys from memory. Each key
+ * has its own hue so colour + position both help. One correct full repeat
+ * grows the sequence by one.
  *
- * Difficulty 1-5 (chosen at start) sets BOTH the pad-pool size (more keys =
- * more randomness) and the playback speed. A wrong press flashes red and
- * restarts; the score is the longest sequence reached.
+ * Difficulty 1-5 (chosen at start) sets the playback speed. A wrong press
+ * flashes the board red and restarts; the score is the longest sequence
+ * reached. Everything stays OFF except the key currently flashing.
  */
 export class GeniusEngine {
   private difficulty = 0;
-  // Pads in play this game: each is a physical key with a colour.
+  // Every physical key with a usable keycode is a potential pad.
   private pads: Array<{ led: number; keycode: number; color: Color }> = [];
   private keyToPad = new Map<number, number>();
 
@@ -1731,17 +1731,7 @@ export class GeniusEngine {
   private pulse = 0;
   private overrides: Record<string, string> = {};
 
-  // Master pad pool, ordered so the first N stay nicely spread across the
-  // whole keyboard. Difficulty selects how many are live (6..20).
-  private readonly POOL_NAMES = [
-    'G', 'Q', 'Slash', 'P', 'Z', 'Space',
-    '5', 'Enter', 'A', 'I', 'T', 'M',
-    'V', 'LCtrl', 'RCtrl', 'Minus',
-    '2', '8', 'F', 'K',
-  ];
-  private readonly POOL_SIZE = [6, 9, 12, 16, 20];
-
-  constructor() { /* wait in difficulty menu */ }
+  constructor() { this.buildPads(); }
 
   setColorOverrides(o: Record<string, string>): void { this.overrides = o ?? {}; }
   setAnimSpeed(s: number): void { void s; }
@@ -1750,11 +1740,8 @@ export class GeniusEngine {
   private onTicks(): number { return Math.max(9, 30 - this.diff * 3); }
   private gapTicks(): number { return Math.max(5, (this.onTicks() / 2) | 0); }
 
-  // Distinct vivid hue per pad index.
-  private hueColor(i: number, n: number): Color {
-    const h = (i / Math.max(1, n)) * 360;
-    const s = 1, v = 1;
-    const c = v * s;
+  private hsv(h: number): Color {
+    const c = 1;
     const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
     let r = 0, g = 0, b = 0;
     if (h < 60) { r = c; g = x; }
@@ -1766,29 +1753,29 @@ export class GeniusEngine {
     return { r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255) };
   }
 
+  /** Every key on the board (that emits an evdev event) becomes a pad, with
+   *  a rainbow hue by its LED position so each flash has its own colour. */
   private buildPads(): void {
-    const n = this.POOL_SIZE[Math.min(4, Math.max(0, this.diff - 1))]!;
     this.pads = [];
     this.keyToPad.clear();
-    for (let i = 0; i < n; i++) {
-      const name = this.POOL_NAMES[i]!;
-      const keycode = KEYCODE_BY_NAME[name];
-      const led = findKeyLed(name);
-      if (keycode === undefined || led === null) continue;
+    const total = K617_LAYOUT.keys.length;
+    for (const k of K617_LAYOUT.keys) {
+      const keycode = KEYCODE_BY_NAME[k.name];
+      if (keycode === undefined) continue; // e.g. Fn — no evdev event
       const idx = this.pads.length;
-      this.pads.push({ led, keycode, color: this.hueColor(idx, n) });
+      this.pads.push({ led: k.ledIndex, keycode, color: this.hsv((k.ledIndex / total) * 360) });
       this.keyToPad.set(keycode, idx);
     }
   }
 
+  private randPad(): number { return Math.floor(Math.random() * this.pads.length); }
+
   private startGame(): void {
-    this.buildPads();
     this.sequence = [this.randPad()];
     this.score = 0;
     this.inputIndex = 0;
     this.beginShow();
   }
-  private randPad(): number { return Math.floor(Math.random() * this.pads.length); }
   private beginShow(): void {
     this.mode = 'show';
     this.showIndex = 0;
@@ -1805,7 +1792,7 @@ export class GeniusEngine {
     }
     if (this.mode !== 'input') return;
     const pad = this.keyToPad.get(keycode);
-    if (pad === undefined) return; // not a pad key — ignore
+    if (pad === undefined) return; // a key with no LED/keycode — ignore
     this.flashPad = pad;
     this.flashTimer = 8;
     if (pad === this.sequence[this.inputIndex]) {
@@ -1864,30 +1851,26 @@ export class GeniusEngine {
     if (this.difficulty === 0) return renderDifficultyMenu(this.pulse);
     const out = new Map<number, Color>();
 
+    // Whole-board flashes for the two end states.
     if (this.mode === 'fail') {
-      const f = this.failTimer % 8 < 4 ? 1 : 0.2;
-      for (const p of this.pads) out.set(p.led, { r: Math.round(220 * f), g: 0, b: 0 });
+      const f = this.failTimer % 8 < 4 ? 1 : 0.15;
+      for (const p of this.pads) out.set(p.led, { r: Math.round(230 * f), g: 0, b: 0 });
       return out;
     }
     if (this.mode === 'levelup') {
-      const f = this.levelupTimer % 6 < 3 ? 1 : 0.3;
-      for (const p of this.pads) out.set(p.led, { r: 0, g: Math.round(220 * f), b: 30 });
+      const f = this.levelupTimer % 6 < 3 ? 1 : 0.25;
+      for (const p of this.pads) out.set(p.led, { r: 0, g: Math.round(230 * f), b: 35 });
       return out;
     }
 
+    // Otherwise everything is OFF except the single key flashing right now
+    // (either the sequence playback, or the player's last press).
     let activePad = -1;
     if (this.mode === 'show' && this.showOn) activePad = this.sequence[this.showIndex]!;
     else if (this.flashTimer > 0) activePad = this.flashPad;
 
-    // Pads glow dim so the player knows which keys are live; brighter while
-    // it's the player's turn; the active pad blazes at full.
-    const idle = this.mode === 'input'
-      ? 0.20 + 0.10 * Math.abs(Math.sin(this.pulse * 0.4))
-      : 0.10;
-    for (let i = 0; i < this.pads.length; i++) {
-      const p = this.pads[i]!;
-      const b = i === activePad ? 1 : idle;
-      out.set(p.led, { r: Math.round(p.color.r * b), g: Math.round(p.color.g * b), b: Math.round(p.color.b * b) });
+    if (activePad >= 0 && activePad < this.pads.length) {
+      out.set(this.pads[activePad]!.led, this.pads[activePad]!.color);
     }
     return out;
   }
