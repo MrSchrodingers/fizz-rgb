@@ -159,7 +159,7 @@ export const BUILTIN_PRESETS: Preset[] = [
   },
   {
     id: 'shape-plus',
-    name: 'Cruz (Plus)',
+    name: 'Plus Sign',
     description: 'G central + cruz com T/F/H/B',
     category: 'shape',
     pattern: {
@@ -191,7 +191,7 @@ export const BUILTIN_PRESETS: Preset[] = [
   },
   {
     id: 'zone-modifiers',
-    name: 'Modificadores',
+    name: 'Modifiers',
     description: 'Todas as teclas modificadoras em laranja — referência visual para power users',
     category: 'shape',
     pattern: {
@@ -224,7 +224,7 @@ export const BUILTIN_PRESETS: Preset[] = [
   // === Patterns ===
   {
     id: 'pattern-checkerboard',
-    name: 'Xadrez',
+    name: 'Checkerboard',
     description: 'Padrão alternado roxo/escuro',
     category: 'pattern',
     pattern: {
@@ -237,7 +237,7 @@ export const BUILTIN_PRESETS: Preset[] = [
   },
   {
     id: 'pattern-row-stripes',
-    name: 'Faixas (linhas)',
+    name: 'Row Stripes',
     description: 'Cada linha do teclado uma cor',
     category: 'pattern',
     pattern: {
@@ -254,7 +254,7 @@ export const BUILTIN_PRESETS: Preset[] = [
   },
   {
     id: 'pattern-vertical-stripes',
-    name: 'Faixas (colunas)',
+    name: 'Column Stripes',
     description: 'Colunas alternadas pink/escuro — zebra vertical',
     category: 'pattern',
     pattern: {
@@ -265,7 +265,7 @@ export const BUILTIN_PRESETS: Preset[] = [
   },
   {
     id: 'pattern-blink-all',
-    name: 'Pisca-pisca',
+    name: 'Blink',
     description: 'Todo o teclado piscando branco',
     category: 'pattern',
     pattern: {
@@ -276,7 +276,7 @@ export const BUILTIN_PRESETS: Preset[] = [
   },
   {
     id: 'pattern-chase-rainbow',
-    name: 'Chase arco-íris',
+    name: 'Rainbow Chase',
     description: 'Cabeçote correndo por todas teclas em arco-íris',
     category: 'pattern',
     pattern: {
@@ -288,7 +288,7 @@ export const BUILTIN_PRESETS: Preset[] = [
   },
   {
     id: 'zone-left-right',
-    name: 'Esquerda / Direita',
+    name: 'Left / Right Split',
     description: 'Metade esquerda magenta, metade direita ciano',
     category: 'pattern',
     pattern: {
@@ -316,7 +316,7 @@ export const BUILTIN_PRESETS: Preset[] = [
   // === Gradients ===
   {
     id: 'gradient-horizontal',
-    name: 'Gradiente horizontal',
+    name: 'Horizontal Gradient',
     description: 'Vermelho → azul da esquerda pra direita',
     category: 'gradient',
     pattern: {
@@ -327,7 +327,7 @@ export const BUILTIN_PRESETS: Preset[] = [
   },
   {
     id: 'gradient-vertical',
-    name: 'Gradiente vertical',
+    name: 'Vertical Gradient',
     description: 'Verde → roxo de cima pra baixo',
     category: 'gradient',
     pattern: {
@@ -340,7 +340,7 @@ export const BUILTIN_PRESETS: Preset[] = [
   // === Themes ===
   {
     id: 'theme-brazil',
-    name: 'Brasil',
+    name: 'Brazil',
     description: 'Bandeira: verde base, losango amarelo, círculo azul no centro — animado flag-wave',
     category: 'theme',
     pattern: {
@@ -367,7 +367,7 @@ export const BUILTIN_PRESETS: Preset[] = [
   },
   {
     id: 'theme-rainbow-rows',
-    name: 'Arco-íris (wave)',
+    name: 'Rainbow Wave',
     description: 'Cada linha uma cor do arco-íris, animado wave',
     category: 'theme',
     pattern: {
@@ -384,7 +384,7 @@ export const BUILTIN_PRESETS: Preset[] = [
   },
   {
     id: 'theme-cyber',
-    name: 'Cyber',
+    name: 'Cyber Grid',
     description: 'Base roxa profunda + ciano nos números + verde em WASD — look cyberpunk gaming',
     category: 'theme',
     pattern: {
@@ -402,7 +402,7 @@ export const BUILTIN_PRESETS: Preset[] = [
   },
   {
     id: 'theme-fire',
-    name: 'Fogo',
+    name: 'Fire',
     description: 'Gradiente de fogo — amarelo no topo, vermelho escuro na base — animado flag-wave',
     category: 'theme',
     pattern: {
@@ -505,7 +505,7 @@ export const BUILTIN_PRESETS: Preset[] = [
   },
   {
     id: 'game-fireworks',
-    name: 'Fogos',
+    name: 'Fireworks',
     description: 'Explosões coloridas de partículas em loop',
     category: 'game',
     pattern: { keys: {}, animType: 'fireworks', animSpeed: 0.5 },
@@ -638,7 +638,7 @@ export const BUILTIN_PRESETS: Preset[] = [
   },
   {
     id: 'theme-aurora',
-    name: 'Aurora Boreal',
+    name: 'Aurora',
     description: 'Ondas verdes/teal/roxas — northern lights',
     category: 'theme',
     pattern: {
@@ -681,7 +681,7 @@ export const BUILTIN_PRESETS: Preset[] = [
   // ── Brasil ───────────────────────────────────────────────────────────────
   {
     id: 'brasil-flag',
-    name: 'Bandeira do Brasil',
+    name: 'Brazil Flag',
     description: 'Verde + amarelo (losango) + azul (círculo central)',
     category: 'brasil',
     pattern: {
@@ -710,7 +710,7 @@ export const BUILTIN_PRESETS: Preset[] = [
   },
   {
     id: 'brasil-carnaval',
-    name: 'Carnaval',
+    name: 'Carnival',
     description: 'Faixas coloridas em chase — cores caminham pelo teclado',
     category: 'brasil',
     pattern: {
@@ -741,7 +741,7 @@ export const BUILTIN_PRESETS: Preset[] = [
   },
   {
     id: 'brasil-festa-junina',
-    name: 'Festa Junina',
+    name: 'June Festival',
     description: 'Chamas de fogueira: laranja embaixo, amarelo em cima, flag-wave',
     category: 'brasil',
     pattern: {
@@ -763,7 +763,7 @@ export const BUILTIN_PRESETS: Preset[] = [
   },
   {
     id: 'brasil-independencia',
-    name: '7 de Setembro',
+    name: 'Independence Day',
     description: 'Verde + amarelo em wave vertical patriótica',
     category: 'brasil',
     pattern: {
@@ -996,7 +996,7 @@ export const BUILTIN_PRESETS: Preset[] = [
   },
   {
     id: 'theme-aquarium',
-    name: 'Aquário',
+    name: 'Aquarium',
     description: 'Água em gradient, bolhas subindo do fundo, peixinho cruzando',
     category: 'theme',
     pattern: { keys: {}, animType: 'aquarium', animSpeed: 0.5 },

@@ -3,10 +3,13 @@ import { BUILTIN_PRESETS } from '@fizz/core';
 import type { Preset, AnimType } from '@fizz/core';
 import { usePaintStore } from '../stores/paintStore.js';
 import { NamePromptModal } from './NamePromptModal.js';
-import { Trash2, Plus, Sliders } from 'lucide-react';
+import { Trash2, Plus, Sliders, Sparkles } from 'lucide-react';
 import { renderThumbnail, THUMB_COLS } from '../lib/thumbnailRenderer.js';
 import { useSharedClock } from '../lib/useSharedClock.js';
 import { PresetEditor } from './PresetEditor.js';
+import { useStyleStore } from '../stores/styleStore.js';
+import { transformKeys, type Style } from '../lib/colorTransform.js';
+import { cn } from '../lib/classnames.js';
 
 export interface UserPreset {
   id: string;
@@ -56,6 +59,45 @@ export function PresetGallery({
   const lastSequence = usePaintStore((s) => s.lastSequence);
   const brushColor = usePaintStore((s) => s.brushColor);
   const activePresetId = usePaintStore((s) => s.activePresetId);
+  const globalStyle = useStyleStore((s) => s.style);
+  const globalVibrancy = useStyleStore((s) => s.vibrancy);
+  const setGlobalStyle = useStyleStore((s) => s.setStyle);
+  const setGlobalVibrancy = useStyleStore((s) => s.setVibrancy);
+
+  // Wrap the parent onApply so the global tonality always applies. Pre-edit
+  // the keys map before forwarding — daemon never sees the raw preset when
+  // a non-Original style is selected.
+  function applyWithStyle(p: Preset | UserPreset, tint?: string) {
+    if (globalStyle === 'original' && globalVibrancy === 1) {
+      onApply(p, tint);
+      return;
+    }
+    const transformed = {
+      ...p,
+      pattern: {
+        keys: transformKeys(p.pattern.keys, {
+          style: globalStyle,
+          vibrancy: globalVibrancy,
+          monoTint: tint ?? brushColor,
+        }),
+        animType: p.pattern.animType,
+        animSpeed: p.pattern.animSpeed,
+        ...(p.pattern.sequence ? { sequence: p.pattern.sequence } : {}),
+      },
+    } as Preset | UserPreset;
+    onApply(transformed, tint);
+  }
+
+  // Re-apply the active preset whenever global style changes — gives instant
+  // visual feedback when the user picks a different tonalidade.
+  useEffect(() => {
+    if (!activePresetId) return;
+    const builtin = (BUILTIN_PRESETS as (Preset | UserPreset)[]).find((p) => p.id === activePresetId);
+    const user = userPresets.find((p) => p.id === activePresetId);
+    const active = builtin ?? user;
+    if (active) applyWithStyle(active, tintEnabled ? brushColor : undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [globalStyle, globalVibrancy]);
 
   // Re-tint the active preset when the brush color changes while tint mode
   // is on, so the user sees the new color immediately instead of having to
@@ -150,9 +192,51 @@ export function PresetGallery({
         </button>
       </div>
 
+      {/* Global tonality (style + vibrancy) — affects every preset before
+          it goes to the hardware. */}
+      <div className="px-3 py-2 border-b border-zinc-800 bg-zinc-900/40 flex flex-col gap-1.5">
+        <div className="flex items-center gap-1.5">
+          <Sparkles className="w-3 h-3 text-fuchsia-400" aria-hidden="true" />
+          <span className="text-[10px] uppercase tracking-wider text-zinc-300">Tonalidade global</span>
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {(['original', 'vivid', 'neon', 'pastel', 'mono'] as Style[]).map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => setGlobalStyle(s)}
+              className={cn(
+                'px-2 py-0.5 rounded text-[11px] capitalize transition',
+                globalStyle === s
+                  ? 'bg-fuchsia-500/25 text-fuchsia-100 ring-1 ring-fuchsia-500/60'
+                  : 'bg-zinc-800/60 hover:bg-zinc-800 text-zinc-300',
+              )}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-zinc-400 shrink-0">Vibrância</span>
+          <input
+            type="range"
+            min={0.4}
+            max={2}
+            step={0.05}
+            value={globalVibrancy}
+            onChange={(e) => setGlobalVibrancy(Number(e.target.value))}
+            aria-label="Global vibrancy"
+            className="accent-fuchsia-500 flex-1 min-w-0"
+          />
+          <span className="text-[10px] font-mono text-zinc-300 tabular-nums w-10 text-right">
+            {globalVibrancy.toFixed(2)}×
+          </span>
+        </div>
+      </div>
+
       {/* Persistence info banner */}
       <div className="px-4 py-2 border-b border-zinc-900 bg-amber-500/5 text-[10px] text-amber-200/80 leading-tight">
-        Presets aqui rodam via Fizz daemon (PC). Pra padrão que persiste no teclado sem PC, usa <span className="font-mono">FIRMWARE EFFECTS</span> na sidebar esquerda. <span className="text-amber-100 font-medium">Export</span> pra levar pra outro PC.
+        Presets rodam via Fizz daemon (PC). <span className="font-mono">FIRMWARE EFFECTS</span> persistem no teclado sem PC.
       </div>
 
       {/* Tint toggle */}
@@ -210,7 +294,7 @@ export function PresetGallery({
                 ? 'bg-fuchsia-500/15 ring-1 ring-fuchsia-500/60'
                 : 'hover:bg-zinc-800/50')
             }
-            onClick={() => onApply(preset, tintEnabled ? brushColor : undefined)}
+            onClick={() => applyWithStyle(preset, tintEnabled ? brushColor : undefined)}
           >
             <PresetThumbnail preset={preset} />
             <div className="flex-1 min-w-0">

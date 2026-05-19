@@ -62,10 +62,14 @@ export function computeFrameInto(p: Pattern, t: number, out: Map<number, Color>)
   }
 
   if (p.animType === 'wave') {
+    // Higher floor (0.55) so base colors stay saturated — wave creates motion
+    // via PHASE differences between keys, not by dragging colors into pastel
+    // territory. The K617's white keycaps amplify any dimness as washed-out
+    // pastel, so we trade swing for brightness.
     for (const [kStr, hex] of Object.entries(p.keys)) {
       const k = Number(kStr);
       const phase = t * speed + k * 0.3;
-      const intensity = 0.3 + 0.7 * (Math.sin(phase) + 1) / 2;
+      const intensity = 0.55 + 0.45 * (Math.sin(phase) + 1) / 2;
       out.set(k, scaleColor(hexToColor(hex), intensity));
     }
     return out;

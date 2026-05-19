@@ -885,12 +885,12 @@ class CpuThermalEngine {
   private temp = 40; // °C, seeded warm so the first frame doesn't look "off"
   private cursor = 0;
   private readonly GRADIENT: Color[] = [
-    { r: 0, g: 80, b: 255 },     // < 35°C
-    { r: 0, g: 200, b: 200 },    // 35-50°C
-    { r: 0, g: 230, b: 80 },     // 50-65°C
-    { r: 255, g: 200, b: 0 },    // 65-75°C
-    { r: 255, g: 100, b: 0 },    // 75-85°C
-    { r: 255, g: 30, b: 30 },    // > 85°C
+    { r: 0, g: 80, b: 255 },     // < 35°C — pure blue
+    { r: 0, g: 255, b: 255 },    // 35-50°C — cyan
+    { r: 0, g: 255, b: 0 },      // 50-65°C — pure green
+    { r: 255, g: 200, b: 0 },    // 65-75°C — yellow
+    { r: 255, g: 100, b: 0 },    // 75-85°C — orange
+    { r: 255, g: 0, b: 0 },      // > 85°C — pure red
   ];
 
   step(): void {
@@ -930,13 +930,15 @@ class CpuThermalEngine {
   render(): Map<number, Color> {
     const out = new Map<number, Color>();
     const base = this.colorForTemp(this.temp);
-    // Brightness ramp from low rows (cool) to top row (hot) so spike is visible
+    // Temperature gauge: hotter temp → more rows lit at full intensity from
+    // the bottom up. Below the cutoff stays dim so the "fill level" reads
+    // clearly. heat in [0..1] across 30..90°C.
     const heat = Math.min(1, Math.max(0, (this.temp - 30) / 60));
     for (let x = 0; x < 14; x++) {
       for (let y = 0; y < GRID_HEIGHT; y++) {
-        // Top rows brighter when hot, bottom rows brighter when cool
         const rowHeat = (GRID_HEIGHT - 1 - y) / (GRID_HEIGHT - 1);
-        const intensity = 0.25 + 0.75 * (rowHeat < heat ? 1 : 0.3);
+        // Full intensity below the fill line, dim (15%) above — readable gauge.
+        const intensity = rowHeat < heat ? 1.0 : 0.15;
         const c: Color = {
           r: Math.round(base.r * intensity),
           g: Math.round(base.g * intensity),
@@ -1033,9 +1035,9 @@ class MinecraftDayEngine {
   render(): Map<number, Color> {
     const out = new Map<number, Color>();
     const { top: skyTop, bottom: skyBottom } = this.skyColor();
-    // Vivid earth-tones so they punch through the white keycap plastic.
-    const DIRT: Color = { r: 140, g: 70, b: 20 };
-    const GRASS: Color = { r: 30, g: 220, b: 50 };
+    // Saturated earth-tones so they punch through the white K617 keycaps.
+    const DIRT: Color = { r: 160, g: 80, b: 20 };
+    const GRASS: Color = { r: 0, g: 255, b: 40 };
 
     // Daylight visibility 0..1 — clouds/sun fade in/out with the day.
     const dayVisibility =
@@ -1072,15 +1074,17 @@ class MinecraftDayEngine {
     for (const k of K617_LAYOUT.keys) {
       const cx = k.col + k.width / 2;
 
-      // Base color by row.
+      // Base color by row. Grass on TOP of the ground (row 3, the surface
+      // you'd see in a side-view Minecraft world), dirt BELOW (row 4 —
+      // underground, deeper into the keyboard's bottom edge).
       let color: Color;
       if (k.row === 0) color = skyTop;
       else if (k.row === 1) color = skyBottom;
       else if (k.row === 2) {
-        // Horizon: blend bottom-of-sky with dirt to suggest distance.
-        color = lerpColor(skyBottom, DIRT, 0.55);
-      } else if (k.row === 3) color = DIRT;
-      else color = GRASS;
+        // Horizon: blend bottom-of-sky with grass — they meet at the surface.
+        color = lerpColor(skyBottom, GRASS, 0.7);
+      } else if (k.row === 3) color = GRASS;
+      else color = DIRT;
 
       // Sun: 1-key-wide bright yellow at the arc position.
       if (sunArcRow === k.row && k.row <= 1) {
@@ -1112,13 +1116,14 @@ class MinecraftDayEngine {
         }
       }
 
-      // Clouds (rows 0-1 during day).
+      // Clouds (rows 0-1 during day). 40% opacity max so the sky still reads
+      // as blue instead of washing out to white.
       if (k.row <= 1 && dayVisibility > 0) {
         for (const c of cloudPositions) {
           if (c.row !== k.row) continue;
           const dCloud = Math.abs(cx - c.col);
-          if (dCloud < 1.5) {
-            const puff = (1 - dCloud / 1.5) * 0.6 * dayVisibility;
+          if (dCloud < 1.2) {
+            const puff = (1 - dCloud / 1.2) * 0.4 * dayVisibility;
             color = lerpColor(color, { r: 255, g: 255, b: 255 }, puff);
           }
         }
@@ -1191,31 +1196,32 @@ class AquariumEngine {
     for (const k of K617_LAYOUT.keys) {
       const cx = k.col + k.width / 2;
 
-      // Base depth gradient.
+      // Base depth gradient — full SAND on row 4 so the floor is unmistakeably
+      // sandy yellow, not muddied by FLOOR blue.
       let color: Color;
       if (k.row === 0) color = SURFACE;
-      else if (k.row === 1) color = lerpColor(SURFACE, MID, 0.4);
+      else if (k.row === 1) color = lerpColor(SURFACE, MID, 0.5);
       else if (k.row === 2) color = MID;
-      else if (k.row === 3) color = lerpColor(MID, FLOOR, 0.6);
-      else color = lerpColor(FLOOR, SAND, 0.3); // sandy floor tinted dark blue
+      else if (k.row === 3) color = FLOOR;
+      else color = SAND;
 
-      // Bubbles climb: row maps from t (1=bottom, 0=top).
+      // Bubbles climb. Bright cyan so they pop against the deep blue water.
       for (const b of this.bubbles) {
         const bubbleRow = 4 - b.t * 4;
         const dRow = Math.abs(k.row - bubbleRow);
         const dCol = Math.abs(cx - b.col);
         if (dRow < 0.8 && dCol < 0.8) {
           const intensity = (1 - dRow / 0.8) * (1 - dCol / 0.8);
-          color = lerpColor(color, { r: 220, g: 250, b: 255 }, intensity * 0.85);
+          color = lerpColor(color, { r: 200, g: 255, b: 255 }, intensity);
         }
       }
 
-      // Fish: 2-key trail (head + body) on its row.
+      // Fish: orange against blue → maximum contrast.
       if (k.row === fishRow) {
         const dFish = cx - fishCol;
         if (dFish >= -0.4 && dFish <= 1.6) {
           const t = 1 - Math.min(1, Math.abs(dFish - 0.5));
-          color = lerpColor(color, { r: 255, g: 140, b: 60 }, t * 0.9);
+          color = lerpColor(color, { r: 255, g: 100, b: 0 }, t);
         }
       }
 
