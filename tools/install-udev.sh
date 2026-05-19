@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# Install udev rule granting the active session user r/w access to the
-# Redragon Fizz K617. Uses TAG+="uaccess" (systemd-logind ACL) so the rule
-# works on Fedora/RHEL (no `plugdev` group) as well as Debian-family distros.
+# Install udev rule granting all users r/w access to the Redragon Fizz K617.
+# Uses MODE="0666" so the rule works on any distro regardless of whether
+# `plugdev` (Debian-family) or `input` (most others) groups exist — single
+# device scope, accepted trade-off for personal use.
+# Covers: hidraw (RGB control), usb (parent), input + event* (evdev for
+# physical-key capture by the interactive Pong preset).
 set -euo pipefail
 
 RULE_PATH="/etc/udev/rules.d/99-fizz-k617.rules"

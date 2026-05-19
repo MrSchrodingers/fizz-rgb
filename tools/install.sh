@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Install fizz-rgb daemon, CLI, systemd unit, and udev rule on a Fedora system.
+# Install fizz-rgb daemon, CLI, systemd unit, and udev rule on any modern
+# Linux distro with systemd-user, npm, and udev (Fedora 43+, Ubuntu 22.04+,
+# Arch, openSUSE Tumbleweed, etc.). The udev rule uses MODE=0666 which is
+# distro-agnostic — no plugdev/input group membership required.
 #
 # Flags:
 #   --easy            Full setup: build AppImage, install GUI app menu entry,

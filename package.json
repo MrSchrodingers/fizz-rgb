@@ -1,7 +1,7 @@
 {
   "name": "fizz-rgb",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Linux RGB controller for the Redragon Fizz K617 keyboard",
   "license": "MIT",
   "type": "module",

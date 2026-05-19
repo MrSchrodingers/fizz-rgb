@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-appimage:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: System deps for AppImage + libusb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libusb-1.0-0-dev libudev-dev fuse libfuse2
+
+      - name: Install
+        run: npm ci
+
+      - name: Build (workspace)
+        run: npm run build
+
+      - name: Tests
+        run: npm test
+
+      - name: Build AppImage
+        run: npm run build:appimage -w fizz-gui
+
+      - name: Compute checksums
+        id: sums
+        run: |
+          cd packages/gui/release
+          AppImage=$(ls fizz-rgb-*.AppImage | head -1)
+          sha256sum "$AppImage" > "${AppImage}.sha256"
+          echo "appimage=$AppImage" >> "$GITHUB_OUTPUT"
+          echo "Computed checksum for $AppImage"
+
+      - name: Extract changelog section for this tag
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          VERSION="${REF_NAME#v}"
+          # Pull just the section for this version out of CHANGELOG.md.
+          awk -v ver="$VERSION" '
+            BEGIN { in_section = 0 }
+            /^## \[/ {
+              if (in_section) exit;
+              if ($0 ~ "\\[" ver "\\]") { in_section = 1; next }
+            }
+            in_section { print }
+          ' CHANGELOG.md > /tmp/release-notes.md
+          if [ ! -s /tmp/release-notes.md ]; then
+            echo "Release $REF_NAME" > /tmp/release-notes.md
+          fi
+          head -3 /tmp/release-notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          body_path: /tmp/release-notes.md
+          draft: false
+          prerelease: false
+          files: |
+            packages/gui/release/${{ steps.sums.outputs.appimage }}
+            packages/gui/release/${{ steps.sums.outputs.appimage }}.sha256
