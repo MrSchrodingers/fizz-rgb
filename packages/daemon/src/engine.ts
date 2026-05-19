@@ -1105,16 +1105,19 @@ class MinecraftDayEngine {
     for (const k of K617_LAYOUT.keys) {
       const cx = k.col + k.width / 2;
 
-      // Base color by row. Grass on TOP of the ground (row 3, the surface
-      // you'd see in a side-view Minecraft world), dirt BELOW (row 4 —
-      // underground, deeper into the keyboard's bottom edge).
+      // Five distinct layers, no blending — eliminates the double-green
+      // strip that was making row 2 read as a second grass layer.
+      // Order from top of keyboard to bottom:
+      //   row 0 = sky high   (F-row / number row)
+      //   row 1 = sky low    (QWERTY)
+      //   row 2 = sky low    (ASDF) — kept as sky so there's ONE grass row
+      //   row 3 = grass      (ZXCV) — the surface
+      //   row 4 = dirt       (Ctrl / Alt / Space) — underground
       let color: Color;
       if (k.row === 0) color = skyTop;
       else if (k.row === 1) color = skyBottom;
-      else if (k.row === 2) {
-        // Horizon: blend bottom-of-sky with grass — they meet at the surface.
-        color = lerpColor(skyBottom, GRASS, 0.7);
-      } else if (k.row === 3) color = GRASS;
+      else if (k.row === 2) color = skyBottom; // still sky — no horizon blend
+      else if (k.row === 3) color = GRASS;
       else color = DIRT;
 
       // Sun: 1-key-wide bright yellow at the arc position.
@@ -1369,49 +1372,49 @@ class PongInteractiveEngine {
 
   render(): Map<number, Color> {
     const out = new Map<number, Color>();
-    const RED: Color = { r: 255, g: 30, b: 30 };
-    const BLUE: Color = { r: 30, g: 80, b: 255 };
+    const RED: Color = { r: 255, g: 0, b: 0 };
+    const BLUE: Color = { r: 0, g: 30, b: 255 };
     const WHITE: Color = { r: 255, g: 255, b: 255 };
-    const DIM_RED: Color = { r: 60, g: 0, b: 0 };
-    const DIM_BLUE: Color = { r: 0, g: 0, b: 60 };
+    // Sparse rendering: only LEDs we explicitly set get color, everything
+    // else stays off. That removes the "filling everything" effect the user
+    // hit with the dim-paddle approach.
 
-    // Scoreboard on the keyboard's TOP row (digits 1..9).
-    // Number-row ledIndex maps via key names: '1'..'9'.
+    // Scoreboard on the number row. Player score lights keys 1..N from the
+    // LEFT. AI score lights keys 9..(9-M+1) from the RIGHT. Unused keys stay
+    // dark.
     const NUMS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
-    for (let i = 0; i < NUMS.length; i++) {
+    for (let i = 0; i < this.scorePlayer && i < 4; i++) {
       const k = K617_LAYOUT.keys.find((x) => x.name === NUMS[i]);
-      if (!k) continue;
-      // Slots 0..3 represent player score (lit up to scorePlayer-1),
-      // slots 5..8 represent AI (lit when (i - 5) < scoreAi).
-      if (i < 4) {
-        out.set(k.ledIndex, i < this.scorePlayer ? RED : DIM_RED);
-      } else if (i === 4) {
-        // Middle "5" key: serve indicator (white pulse) or neutral.
-        out.set(k.ledIndex, this.resetCountdown > 0 ? WHITE : { r: 25, g: 25, b: 25 });
-      } else {
-        const aiIdx = i - 5;
-        out.set(k.ledIndex, aiIdx < this.scoreAi ? BLUE : DIM_BLUE);
-      }
+      if (k) out.set(k.ledIndex, RED);
+    }
+    for (let i = 0; i < this.scoreAi && i < 4; i++) {
+      const k = K617_LAYOUT.keys.find((x) => x.name === NUMS[8 - i]);
+      if (k) out.set(k.ledIndex, BLUE);
+    }
+    // Middle key 5 flashes white during the reset/serve countdown.
+    if (this.resetCountdown > 0) {
+      const k = K617_LAYOUT.keys.find((x) => x.name === '5');
+      if (k) out.set(k.ledIndex, WHITE);
     }
 
-    // Player paddle on the left edge keys (Tab/Caps/LShift/LCtrl).
+    // Player paddle: ONE key only at the active slot (Tab/Caps/LShift/LCtrl).
     const PLAYER_KEYS = ['Tab', 'CapsLock', 'LShift', 'LCtrl'];
-    for (let i = 0; i < PLAYER_KEYS.length; i++) {
-      const k = K617_LAYOUT.keys.find((x) => x.name === PLAYER_KEYS[i]);
-      if (!k) continue;
-      out.set(k.ledIndex, i === this.paddleSlot ? RED : DIM_RED);
+    const playerName = PLAYER_KEYS[this.paddleSlot];
+    if (playerName) {
+      const k = K617_LAYOUT.keys.find((x) => x.name === playerName);
+      if (k) out.set(k.ledIndex, RED);
     }
 
-    // AI paddle on the right edge (Backslash/Enter/RShift/RCtrl).
+    // AI paddle: ONE key only on the right edge.
     const AI_KEYS = ['Backslash', 'Enter', 'RShift', 'RCtrl'];
     const aiSlot = Math.max(0, Math.min(3, Math.round(this.aiY)));
-    for (let i = 0; i < AI_KEYS.length; i++) {
-      const k = K617_LAYOUT.keys.find((x) => x.name === AI_KEYS[i]);
-      if (!k) continue;
-      out.set(k.ledIndex, i === aiSlot ? BLUE : DIM_BLUE);
+    const aiName = AI_KEYS[aiSlot];
+    if (aiName) {
+      const k = K617_LAYOUT.keys.find((x) => x.name === aiName);
+      if (k) out.set(k.ledIndex, BLUE);
     }
 
-    // Ball — render on the closest grid cell in the play area (rows 1..3).
+    // Ball in the play area (rows 1..3). Only the closest cell.
     const bx = Math.max(1, Math.min(13, Math.round(this.ballX)));
     const by = Math.max(this.PLAY_TOP, Math.min(this.PLAY_BOTTOM, Math.round(this.ballY)));
     const ballLed = gridToLed(bx, by);

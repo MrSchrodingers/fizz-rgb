@@ -96,14 +96,34 @@ export function PresetGallery({
     onApply(transformed, tint);
   }
 
-  // Re-apply the active preset whenever global style changes — gives instant
-  // visual feedback when the user picks a different tonalidade.
+  // Re-apply whenever global style changes — gives instant feedback whether
+  // there's an active preset or just whatever the daemon is currently
+  // running. Without this, clicking Vivid/Pastel/etc would visually update
+  // the chip but the hardware would stay the same.
   useEffect(() => {
-    if (!activePresetId) return;
-    const builtin = (BUILTIN_PRESETS as (Preset | UserPreset)[]).find((p) => p.id === activePresetId);
-    const user = userPresets.find((p) => p.id === activePresetId);
-    const active = builtin ?? user;
-    if (active) applyWithStyle(active, tintEnabled ? brushColor : undefined);
+    if (activePresetId) {
+      const builtin = (BUILTIN_PRESETS as (Preset | UserPreset)[]).find((p) => p.id === activePresetId);
+      const user = userPresets.find((p) => p.id === activePresetId);
+      const active = builtin ?? user;
+      if (active) {
+        console.log('[tonality] re-applying preset', active.id, 'style=', globalStyle, 'vibrancy=', globalVibrancy);
+        applyWithStyle(active, tintEnabled ? brushColor : undefined);
+        return;
+      }
+    }
+    // Nothing tracked client-side — ask the daemon what's running and resend.
+    if (!window.fizz) return;
+    window.fizz.perkeyCurrent().then((state) => {
+      if (state.mode !== 'pattern') return;
+      console.log('[tonality] re-applying daemon pattern', state.pattern.animType);
+      window.fizz!.perkeyStartPattern({
+        keys: state.pattern.keys,
+        animType: state.pattern.animType as AnimType,
+        animSpeed: state.pattern.animSpeed,
+        vibrancy: globalVibrancy,
+        ...(state.pattern.sequence && state.pattern.sequence.length > 0 ? { sequence: state.pattern.sequence } : {}),
+      }).catch(() => {});
+    }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [globalStyle, globalVibrancy]);
 
@@ -212,7 +232,21 @@ export function PresetGallery({
             <button
               key={s}
               type="button"
-              onClick={() => setGlobalStyle(s)}
+              onClick={() => {
+                setGlobalStyle(s);
+                // Bump vibrancy along with the style so the change is
+                // immediately visible for stateful presets (Minecraft,
+                // Aquarium, games) — their palettes are daemon-generated
+                // and only respond to pattern.vibrancy, not to style.
+                const defaultVibrancyFor: Record<Style, number> = {
+                  original: 1.0,
+                  vivid: 1.6,
+                  neon: 1.9,
+                  pastel: 0.7,
+                  mono: 1.0,
+                };
+                setGlobalVibrancy(defaultVibrancyFor[s]);
+              }}
               className={cn(
                 'px-2 py-0.5 rounded text-[11px] capitalize transition',
                 globalStyle === s
