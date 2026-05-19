@@ -543,12 +543,30 @@ export const BUILTIN_PRESETS: Preset[] = [
   {
     id: 'theme-cyberpunk',
     name: 'Cyberpunk',
-    description: 'Magenta e ciano com flicker neon — Night City vibe',
+    description: 'Letras ciano, números magenta, modifiers amarelo — Night City',
     category: 'theme',
     pattern: {
-      keys: buildKeys(ALL_KEYS_NAMES.map((n, i) => [n, i % 3 === 0 ? '#ff00ff' : i % 3 === 1 ? '#00f0ff' : '#fcee0a'] as [string, string])),
-      animType: 'blink',
-      animSpeed: 0.65,
+      // Layout-aware split: top function/number row magenta, alphanumeric
+      // letters ciano, modifiers (Tab/Caps/Shift/Ctrl/Alt/Space) yellow.
+      // Slow wave gives the neon a breathing glow instead of strobing.
+      keys: (() => {
+        const entries: Array<[string, string]> = [];
+        const MAGENTA = '#ff2bd6';
+        const CYAN = '#00f0ff';
+        const YELLOW = '#fcee0a';
+        const MODIFIERS = new Set([
+          'Escape', 'Tab', 'CapsLock', 'LShift', 'RShift', 'LCtrl', 'RCtrl',
+          'LAlt', 'RAlt', 'LSuper', 'Fn', 'Menu', 'Space', 'Enter', 'Backspace',
+        ]);
+        for (const k of _layout.keys) {
+          if (MODIFIERS.has(k.name)) entries.push([k.name, YELLOW]);
+          else if (k.row === 0) entries.push([k.name, MAGENTA]);
+          else entries.push([k.name, CYAN]);
+        }
+        return buildKeys(entries);
+      })(),
+      animType: 'wave',
+      animSpeed: 0.18,
     },
   },
   {
@@ -587,12 +605,29 @@ export const BUILTIN_PRESETS: Preset[] = [
   {
     id: 'theme-tron',
     name: 'Tron Grid',
-    description: 'Linhas ciano correndo na grade — light cycle trail',
+    description: 'Ciano com linha branca correndo — light cycle trail',
     category: 'theme',
     pattern: {
-      keys: buildKeys(ALL_KEYS_NAMES.map((n) => [n, '#00f0ff'] as [string, string])),
+      // Ciano base + faixa branca a cada 3 colunas pro chase ter contraste
+      // (sem isso vira chuva monocromática).
+      keys: (() => {
+        const entries: Array<[string, string]> = [];
+        for (const k of _layout.keys) {
+          entries.push([k.name, Math.floor(k.col) % 3 === 0 ? '#ffffff' : '#00f0ff']);
+        }
+        return buildKeys(entries);
+      })(),
       animType: 'chase',
-      animSpeed: 0.7,
+      animSpeed: 0.55,
+      sequence: (() => {
+        const seq: number[] = [];
+        for (let r = 0; r < 5; r++) {
+          const row = _layout.keys.filter((k) => k.row === r);
+          row.sort((a, b) => a.col - b.col);
+          for (const k of row) seq.push(k.ledIndex);
+        }
+        return seq;
+      })(),
     },
   },
   {
@@ -670,28 +705,54 @@ export const BUILTIN_PRESETS: Preset[] = [
   {
     id: 'brasil-carnaval',
     name: 'Carnaval',
-    description: 'Multi-cor pulsando em batida de samba (~130 BPM)',
+    description: 'Faixas coloridas em chase — cores caminham pelo teclado',
     category: 'brasil',
     pattern: {
-      keys: buildKeys(ALL_KEYS_NAMES.map((n, i) => {
-        const palette = ['#ff006e', '#ffbe0b', '#3a86ff', '#8338ec', '#06ffa5', '#fb5607'];
-        return [n, palette[i % palette.length]!] as [string, string];
-      })),
-      animType: 'blink',
-      // 130 BPM = ~2.17 Hz. animSpeed maps 0..1 → 0.5..4.5 internal, so set
-      // accordingly to hit roughly the right tempo.
-      animSpeed: 0.42,
+      // Coluna define cor: cria faixas verticais que viajam horizontalmente
+      // via animType=chase. Bem mais "samba" do que strobe.
+      keys: (() => {
+        const entries: Array<[string, string]> = [];
+        const palette = ['#ff006e', '#ffbe0b', '#3a86ff', '#06ffa5', '#8338ec', '#fb5607', '#ff4081'];
+        for (const k of _layout.keys) {
+          entries.push([k.name, palette[Math.floor(k.col) % palette.length]!]);
+        }
+        return buildKeys(entries);
+      })(),
+      animType: 'chase',
+      animSpeed: 0.6,
+      sequence: (() => {
+        // Snake order: row 0 L→R, row 1 R→L, etc. — chase ripples through
+        // the whole keyboard like a samba line, not random ledIndex order.
+        const seq: number[] = [];
+        for (let r = 0; r < 5; r++) {
+          const row = _layout.keys.filter((k) => k.row === r);
+          row.sort((a, b) => r % 2 === 0 ? a.col - b.col : b.col - a.col);
+          for (const k of row) seq.push(k.ledIndex);
+        }
+        return seq;
+      })(),
     },
   },
   {
     id: 'brasil-festa-junina',
     name: 'Festa Junina',
-    description: 'Laranja + amarelo flicker estilo fogueira',
+    description: 'Chamas de fogueira: laranja embaixo, amarelo em cima, flag-wave',
     category: 'brasil',
     pattern: {
-      keys: buildKeys(ALL_KEYS_NAMES.map((n, i) => [n, i % 2 === 0 ? '#ff7518' : '#ffd23f'] as [string, string])),
-      animType: 'blink',
-      animSpeed: 0.7,
+      // Fogueira ascendente: vermelho-laranja nas linhas baixas, amarelo
+      // nas linhas altas. flag-wave faz o flicker horizontal lembrar chama.
+      keys: (() => {
+        const entries: Array<[string, string]> = [];
+        const palette = ['#ffea5e', '#ffd23f', '#ff8a00', '#ff4d00', '#c41e00'];
+        for (const k of _layout.keys) {
+          // row 0 (top) = brasa amarela; row 4 = brasa vermelha
+          const t = Math.min(palette.length - 1, k.row);
+          entries.push([k.name, palette[t]!]);
+        }
+        return buildKeys(entries);
+      })(),
+      animType: 'flag-wave',
+      animSpeed: 0.55,
     },
   },
   {
@@ -714,12 +775,23 @@ export const BUILTIN_PRESETS: Preset[] = [
   {
     id: 'brasil-halloween',
     name: 'Halloween',
-    description: 'Laranja + roxo com flicker fantasmagórico',
+    description: 'Laranja em cima, roxo embaixo — drift fantasmagórico (wave lenta)',
     category: 'brasil',
     pattern: {
-      keys: buildKeys(ALL_KEYS_NAMES.map((n, i) => [n, i % 2 === 0 ? '#ff7518' : '#7d2eff'] as [string, string])),
-      animType: 'blink',
-      animSpeed: 0.45,
+      // Gradient vertical: top rows = abóbora laranja, bottom = roxo místico.
+      // wave lento dá um drift de fantasma sem strobe.
+      keys: (() => {
+        const entries: Array<[string, string]> = [];
+        for (const k of _layout.keys) {
+          const t = k.row / _maxRow; // 0 top → 1 bottom
+          const palette = ['#ff8a17', '#ff6a00', '#ff2db5', '#9b2cff', '#3a0ca3'];
+          const idx = Math.min(palette.length - 1, Math.floor(t * palette.length));
+          entries.push([k.name, palette[idx]!]);
+        }
+        return buildKeys(entries);
+      })(),
+      animType: 'wave',
+      animSpeed: 0.22,
     },
   },
 
@@ -857,13 +929,32 @@ export const BUILTIN_PRESETS: Preset[] = [
   {
     id: 'pattern-heart-pulse',
     name: 'Heart Pulse',
-    description: 'Rosa/vermelho pulsando em ritmo cardíaco (~60 BPM)',
+    description: 'Vermelho profundo nas bordas, rosa quente no centro — pulso suave',
     category: 'pattern',
     pattern: {
-      keys: buildKeys(ALL_KEYS_NAMES.map((n) => [n, '#ff3b6f'] as [string, string])),
-      // 60 BPM = 1 Hz. animSpeed 0..1 → 0.5..4.5 speed internal → target ~1 cycle/s.
-      animType: 'blink',
-      animSpeed: 0.18,
+      // Gradient radial-ish: keys do centro vermelho vivo, bordas vermelho
+      // escuro. wave em velocidade baixa dá pulso de coração sem strobe.
+      keys: (() => {
+        const entries: Array<[string, string]> = [];
+        const cx = _maxCol / 2;
+        const cy = _maxRow / 2;
+        const maxDist = Math.sqrt(cx * cx + cy * cy);
+        for (const k of _layout.keys) {
+          const dx = (k.col + k.width / 2) - cx;
+          const dy = k.row - cy;
+          const t = Math.min(1, Math.sqrt(dx * dx + dy * dy) / maxDist);
+          // Center #ff5b8e, edges #6b0024
+          const hot: [number, number, number] = [0xff, 0x5b, 0x8e];
+          const dark: [number, number, number] = [0x6b, 0x00, 0x24];
+          const r = Math.round(hot[0] + (dark[0] - hot[0]) * t);
+          const g = Math.round(hot[1] + (dark[1] - hot[1]) * t);
+          const b = Math.round(hot[2] + (dark[2] - hot[2]) * t);
+          entries.push([k.name, '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')]);
+        }
+        return buildKeys(entries);
+      })(),
+      animType: 'wave',
+      animSpeed: 0.15,
     },
   },
   {
@@ -886,6 +977,22 @@ export const BUILTIN_PRESETS: Preset[] = [
     description: 'Heatmap em tempo real lendo /sys/class/thermal — azul=frio, vermelho=quente',
     category: 'game',
     pattern: { keys: {}, animType: 'cpu-thermal', animSpeed: 0.5 },
+  },
+
+  // ── Themed cycles (host-streamed, layout-aware) ──────────────────────────
+  {
+    id: 'theme-minecraft',
+    name: 'Minecraft Day/Night',
+    description: 'Chão verde, céu azul, sol cruza o céu, nuvens brancas, depois noite com lua e estrelas',
+    category: 'theme',
+    pattern: { keys: {}, animType: 'minecraft-day', animSpeed: 0.5 },
+  },
+  {
+    id: 'theme-aquarium',
+    name: 'Aquário',
+    description: 'Água em gradient, bolhas subindo do fundo, peixinho cruzando',
+    category: 'theme',
+    pattern: { keys: {}, animType: 'aquarium', animSpeed: 0.5 },
   },
 ];
 

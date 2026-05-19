@@ -1,6 +1,6 @@
 import { encodeFirmwareEffect, encodePerKeyFrame } from '@fizz/core/encoder';
 import type { FirmwareEffectName, FirmwareEffectParams } from '@fizz/core';
-import { computeFrameInto } from '@fizz/core';
+import { computeFrameInto, K617_LAYOUT } from '@fizz/core';
 import type { Color, Pattern } from '@fizz/core';
 import type { HidController } from './hid.js';
 import { log } from './log.js';
@@ -950,6 +950,283 @@ class CpuThermalEngine {
   }
 }
 
+// ─── Minecraft day/night cycle ───────────────────────────────────────────────
+
+function lerpColor(a: Color, b: Color, t: number): Color {
+  const k = Math.max(0, Math.min(1, t));
+  return {
+    r: Math.round(a.r + (b.r - a.r) * k),
+    g: Math.round(a.g + (b.g - a.g) * k),
+    b: Math.round(a.b + (b.b - a.b) * k),
+  };
+}
+
+/**
+ * Minecraft-themed day/night cycle. ~30 seconds per full cycle at default
+ * speed. Layout-aware: bottom rows are grass + dirt, top rows are the sky.
+ * The sun arcs across rows 0-1 during the day; at night the moon does the
+ * same and three columns of stars twinkle deterministically.
+ *
+ * Three drifting clouds (3-key-wide white puffs at different rows + speeds)
+ * cross the sky during the day and dissolve into the dusk palette as it
+ * gets late.
+ */
+class MinecraftDayEngine {
+  private tickCounter = 0;
+  // Phase 0..1 = one full day/night cycle. 30s default → 900 ticks @ 30fps.
+  private phase = 0;
+  private readonly TICKS_PER_CYCLE = 900;
+
+  // Three independent clouds: starting offset (in column space) + drift rate.
+  // Different rates / starting points so they never overlap perfectly.
+  private readonly clouds = [
+    { offset: 0.0, rate: 1.0, row: 0 },
+    { offset: 0.35, rate: 1.3, row: 1 },
+    { offset: 0.7, rate: 0.7, row: 0 },
+  ];
+
+  step(): void {
+    this.tickCounter = (this.tickCounter + 1) % this.TICKS_PER_CYCLE;
+    this.phase = this.tickCounter / this.TICKS_PER_CYCLE;
+  }
+
+  private skyColor(): { top: Color; bottom: Color } {
+    const p = this.phase;
+    // Palette anchors (clockwise around the day):
+    const NIGHT_TOP: Color = { r: 6, g: 4, b: 28 };
+    const NIGHT_BOTTOM: Color = { r: 16, g: 12, b: 50 };
+    const DAWN_TOP: Color = { r: 80, g: 60, b: 130 };
+    const DAWN_BOTTOM: Color = { r: 255, g: 140, b: 90 };
+    const DAY_TOP: Color = { r: 60, g: 140, b: 255 };
+    const DAY_BOTTOM: Color = { r: 140, g: 200, b: 255 };
+    const DUSK_TOP: Color = { r: 90, g: 50, b: 100 };
+    const DUSK_BOTTOM: Color = { r: 255, g: 110, b: 60 };
+
+    if (p < 0.06) {
+      // Dawn (0.00 - 0.06): night → dawn
+      const k = p / 0.06;
+      return { top: lerpColor(NIGHT_TOP, DAWN_TOP, k), bottom: lerpColor(NIGHT_BOTTOM, DAWN_BOTTOM, k) };
+    }
+    if (p < 0.12) {
+      // Sunrise (0.06 - 0.12): dawn → day
+      const k = (p - 0.06) / 0.06;
+      return { top: lerpColor(DAWN_TOP, DAY_TOP, k), bottom: lerpColor(DAWN_BOTTOM, DAY_BOTTOM, k) };
+    }
+    if (p < 0.6) {
+      // Full day (0.12 - 0.60): stable blue
+      return { top: DAY_TOP, bottom: DAY_BOTTOM };
+    }
+    if (p < 0.68) {
+      // Sunset (0.60 - 0.68): day → dusk
+      const k = (p - 0.6) / 0.08;
+      return { top: lerpColor(DAY_TOP, DUSK_TOP, k), bottom: lerpColor(DAY_BOTTOM, DUSK_BOTTOM, k) };
+    }
+    if (p < 0.75) {
+      // Twilight (0.68 - 0.75): dusk → night
+      const k = (p - 0.68) / 0.07;
+      return { top: lerpColor(DUSK_TOP, NIGHT_TOP, k), bottom: lerpColor(DUSK_BOTTOM, NIGHT_BOTTOM, k) };
+    }
+    return { top: NIGHT_TOP, bottom: NIGHT_BOTTOM };
+  }
+
+  render(): Map<number, Color> {
+    const out = new Map<number, Color>();
+    const { top: skyTop, bottom: skyBottom } = this.skyColor();
+    const DIRT: Color = { r: 86, g: 51, b: 28 };
+    const GRASS: Color = { r: 56, g: 142, b: 60 };
+    const GRASS_TOP: Color = { r: 74, g: 168, b: 76 };
+
+    // Daylight visibility 0..1 — clouds/sun fade in/out with the day.
+    const dayVisibility =
+      this.phase < 0.06 ? 0
+        : this.phase < 0.12 ? (this.phase - 0.06) / 0.06
+          : this.phase < 0.6 ? 1
+            : this.phase < 0.68 ? 1 - (this.phase - 0.6) / 0.08
+              : 0;
+    const nightVisibility = this.phase > 0.72 ? Math.min(1, (this.phase - 0.72) / 0.05) : 0;
+
+    // Sun arc across columns during day (0..0.6 in phase = day proper).
+    let sunCol = -10;
+    let sunArcRow = 1; // row 1 = lower sky band
+    if (this.phase >= 0.06 && this.phase <= 0.6) {
+      const dayT = (this.phase - 0.06) / 0.54; // 0..1 across day
+      sunCol = dayT * 14; // travel left → right across keyboard cols
+      // Arc: sin(πt) gives 0..1..0; > 0.55 → top row, otherwise lower band
+      sunArcRow = Math.sin(dayT * Math.PI) > 0.55 ? 0 : 1;
+    }
+
+    // Moon arc during night (0.72..1.0).
+    let moonCol = -10;
+    if (this.phase >= 0.72) {
+      const nightT = (this.phase - 0.72) / 0.28;
+      moonCol = nightT * 14;
+    }
+
+    // Cloud positions (drift left → right, wrap around).
+    const cloudPositions = this.clouds.map((c) => ({
+      col: ((this.phase * c.rate + c.offset) * 16) % 16 - 1, // -1..15 so they enter from the edge
+      row: c.row,
+    }));
+
+    for (const k of K617_LAYOUT.keys) {
+      const cx = k.col + k.width / 2;
+
+      // Base color by row.
+      let color: Color;
+      if (k.row === 0) color = skyTop;
+      else if (k.row === 1) color = skyBottom;
+      else if (k.row === 2) {
+        // Horizon: blend bottom-of-sky with dirt to suggest distance.
+        color = lerpColor(skyBottom, DIRT, 0.55);
+      } else if (k.row === 3) color = DIRT;
+      else color = GRASS;
+
+      // Grass top edge (last row sometimes gets a lighter strip on the
+      // "front" keys to suggest a flat block top).
+      if (k.row === 4 && (k.col + k.width / 2) % 2 < 1) color = GRASS_TOP;
+
+      // Sun: 1-key-wide bright yellow at the arc position.
+      if (sunArcRow === k.row && k.row <= 1) {
+        const dSun = Math.abs(cx - sunCol);
+        if (dSun < 1.0) {
+          const halo = 1 - dSun;
+          color = lerpColor(color, { r: 255, g: 225, b: 90 }, Math.max(0, halo));
+        }
+      }
+
+      // Moon at night (top row only).
+      if (k.row === 0 && this.phase >= 0.72) {
+        const dMoon = Math.abs(cx - moonCol);
+        if (dMoon < 0.9) {
+          const halo = 1 - dMoon;
+          color = lerpColor(color, { r: 230, g: 230, b: 245 }, halo);
+        }
+      }
+
+      // Stars (deterministic twinkle on rows 0-1 during night).
+      if (k.row <= 1 && nightVisibility > 0) {
+        // Hash key position into a pseudo-random "star" flag — only some
+        // keys are stars at all.
+        const hash = Math.sin((cx + 1) * 12.9898 + (k.row + 1) * 78.233) * 43758.5453;
+        const isStar = (hash - Math.floor(hash)) > 0.78;
+        if (isStar) {
+          const twinkle = 0.5 + 0.5 * Math.sin(this.phase * 60 + cx * 4 + k.row * 3);
+          color = lerpColor(color, { r: 255, g: 255, b: 230 }, twinkle * nightVisibility);
+        }
+      }
+
+      // Clouds (rows 0-1 during day).
+      if (k.row <= 1 && dayVisibility > 0) {
+        for (const c of cloudPositions) {
+          if (c.row !== k.row) continue;
+          const dCloud = Math.abs(cx - c.col);
+          if (dCloud < 1.5) {
+            const puff = (1 - dCloud / 1.5) * 0.6 * dayVisibility;
+            color = lerpColor(color, { r: 255, g: 255, b: 255 }, puff);
+          }
+        }
+      }
+
+      out.set(k.ledIndex, color);
+    }
+    return out;
+  }
+}
+
+// ─── Aquarium ────────────────────────────────────────────────────────────────
+
+/**
+ * Underwater scene: blue gradient, bubbles rising from the bottom, and a
+ * lone fish slowly traversing the middle rows every cycle.
+ *
+ * Each bubble is a small bright-cyan tile that climbs from row 4 → row 0
+ * over ~3 seconds. A pool of 6 bubbles is recycled at random columns.
+ */
+interface Bubble { col: number; t: number; speed: number; }
+
+class AquariumEngine {
+  private tickCounter = 0;
+  private bubbles: Bubble[] = [];
+  private fishPhase = 0;
+  private readonly BUBBLE_DURATION_TICKS = 90; // 3s at 30fps to traverse top→bottom
+  private readonly POOL = 6;
+
+  constructor() {
+    for (let i = 0; i < this.POOL; i++) this.spawn(i / this.POOL);
+  }
+
+  private spawn(initialT = 0): void {
+    this.bubbles.push({
+      col: 0.5 + Math.random() * 13,
+      t: initialT,
+      speed: 0.7 + Math.random() * 0.6,
+    });
+  }
+
+  step(): void {
+    this.tickCounter++;
+    this.fishPhase = (this.fishPhase + 1 / 240) % 1; // ~8s per fish trip
+
+    // Advance bubbles; respawn when they reach the top.
+    for (const b of this.bubbles) {
+      b.t += b.speed / this.BUBBLE_DURATION_TICKS;
+      if (b.t > 1) {
+        b.t = 0;
+        b.col = 0.5 + Math.random() * 13;
+        b.speed = 0.7 + Math.random() * 0.6;
+      }
+    }
+  }
+
+  render(): Map<number, Color> {
+    const out = new Map<number, Color>();
+    // Vertical depth gradient: row 0 (surface) is lighter, row 4 (floor) is deep.
+    const SURFACE: Color = { r: 60, g: 175, b: 220 };
+    const MID: Color = { r: 18, g: 90, b: 160 };
+    const FLOOR: Color = { r: 8, g: 32, b: 78 };
+    const SAND: Color = { r: 195, g: 175, b: 110 };
+
+    // Fish position — sinusoidal sway in row, linear sweep across cols.
+    const fishCol = -1 + this.fishPhase * 16; // -1..15 so it enters/exits
+    const fishRow = 2 + Math.round(Math.sin(this.fishPhase * Math.PI * 2) * 0.5);
+
+    for (const k of K617_LAYOUT.keys) {
+      const cx = k.col + k.width / 2;
+
+      // Base depth gradient.
+      let color: Color;
+      if (k.row === 0) color = SURFACE;
+      else if (k.row === 1) color = lerpColor(SURFACE, MID, 0.4);
+      else if (k.row === 2) color = MID;
+      else if (k.row === 3) color = lerpColor(MID, FLOOR, 0.6);
+      else color = lerpColor(FLOOR, SAND, 0.3); // sandy floor tinted dark blue
+
+      // Bubbles climb: row maps from t (1=bottom, 0=top).
+      for (const b of this.bubbles) {
+        const bubbleRow = 4 - b.t * 4;
+        const dRow = Math.abs(k.row - bubbleRow);
+        const dCol = Math.abs(cx - b.col);
+        if (dRow < 0.8 && dCol < 0.8) {
+          const intensity = (1 - dRow / 0.8) * (1 - dCol / 0.8);
+          color = lerpColor(color, { r: 220, g: 250, b: 255 }, intensity * 0.85);
+        }
+      }
+
+      // Fish: 2-key trail (head + body) on its row.
+      if (k.row === fishRow) {
+        const dFish = cx - fishCol;
+        if (dFish >= -0.4 && dFish <= 1.6) {
+          const t = 1 - Math.min(1, Math.abs(dFish - 0.5));
+          color = lerpColor(color, { r: 255, g: 140, b: 60 }, t * 0.9);
+        }
+      }
+
+      out.set(k.ledIndex, color);
+    }
+    return out;
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export class EffectEngine {
@@ -1191,6 +1468,28 @@ export class EffectEngine {
         this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
       }, 1000 / 30);
       log.info('CPU thermal stream started');
+      return;
+    }
+
+    if (pattern.animType === 'minecraft-day') {
+      const eng = new MinecraftDayEngine();
+      this.streamInterval = setInterval(() => {
+        eng.step();
+        const frame = encodePerKeyFrame(eng.render());
+        this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
+      }, 1000 / 30);
+      log.info('Minecraft day/night stream started');
+      return;
+    }
+
+    if (pattern.animType === 'aquarium') {
+      const eng = new AquariumEngine();
+      this.streamInterval = setInterval(() => {
+        eng.step();
+        const frame = encodePerKeyFrame(eng.render());
+        this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
+      }, 1000 / 30);
+      log.info('Aquarium stream started');
       return;
     }
 

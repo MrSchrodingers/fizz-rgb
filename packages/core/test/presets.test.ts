@@ -11,10 +11,16 @@ describe('BUILTIN_PRESETS', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('all non-game presets have non-empty key maps', () => {
-    const gameOnlyAnimTypes = ['pong', 'snake', 'tetris', 'matrix-rain', 'breakout', 'fireworks', 'dvd', 'heart-rate', 'equalizer', 'rule30', 'cpu-thermal'];
+  it('all non-stateful presets have non-empty key maps', () => {
+    // Stateful animations generate their frames internally on the daemon —
+    // pattern.keys is empty by design (games, thermal probe, themed cycles).
+    const statefulAnimTypes = [
+      'pong', 'snake', 'tetris', 'matrix-rain', 'breakout',
+      'fireworks', 'dvd', 'heart-rate', 'equalizer', 'rule30',
+      'cpu-thermal', 'minecraft-day', 'aquarium',
+    ];
     for (const p of BUILTIN_PRESETS) {
-      if (p.category === 'game' && gameOnlyAnimTypes.includes(p.pattern.animType)) continue;
+      if (statefulAnimTypes.includes(p.pattern.animType)) continue;
       expect(Object.keys(p.pattern.keys).length).toBeGreaterThan(0);
     }
   });
