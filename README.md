@@ -1,26 +1,39 @@
 # fizz-rgb
 
+<p align="center">
+  <img src="docs/images/banner.svg" alt="fizz-rgb — Linux controller for the Redragon Fizz K617 keyboard" width="100%"/>
+</p>
+
 > 🇧🇷 [Leia em português](README.pt-BR.md)
 
 [![CI](https://github.com/MrSchrodingers/fizz-rgb/actions/workflows/ci.yml/badge.svg)](https://github.com/MrSchrodingers/fizz-rgb/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/MrSchrodingers/fizz-rgb?display_name=tag&sort=semver)](https://github.com/MrSchrodingers/fizz-rgb/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node 22+](https://img.shields.io/badge/node-%3E%3D22-339933?logo=node.js&logoColor=white)](package.json)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.base.json)
-[![Tests: 129](https://img.shields.io/badge/tests-129%20passing-success)](packages)
+[![Tests: 140](https://img.shields.io/badge/tests-140%20passing-success)](packages)
 [![Hardware: K617](https://img.shields.io/badge/hardware-Redragon%20Fizz%20K617-c4302b)](https://www.redragonzone.com/products/redragon-fizz-pro)
 
 Linux RGB controller for the **Redragon Fizz K617** (60% wired mechanical keyboard, USB `258a:0049`, Sinowealth SH68F90A MCU). Fills the gap left by the Windows-only Redragon software.
+
+<p align="center">
+  <img src="docs/images/gui-paint-mode.png" alt="Fizz RGB Electron GUI in paint mode" width="100%"/>
+</p>
 
 ## Highlights
 
 - **Daemon + CLI + Electron GUI** with a 3D model of the keyboard.
 - **8 firmware-native effects** reverse-engineered from USB captures (rainbow, snake, waterfall, sine wave, star twinkle, rainbow blossom, wheel, static).
 - **Per-key direct control** via the Sinodragon protocol (382-byte HID feature report).
-- **12 game animations** running on real hardware at 30 fps — Pong, Snake, Tetris (sideways), Matrix Rain, Breakout, Fireworks, DVD Bouncer, Heart Rate ECG, Equalizer, Rule 30, plus FPS Gamer and MMO Hotkeys presets.
-- **22 built-in presets** (words, shapes, patterns, gradients, themes, games).
+- **17 host-streamed animations** at 30 fps — Pong, Snake, Tetris (sideways), Matrix Rain, Breakout, Fireworks, DVD Bouncer, Heart Rate ECG, Equalizer, Rule 30, CPU thermal heatmap, Minecraft day/night cycle (sun arc + clouds + moon and stars), Aquarium with rising bubbles and a roaming fish — plus the standard `blink`, `chase`, `wave`, `typewriter`, `marquee`, `flag-wave` patterns.
+- **Interactive Pong (`pong-interactive`)** playable from the **physical keyboard** — Tab/Caps/LShift/LCtrl move the paddle, fizzd reads `/dev/input/event*` in parallel with the OS via the udev rule.
+- **60+ built-in presets** across `theme`, `brasil`, `productivity`, `pattern`, `gradient`, `shape`, `word`, `game`, plus user-saved presets.
+- **Global tonality selector** — Original / Vivid / Neon / Pastel / Mono style chips + 0.4×–2.0× vibrancy slider that affects stateful animations too (daemon honours `pattern.vibrancy`).
+- **Animated thumbnails** that mimic each preset's actual frames in real time.
+- **Undo/redo (Ctrl+Z)**, drag-to-paint, color history with 15 curated palettes, status bar, sidebars that collapse below 1400px.
 - **Persistence**: profiles in `~/.config/fizz/profiles.json`, per-key patterns in browser `localStorage`, portable export/import via `.fizzpattern.json`.
-- **System tray**, auto-restore on boot, auto-resume on keyboard reconnect, AppImage build.
-- **129/129 vitest tests** across daemon, CLI, core, and GUI.
+- **System tray**, auto-restore on boot, auto-resume on keyboard reconnect, AppImage published as a release asset.
+- **140/140 vitest tests** across daemon, CLI, core, and GUI.
 
 ## Architecture
 

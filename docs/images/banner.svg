@@ -1,0 +1,185 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" role="img" aria-label="Fizz RGB — Linux controller for the Redragon Fizz K617 keyboard">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#0a0a14"/>
+      <stop offset="100%" stop-color="#15101e"/>
+    </linearGradient>
+
+    <linearGradient id="title" x1="0" x2="1" y1=".5" y2=".5">
+      <stop offset="0%"  stop-color="#ff3bb0"/>
+      <stop offset="50%" stop-color="#bf5aff"/>
+      <stop offset="100%" stop-color="#0adcff"/>
+    </linearGradient>
+
+    <linearGradient id="rgbStrip" x1="0" x2="1" y1=".5" y2=".5">
+      <stop offset="0%"   stop-color="#ff2d55"/>
+      <stop offset="18%"  stop-color="#ff9500"/>
+      <stop offset="36%"  stop-color="#ffd60a"/>
+      <stop offset="54%"  stop-color="#34c759"/>
+      <stop offset="72%"  stop-color="#0a84ff"/>
+      <stop offset="90%"  stop-color="#bf5af2"/>
+      <stop offset="100%" stop-color="#ff2d55"/>
+    </linearGradient>
+
+    <filter id="halo" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+
+    <filter id="textGlow">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- 5x14 keyboard rendered as a symbol so we keep markup compact -->
+    <symbol id="key" viewBox="0 0 60 60">
+      <rect x="3" y="3" width="54" height="54" rx="10" fill="#1c1c28" stroke="#3a3a4c" stroke-width="1.5"/>
+      <rect x="8" y="8" width="44" height="22" rx="6" fill="url(#topShine)"/>
+    </symbol>
+    <linearGradient id="topShine" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity=".10"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="360" fill="url(#bg)"/>
+
+  <!-- Soft halo behind the keyboard -->
+  <g filter="url(#halo)" opacity=".85" transform="translate(80, 80)">
+    <rect x="0" y="180" width="660" height="48" rx="24" fill="url(#rgbStrip)"/>
+  </g>
+
+  <!-- Mini keyboard, 5 rows x 14 cols of cells.
+       Each cell pulses through hue at a phase offset so the wave reads
+       left→right. Markup written by hand for predictability. -->
+  <g transform="translate(80, 90)" font-family="Inter, system-ui, sans-serif">
+    <!-- generate row groups; each cell is 44x44 with 5px gap -->
+    <!-- 5 rows × 14 columns -->
+    <g>
+      <!-- ROW 0 -->
+      <g transform="translate(0, 0)">
+        <g><rect x="0"   y="0" width="44" height="44" rx="7" fill="#ff2d55"><animate attributeName="fill" values="#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55" dur="6s" repeatCount="indefinite"/></rect></g>
+        <g><rect x="49"  y="0" width="44" height="44" rx="7" fill="#ff9500"><animate attributeName="fill" values="#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500" dur="6s" repeatCount="indefinite"/></rect></g>
+        <g><rect x="98"  y="0" width="44" height="44" rx="7" fill="#ffd60a"><animate attributeName="fill" values="#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a" dur="6s" repeatCount="indefinite"/></rect></g>
+        <g><rect x="147" y="0" width="44" height="44" rx="7" fill="#34c759"><animate attributeName="fill" values="#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759" dur="6s" repeatCount="indefinite"/></rect></g>
+        <g><rect x="196" y="0" width="44" height="44" rx="7" fill="#0a84ff"><animate attributeName="fill" values="#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff" dur="6s" repeatCount="indefinite"/></rect></g>
+        <g><rect x="245" y="0" width="44" height="44" rx="7" fill="#bf5af2"><animate attributeName="fill" values="#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2" dur="6s" repeatCount="indefinite"/></rect></g>
+        <g><rect x="294" y="0" width="44" height="44" rx="7" fill="#ff2d55"><animate attributeName="fill" values="#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55" dur="6s" repeatCount="indefinite" begin="-1s"/></rect></g>
+        <g><rect x="343" y="0" width="44" height="44" rx="7" fill="#ff9500"><animate attributeName="fill" values="#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500" dur="6s" repeatCount="indefinite" begin="-1s"/></rect></g>
+        <g><rect x="392" y="0" width="44" height="44" rx="7" fill="#ffd60a"><animate attributeName="fill" values="#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a" dur="6s" repeatCount="indefinite" begin="-1s"/></rect></g>
+        <g><rect x="441" y="0" width="44" height="44" rx="7" fill="#34c759"><animate attributeName="fill" values="#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759" dur="6s" repeatCount="indefinite" begin="-1s"/></rect></g>
+        <g><rect x="490" y="0" width="44" height="44" rx="7" fill="#0a84ff"><animate attributeName="fill" values="#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff" dur="6s" repeatCount="indefinite" begin="-1s"/></rect></g>
+        <g><rect x="539" y="0" width="44" height="44" rx="7" fill="#bf5af2"><animate attributeName="fill" values="#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2" dur="6s" repeatCount="indefinite" begin="-1s"/></rect></g>
+        <g><rect x="588" y="0" width="44" height="44" rx="7" fill="#ff2d55"><animate attributeName="fill" values="#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55" dur="6s" repeatCount="indefinite" begin="-2s"/></rect></g>
+        <g><rect x="637" y="0" width="44" height="44" rx="7" fill="#ff9500"><animate attributeName="fill" values="#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500" dur="6s" repeatCount="indefinite" begin="-2s"/></rect></g>
+        <g><rect x="686" y="0" width="44" height="44" rx="7" fill="#ffd60a"><animate attributeName="fill" values="#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a" dur="6s" repeatCount="indefinite" begin="-2s"/></rect></g>
+      </g>
+
+      <!-- ROW 1 (offset hue phase by 0.5s for diagonal feel) -->
+      <g transform="translate(0, 49)">
+        <g><rect x="0"   y="0" width="44" height="44" rx="7" fill="#0a84ff"><animate attributeName="fill" values="#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff" dur="6s" repeatCount="indefinite" begin="-0.5s"/></rect></g>
+        <g><rect x="49"  y="0" width="44" height="44" rx="7" fill="#bf5af2"><animate attributeName="fill" values="#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2" dur="6s" repeatCount="indefinite" begin="-0.5s"/></rect></g>
+        <g><rect x="98"  y="0" width="44" height="44" rx="7" fill="#ff2d55"><animate attributeName="fill" values="#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55" dur="6s" repeatCount="indefinite" begin="-0.5s"/></rect></g>
+        <g><rect x="147" y="0" width="44" height="44" rx="7" fill="#ff9500"><animate attributeName="fill" values="#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500" dur="6s" repeatCount="indefinite" begin="-0.5s"/></rect></g>
+        <g><rect x="196" y="0" width="44" height="44" rx="7" fill="#ffd60a"><animate attributeName="fill" values="#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a" dur="6s" repeatCount="indefinite" begin="-0.5s"/></rect></g>
+        <g><rect x="245" y="0" width="44" height="44" rx="7" fill="#34c759"><animate attributeName="fill" values="#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759" dur="6s" repeatCount="indefinite" begin="-0.5s"/></rect></g>
+        <g><rect x="294" y="0" width="44" height="44" rx="7" fill="#0a84ff"><animate attributeName="fill" values="#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff" dur="6s" repeatCount="indefinite" begin="-1.5s"/></rect></g>
+        <g><rect x="343" y="0" width="44" height="44" rx="7" fill="#bf5af2"><animate attributeName="fill" values="#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2" dur="6s" repeatCount="indefinite" begin="-1.5s"/></rect></g>
+        <g><rect x="392" y="0" width="44" height="44" rx="7" fill="#ff2d55"><animate attributeName="fill" values="#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55" dur="6s" repeatCount="indefinite" begin="-1.5s"/></rect></g>
+        <g><rect x="441" y="0" width="44" height="44" rx="7" fill="#ff9500"><animate attributeName="fill" values="#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500" dur="6s" repeatCount="indefinite" begin="-1.5s"/></rect></g>
+        <g><rect x="490" y="0" width="44" height="44" rx="7" fill="#ffd60a"><animate attributeName="fill" values="#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a" dur="6s" repeatCount="indefinite" begin="-1.5s"/></rect></g>
+        <g><rect x="539" y="0" width="44" height="44" rx="7" fill="#34c759"><animate attributeName="fill" values="#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759" dur="6s" repeatCount="indefinite" begin="-1.5s"/></rect></g>
+        <g><rect x="588" y="0" width="44" height="44" rx="7" fill="#0a84ff"><animate attributeName="fill" values="#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff" dur="6s" repeatCount="indefinite" begin="-2.5s"/></rect></g>
+        <g><rect x="637" y="0" width="44" height="44" rx="7" fill="#bf5af2"><animate attributeName="fill" values="#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2" dur="6s" repeatCount="indefinite" begin="-2.5s"/></rect></g>
+        <g><rect x="686" y="0" width="44" height="44" rx="7" fill="#ff2d55"><animate attributeName="fill" values="#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55" dur="6s" repeatCount="indefinite" begin="-2.5s"/></rect></g>
+      </g>
+
+      <!-- ROW 2 (1s offset) -->
+      <g transform="translate(0, 98)">
+        <g><rect x="0"   y="0" width="44" height="44" rx="7" fill="#bf5af2"><animate attributeName="fill" values="#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2" dur="6s" repeatCount="indefinite" begin="-1s"/></rect></g>
+        <g><rect x="49"  y="0" width="44" height="44" rx="7" fill="#ff2d55"><animate attributeName="fill" values="#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55" dur="6s" repeatCount="indefinite" begin="-1s"/></rect></g>
+        <g><rect x="98"  y="0" width="44" height="44" rx="7" fill="#ff9500"><animate attributeName="fill" values="#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500" dur="6s" repeatCount="indefinite" begin="-1s"/></rect></g>
+        <g><rect x="147" y="0" width="44" height="44" rx="7" fill="#ffd60a"><animate attributeName="fill" values="#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a" dur="6s" repeatCount="indefinite" begin="-1s"/></rect></g>
+        <g><rect x="196" y="0" width="44" height="44" rx="7" fill="#34c759"><animate attributeName="fill" values="#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759" dur="6s" repeatCount="indefinite" begin="-1s"/></rect></g>
+        <g><rect x="245" y="0" width="44" height="44" rx="7" fill="#0a84ff"><animate attributeName="fill" values="#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff" dur="6s" repeatCount="indefinite" begin="-1s"/></rect></g>
+        <g><rect x="294" y="0" width="44" height="44" rx="7" fill="#bf5af2"><animate attributeName="fill" values="#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2" dur="6s" repeatCount="indefinite" begin="-2s"/></rect></g>
+        <g><rect x="343" y="0" width="44" height="44" rx="7" fill="#ff2d55"><animate attributeName="fill" values="#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55" dur="6s" repeatCount="indefinite" begin="-2s"/></rect></g>
+        <g><rect x="392" y="0" width="44" height="44" rx="7" fill="#ff9500"><animate attributeName="fill" values="#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500" dur="6s" repeatCount="indefinite" begin="-2s"/></rect></g>
+        <g><rect x="441" y="0" width="44" height="44" rx="7" fill="#ffd60a"><animate attributeName="fill" values="#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a" dur="6s" repeatCount="indefinite" begin="-2s"/></rect></g>
+        <g><rect x="490" y="0" width="44" height="44" rx="7" fill="#34c759"><animate attributeName="fill" values="#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759" dur="6s" repeatCount="indefinite" begin="-2s"/></rect></g>
+        <g><rect x="539" y="0" width="44" height="44" rx="7" fill="#0a84ff"><animate attributeName="fill" values="#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff" dur="6s" repeatCount="indefinite" begin="-2s"/></rect></g>
+        <g><rect x="588" y="0" width="44" height="44" rx="7" fill="#bf5af2"><animate attributeName="fill" values="#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2" dur="6s" repeatCount="indefinite" begin="-3s"/></rect></g>
+        <g><rect x="637" y="0" width="44" height="44" rx="7" fill="#ff2d55"><animate attributeName="fill" values="#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55" dur="6s" repeatCount="indefinite" begin="-3s"/></rect></g>
+        <g><rect x="686" y="0" width="44" height="44" rx="7" fill="#ff9500"><animate attributeName="fill" values="#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500" dur="6s" repeatCount="indefinite" begin="-3s"/></rect></g>
+      </g>
+
+      <!-- ROW 3 (1.5s offset) -->
+      <g transform="translate(0, 147)">
+        <g><rect x="0"   y="0" width="44" height="44" rx="7" fill="#34c759"><animate attributeName="fill" values="#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759" dur="6s" repeatCount="indefinite" begin="-1.5s"/></rect></g>
+        <g><rect x="49"  y="0" width="44" height="44" rx="7" fill="#0a84ff"><animate attributeName="fill" values="#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff" dur="6s" repeatCount="indefinite" begin="-1.5s"/></rect></g>
+        <g><rect x="98"  y="0" width="44" height="44" rx="7" fill="#bf5af2"><animate attributeName="fill" values="#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2" dur="6s" repeatCount="indefinite" begin="-1.5s"/></rect></g>
+        <g><rect x="147" y="0" width="44" height="44" rx="7" fill="#ff2d55"><animate attributeName="fill" values="#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55" dur="6s" repeatCount="indefinite" begin="-1.5s"/></rect></g>
+        <g><rect x="196" y="0" width="44" height="44" rx="7" fill="#ff9500"><animate attributeName="fill" values="#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500" dur="6s" repeatCount="indefinite" begin="-1.5s"/></rect></g>
+        <g><rect x="245" y="0" width="44" height="44" rx="7" fill="#ffd60a"><animate attributeName="fill" values="#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a" dur="6s" repeatCount="indefinite" begin="-1.5s"/></rect></g>
+        <g><rect x="294" y="0" width="44" height="44" rx="7" fill="#34c759"><animate attributeName="fill" values="#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759" dur="6s" repeatCount="indefinite" begin="-2.5s"/></rect></g>
+        <g><rect x="343" y="0" width="44" height="44" rx="7" fill="#0a84ff"><animate attributeName="fill" values="#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff" dur="6s" repeatCount="indefinite" begin="-2.5s"/></rect></g>
+        <g><rect x="392" y="0" width="44" height="44" rx="7" fill="#bf5af2"><animate attributeName="fill" values="#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2" dur="6s" repeatCount="indefinite" begin="-2.5s"/></rect></g>
+        <g><rect x="441" y="0" width="44" height="44" rx="7" fill="#ff2d55"><animate attributeName="fill" values="#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55" dur="6s" repeatCount="indefinite" begin="-2.5s"/></rect></g>
+        <g><rect x="490" y="0" width="44" height="44" rx="7" fill="#ff9500"><animate attributeName="fill" values="#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500" dur="6s" repeatCount="indefinite" begin="-2.5s"/></rect></g>
+        <g><rect x="539" y="0" width="44" height="44" rx="7" fill="#ffd60a"><animate attributeName="fill" values="#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a" dur="6s" repeatCount="indefinite" begin="-2.5s"/></rect></g>
+        <g><rect x="588" y="0" width="44" height="44" rx="7" fill="#34c759"><animate attributeName="fill" values="#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759" dur="6s" repeatCount="indefinite" begin="-3.5s"/></rect></g>
+        <g><rect x="637" y="0" width="44" height="44" rx="7" fill="#0a84ff"><animate attributeName="fill" values="#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff" dur="6s" repeatCount="indefinite" begin="-3.5s"/></rect></g>
+        <g><rect x="686" y="0" width="44" height="44" rx="7" fill="#bf5af2"><animate attributeName="fill" values="#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2" dur="6s" repeatCount="indefinite" begin="-3.5s"/></rect></g>
+      </g>
+
+      <!-- ROW 4 (2s offset, includes spacebar — wider middle cell) -->
+      <g transform="translate(0, 196)">
+        <g><rect x="0"   y="0" width="44" height="44" rx="7" fill="#ffd60a"><animate attributeName="fill" values="#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a" dur="6s" repeatCount="indefinite" begin="-2s"/></rect></g>
+        <g><rect x="49"  y="0" width="44" height="44" rx="7" fill="#34c759"><animate attributeName="fill" values="#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759" dur="6s" repeatCount="indefinite" begin="-2s"/></rect></g>
+        <g><rect x="98"  y="0" width="44" height="44" rx="7" fill="#0a84ff"><animate attributeName="fill" values="#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff" dur="6s" repeatCount="indefinite" begin="-2s"/></rect></g>
+        <g><rect x="147" y="0" width="338" height="44" rx="7" fill="#bf5af2"><animate attributeName="fill" values="#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2" dur="6s" repeatCount="indefinite" begin="-2s"/></rect></g>
+        <g><rect x="490" y="0" width="44" height="44" rx="7" fill="#ff2d55"><animate attributeName="fill" values="#ff2d55;#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55" dur="6s" repeatCount="indefinite" begin="-3s"/></rect></g>
+        <g><rect x="539" y="0" width="44" height="44" rx="7" fill="#ff9500"><animate attributeName="fill" values="#ff9500;#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500" dur="6s" repeatCount="indefinite" begin="-3s"/></rect></g>
+        <g><rect x="588" y="0" width="44" height="44" rx="7" fill="#ffd60a"><animate attributeName="fill" values="#ffd60a;#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a" dur="6s" repeatCount="indefinite" begin="-3s"/></rect></g>
+        <g><rect x="637" y="0" width="44" height="44" rx="7" fill="#34c759"><animate attributeName="fill" values="#34c759;#0a84ff;#bf5af2;#ff2d55;#ff9500;#ffd60a;#34c759" dur="6s" repeatCount="indefinite" begin="-3s"/></rect></g>
+      </g>
+    </g>
+  </g>
+
+  <!-- Title block on the right -->
+  <g transform="translate(820, 0)" font-family="Inter, system-ui, sans-serif">
+    <text x="0" y="120" font-size="88" font-weight="900" fill="url(#title)" filter="url(#textGlow)" letter-spacing="-3">fizz-rgb</text>
+    <text x="2" y="172" font-size="22" font-weight="600" fill="#e6e6ec" letter-spacing="0.5">
+      Linux RGB controller
+    </text>
+    <text x="2" y="200" font-size="18" font-weight="400" fill="#b4b4c4">
+      Redragon Fizz K617 · 60 % mechanical
+    </text>
+
+    <g transform="translate(0, 230)">
+      <rect x="-4" y="-18" width="320" height="34" rx="17" fill="#1a1a26" stroke="#3a3a4c" stroke-width="1"/>
+      <text x="14" y="4" font-size="13" font-weight="500" fill="#0adcff">
+        ▣ daemon
+      </text>
+      <text x="86" y="4" font-size="13" font-weight="500" fill="#bf5aff">
+        ▣ Electron GUI
+      </text>
+      <text x="200" y="4" font-size="13" font-weight="500" fill="#ff3bb0">
+        ▣ 60+ presets
+      </text>
+    </g>
+
+    <g transform="translate(0, 286)">
+      <rect x="-4" y="-18" width="320" height="34" rx="17" fill="#1a1a26" stroke="#3a3a4c" stroke-width="1"/>
+      <text x="14" y="4" font-size="13" font-weight="500" fill="#0adcff">
+        🏓 interactive Pong
+      </text>
+      <text x="158" y="4" font-size="13" font-weight="500" fill="#34c759">
+        ⛏ Minecraft day/night
+      </text>
+    </g>
+  </g>
+</svg>
