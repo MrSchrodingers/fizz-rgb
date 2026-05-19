@@ -13,6 +13,10 @@
   "build": {
     "appId": "br.com.debt.fizz-rgb",
     "productName": "Fizz RGB",
+    "artifactName": "fizz-rgb-${version}.${ext}",
+    "electronVersion": "42.1.0",
+    "nodeGypRebuild": false,
+    "buildDependenciesFromSource": false,
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
