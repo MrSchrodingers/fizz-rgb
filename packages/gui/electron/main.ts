@@ -108,6 +108,7 @@ ipcMain.handle('fizz:perkeyStartPattern', (_e, pattern) =>
   daemon.call('perkey.startPattern', pattern));
 ipcMain.handle('fizz:perkeyStopPattern', () =>
   daemon.call('perkey.stopPattern', {}));
+ipcMain.handle('fizz:perkeyCurrent', () => daemon.call('perkey.current', {}));
 
 // === Daemon notifications → forward to renderer ===
 daemon.on('effect.changed', (params) => {
@@ -115,6 +116,9 @@ daemon.on('effect.changed', (params) => {
 });
 daemon.on('device.changed', (params) => {
   mainWindow?.webContents.send('fizz:deviceChanged', params);
+});
+daemon.on('perkey.changed', (params) => {
+  mainWindow?.webContents.send('fizz:perkeyChanged', params);
 });
 
 function setupTray() {

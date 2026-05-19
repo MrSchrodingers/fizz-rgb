@@ -129,6 +129,20 @@ export const RpcMethods = {
     params: z.object({}).strict(),
     result: z.object({ ok: z.literal(true) }),
   },
+  'perkey.current': {
+    params: z.object({}).strict(),
+    result: z.union([
+      z.object({ mode: z.literal('off') }),
+      z.object({
+        mode: z.literal('static'),
+        colors: z.record(z.string(), HexColorSchema),
+      }),
+      z.object({
+        mode: z.literal('pattern'),
+        pattern: PatternSchema,
+      }),
+    ]),
+  },
 } as const;
 
 export type RpcMethodName = keyof typeof RpcMethods;

@@ -14,6 +14,8 @@ export interface FizzApi {
   profileDelete(name: string): Promise<void>;
   subscribeEffectChanged(handler: (cur: any) => void): () => void;
   subscribeDeviceChanged(handler: (s: any) => void): () => void;
+  subscribePerkeyChanged(handler: (s: PerkeyState) => void): () => void;
+  perkeyCurrent(): Promise<PerkeyState>;
   perkeySet(colors: Record<string, string>): Promise<void>;
   perkeyStartPattern(pattern: {
     keys: Record<string, string>;
@@ -23,6 +25,16 @@ export interface FizzApi {
   }): Promise<void>;
   perkeyStopPattern(): Promise<void>;
 }
+
+export type PerkeyState =
+  | { mode: 'off' }
+  | { mode: 'static'; colors: Record<string, string> }
+  | { mode: 'pattern'; pattern: {
+      keys: Record<string, string>;
+      animType: string;
+      animSpeed: number;
+      sequence?: number[];
+    } };
 
 declare global {
   interface Window {

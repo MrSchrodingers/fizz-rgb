@@ -12,7 +12,7 @@ export function ParametersPanel({ onApply }: { onApply: () => void }) {
   if (selected === 'solid-color') {
     return (
       <section className="p-6 flex flex-col gap-4 min-w-[260px]">
-        <h3 className="text-xs uppercase tracking-wider text-zinc-500">Solid Color</h3>
+        <h3 className="text-xs uppercase tracking-wider text-zinc-400">Solid Color</h3>
         <ColorPickerField value={solidColor} onChange={setSolidColor} />
         <button
           type="button"
@@ -28,7 +28,7 @@ export function ParametersPanel({ onApply }: { onApply: () => void }) {
   const meta = EFFECT_META[selected];
   return (
     <section className="p-6 flex flex-col gap-5 min-w-[260px]">
-      <h3 className="text-xs uppercase tracking-wider text-zinc-500">{meta.label}</h3>
+      <h3 className="text-xs uppercase tracking-wider text-zinc-400">{meta.label}</h3>
       <p className="text-sm text-zinc-400 -mt-3">{meta.description}</p>
 
       {meta.acceptsColor && (

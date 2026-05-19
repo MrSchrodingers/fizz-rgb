@@ -40,6 +40,7 @@ export class IpcServer {
       });
     });
     this.opts.engine.onChange((cur) => setImmediate(() => this.broadcast('effect.changed', cur)));
+    this.opts.engine.onPerkeyChange((state) => setImmediate(() => this.broadcast('perkey.changed', state)));
     this.opts.hid.on('connect', () => setImmediate(() => this.broadcast('device.changed', { connected: true })));
     this.opts.hid.on('disconnect', () => setImmediate(() => this.broadcast('device.changed', { connected: false })));
   }
@@ -178,6 +179,9 @@ export class IpcServer {
       case 'perkey.stopPattern': {
         await engine.stopPattern();
         return { ok: true };
+      }
+      case 'perkey.current': {
+        return engine.currentPerkey();
       }
     }
   }

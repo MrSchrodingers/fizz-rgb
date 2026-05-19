@@ -13,7 +13,7 @@ export function EffectSidebar() {
 
   return (
     <aside className="flex flex-col gap-1 w-56 px-3 py-4 border-r border-zinc-800 overflow-y-auto">
-      <h2 className="text-xs uppercase tracking-wider text-zinc-500 px-2 mb-2">Mode</h2>
+      <h2 className="text-xs uppercase tracking-wider text-zinc-400 px-2 mb-2">Mode</h2>
       <button
         type="button"
         onClick={() => setPaintMode(paintMode === 'paint' ? 'effect' : 'paint')}
@@ -29,7 +29,7 @@ export function EffectSidebar() {
       </button>
 
       <div className={cn('flex flex-col gap-1', paintMode === 'paint' && 'opacity-40 pointer-events-none')}>
-        <h2 className="text-xs uppercase tracking-wider text-zinc-500 px-2 mt-4 mb-2">Color</h2>
+        <h2 className="text-xs uppercase tracking-wider text-zinc-400 px-2 mt-4 mb-2">Color</h2>
         <button
           type="button"
           onClick={() => setSelected('solid-color')}
@@ -44,7 +44,7 @@ export function EffectSidebar() {
           Solid Color
         </button>
 
-        <h2 className="text-xs uppercase tracking-wider text-zinc-500 px-2 mt-4 mb-1">
+        <h2 className="text-xs uppercase tracking-wider text-zinc-400 px-2 mt-4 mb-1">
           Firmware Effects
         </h2>
         <p className="text-[10px] text-emerald-400/70 px-2 mb-2 leading-tight">
@@ -69,7 +69,7 @@ export function EffectSidebar() {
           );
         })}
 
-        <p className="text-xs text-zinc-600 px-2 mt-6 leading-relaxed">
+        <p className="text-xs text-zinc-500 px-2 mt-6 leading-relaxed">
           Host-side effects (audio-reactive, etc.) land in Phase 3.
         </p>
       </div>

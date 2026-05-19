@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Brush, Trash2, MousePointer2, CheckSquare, Save, Zap, StopCircle } from 'lucide-react';
+import { Brush, Trash2, MousePointer2, CheckSquare, Save, Zap, StopCircle, Undo2, Redo2, PenLine, Radio } from 'lucide-react';
 import { usePaintStore } from '../stores/paintStore.js';
+import { useHistoryStore } from '../stores/historyStore.js';
 import { ColorPickerField } from './ColorPickerField.js';
 import type { AnimType } from '../stores/paintStore.js';
 
@@ -34,6 +35,10 @@ export function PaintToolbar({ onSavePattern }: Props) {
   const lastSequence = usePaintStore((s) => s.lastSequence);
   const setAnimType = usePaintStore((s) => s.setAnimType);
   const setAnimSpeed = usePaintStore((s) => s.setAnimSpeed);
+  const directPaintMode = usePaintStore((s) => s.directPaintMode);
+  const setDirectPaintMode = usePaintStore((s) => s.setDirectPaintMode);
+  const tapToTestMode = usePaintStore((s) => s.tapToTestMode);
+  const setTapToTestMode = usePaintStore((s) => s.setTapToTestMode);
 
   const handleAnimTypeChange = async (newType: AnimType) => {
     setAnimType(newType);
@@ -82,6 +87,48 @@ export function PaintToolbar({ onSavePattern }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [text, setText] = useState('');
   const [streaming, setStreaming] = useState(false);
+
+  // Subscribe to history so the Undo/Redo buttons disable when no history.
+  const canUndo = useHistoryStore((s) => s.past.length > 1);
+  const canRedo = useHistoryStore((s) => s.future.length > 0);
+
+  const doUndo = async () => {
+    const snap = useHistoryStore.getState().undo();
+    if (!snap) return;
+    usePaintStore.getState().applySnapshot(snap);
+    if (!window.fizz) return;
+    const colors: Record<string, string> = {};
+    snap.keyColors.forEach((hex, idx) => { colors[String(idx)] = hex; });
+    if (snap.animType === 'solid') {
+      window.fizz.perkeySet(colors).catch(() => {});
+    } else {
+      window.fizz.perkeyStartPattern({
+        keys: colors,
+        animType: snap.animType as AnimType,
+        animSpeed: snap.animSpeed,
+        ...(snap.lastSequence.length > 0 ? { sequence: snap.lastSequence } : {}),
+      }).catch(() => {});
+    }
+  };
+
+  const doRedo = async () => {
+    const snap = useHistoryStore.getState().redo();
+    if (!snap) return;
+    usePaintStore.getState().applySnapshot(snap);
+    if (!window.fizz) return;
+    const colors: Record<string, string> = {};
+    snap.keyColors.forEach((hex, idx) => { colors[String(idx)] = hex; });
+    if (snap.animType === 'solid') {
+      window.fizz.perkeySet(colors).catch(() => {});
+    } else {
+      window.fizz.perkeyStartPattern({
+        keys: colors,
+        animType: snap.animType as AnimType,
+        animSpeed: snap.animSpeed,
+        ...(snap.lastSequence.length > 0 ? { sequence: snap.lastSequence } : {}),
+      }).catch(() => {});
+    }
+  };
 
   const buildColorRecord = (colors: Map<number, string>): Record<string, string> => {
     const record: Record<string, string> = {};
@@ -160,6 +207,27 @@ export function PaintToolbar({ onSavePattern }: Props) {
     <div className="border-b border-zinc-800 bg-zinc-950/60">
       {/* Main toolbar row */}
       <div className="relative flex items-center gap-2 px-4 py-2">
+        <button
+          type="button"
+          onClick={() => void doUndo()}
+          disabled={!canUndo}
+          title="Undo (Ctrl+Z)"
+          aria-label="Undo"
+          className="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-300 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Undo2 className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => void doRedo()}
+          disabled={!canRedo}
+          title="Redo (Ctrl+Shift+Z)"
+          aria-label="Redo"
+          className="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-300 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Redo2 className="w-4 h-4" />
+        </button>
+
         <span className="text-xs text-zinc-400 mr-2">
           {selected.size} key{selected.size === 1 ? '' : 's'} selected
         </span>
@@ -201,7 +269,7 @@ export function PaintToolbar({ onSavePattern }: Props) {
           type="button"
           onClick={() => void handlePaintTextAndSend()}
           disabled={!text.trim()}
-          className="px-3 py-1.5 rounded-md bg-indigo-500/20 hover:bg-indigo-500/30 disabled:opacity-40 text-indigo-200 text-sm"
+          className="px-3 py-1.5 rounded-md bg-indigo-500/20 hover:bg-indigo-500/30 disabled:opacity-50 disabled:cursor-not-allowed text-indigo-200 text-sm"
         >
           Paint text
         </button>
@@ -210,9 +278,37 @@ export function PaintToolbar({ onSavePattern }: Props) {
           type="button"
           onClick={() => void handlePaintSelectedAndSend()}
           disabled={selected.size === 0}
-          className="px-3 py-1.5 rounded-md bg-fuchsia-500 hover:bg-fuchsia-400 disabled:bg-zinc-800 disabled:text-zinc-500 text-zinc-950 font-medium text-sm transition"
+          className="px-3 py-1.5 rounded-md bg-fuchsia-500 hover:bg-fuchsia-400 disabled:opacity-50 disabled:cursor-not-allowed text-zinc-950 font-medium text-sm transition"
         >
           Paint selected
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setDirectPaintMode(!directPaintMode)}
+          aria-pressed={directPaintMode}
+          title="Drag-paint: click+arrasta nas teclas pra pintar direto (Alt = erase)"
+          className={cn(
+            'flex items-center gap-1 px-2 py-1.5 rounded-md text-sm transition',
+            directPaintMode ? 'bg-fuchsia-500/20 text-fuchsia-200 ring-1 ring-fuchsia-500/60' : 'hover:bg-zinc-800 text-zinc-400',
+          )}
+        >
+          <PenLine className="w-3.5 h-3.5" />
+          Drag-paint
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setTapToTestMode(!tapToTestMode)}
+          aria-pressed={tapToTestMode}
+          title="Tap-to-test: clica numa tecla virtual e ela pisca no hardware por 250ms"
+          className={cn(
+            'flex items-center gap-1 px-2 py-1.5 rounded-md text-sm transition',
+            tapToTestMode ? 'bg-cyan-500/20 text-cyan-200 ring-1 ring-cyan-500/60' : 'hover:bg-zinc-800 text-zinc-400',
+          )}
+        >
+          <Radio className="w-3.5 h-3.5" />
+          Tap-test
         </button>
 
         <button
@@ -246,7 +342,7 @@ export function PaintToolbar({ onSavePattern }: Props) {
           type="button"
           onClick={() => void handleSendToHardware()}
           disabled={keyColors.size === 0}
-          className="flex items-center gap-1 px-2 py-1.5 rounded-md hover:bg-cyan-500/10 hover:text-cyan-300 disabled:opacity-40 text-zinc-400 text-sm"
+          className="flex items-center gap-1 px-2 py-1.5 rounded-md hover:bg-cyan-500/10 hover:text-cyan-300 disabled:opacity-50 disabled:cursor-not-allowed text-zinc-400 text-sm"
           title={animType === 'solid' ? 'Push current pattern to keyboard LEDs' : 'Start streaming animation to keyboard LEDs'}
         >
           <Zap className="w-3.5 h-3.5" />

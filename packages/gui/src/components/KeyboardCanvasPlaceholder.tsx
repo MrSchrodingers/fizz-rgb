@@ -8,8 +8,8 @@ export function KeyboardCanvasPlaceholder() {
       <div className="text-center">
         <div className="text-zinc-500 text-sm mb-2">3D keyboard preview</div>
         <div className="text-zinc-700 text-xs">arrives in Batch 3</div>
-        <div className="mt-6 text-xs font-mono text-zinc-600">selected: {selected}</div>
-        {current && <div className="text-xs font-mono text-zinc-600">running: {current.name}</div>}
+        <div className="mt-6 text-xs font-mono text-zinc-500">selected: {selected}</div>
+        {current && <div className="text-xs font-mono text-zinc-500">running: {current.name}</div>}
       </div>
     </div>
   );

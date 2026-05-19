@@ -190,7 +190,7 @@ export function PresetGallery({
       {/* Preset list */}
       <div className="flex-1 overflow-y-auto px-2 py-2">
         {allPresets.length === 0 && (
-          <p className="text-zinc-600 text-xs px-2 py-4 text-center">
+          <p className="text-zinc-500 text-xs px-2 py-4 text-center">
             Nenhum preset nessa categoria.
           </p>
         )}

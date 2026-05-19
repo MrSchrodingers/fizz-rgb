@@ -15,6 +15,31 @@ html, body, #root {
   to   { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes pulse-trail {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(1.4); }
+}
+
 .animate-fade-in {
   animation: fade-in 0.2s ease-out forwards;
+}
+
+/* Global focus-visible for keyboard navigation — buttons/inputs/anchors. */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid rgb(232 121 249); /* fuchsia-400 */
+  outline-offset: 2px;
+}
+
+/* Reduce motion for users that ask for it. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

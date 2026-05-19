@@ -30,7 +30,7 @@ export function NamePromptModal({ title, defaultValue = '', onConfirm, onCancel 
         />
         <div className="flex justify-end gap-2 mt-4">
           <button onClick={onCancel} className="px-3 py-1.5 text-sm rounded hover:bg-zinc-800 text-zinc-400">Cancelar</button>
-          <button onClick={() => value.trim() && onConfirm(value.trim())} disabled={!value.trim()} className="px-3 py-1.5 text-sm rounded bg-fuchsia-500 hover:bg-fuchsia-400 disabled:bg-zinc-700 disabled:text-zinc-500 text-zinc-950 font-medium">OK</button>
+          <button onClick={() => value.trim() && onConfirm(value.trim())} disabled={!value.trim()} className="px-3 py-1.5 text-sm rounded bg-fuchsia-500 hover:bg-fuchsia-400 disabled:opacity-50 disabled:cursor-not-allowed text-zinc-950 font-medium">OK</button>
         </div>
       </div>
     </div>

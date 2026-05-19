@@ -14,6 +14,26 @@ export interface CurrentEffect {
 
 type Listener = (cur: CurrentEffect | null) => void;
 
+/** Snapshot of the host-streamed per-key state for live mirroring in GUIs.
+ *  - 'pattern' = an animated stream (chase/wave/games/etc.) is running
+ *  - 'static'  = a frozen color map sent via setPerKey
+ *  - 'off'     = no perkey activity; firmware effect (or none) owns the LEDs
+ */
+export type PerkeyState =
+  | { mode: 'pattern'; pattern: Pattern }
+  | { mode: 'static'; colors: Record<string, string> }
+  | { mode: 'off' };
+
+type PerkeyListener = (state: PerkeyState) => void;
+
+function colorMapToHexRecord(colors: Map<number, Color>): Record<string, string> {
+  const out: Record<string, string> = {};
+  colors.forEach((c, idx) => {
+    out[String(idx)] = '#' + [c.r, c.g, c.b].map((n) => n.toString(16).padStart(2, '0')).join('');
+  });
+  return out;
+}
+
 // ─── Pong game engine ────────────────────────────────────────────────────────
 
 const PADDLE_LEN = 2;
@@ -890,12 +910,29 @@ export class EffectEngine {
 
   onChange(listener: Listener): void { this.listeners.push(listener); }
 
+  private perkeyListeners: PerkeyListener[] = [];
+  onPerkeyChange(listener: PerkeyListener): void { this.perkeyListeners.push(listener); }
+  private notifyPerkey(s: PerkeyState): void {
+    for (const l of this.perkeyListeners) {
+      try { l(s); } catch (err) { log.warn({ err }, 'perkey listener threw'); }
+    }
+  }
+  /** Current host-side perkey snapshot — used by clients to mirror state. */
+  currentPerkey(): PerkeyState {
+    if (this.currentPattern) return { mode: 'pattern', pattern: this.currentPattern };
+    if (this.lastPerKeyColors && this.lastPerKeyColors.size > 0) {
+      return { mode: 'static', colors: colorMapToHexRecord(this.lastPerKeyColors) };
+    }
+    return { mode: 'off' };
+  }
+
   stopStreamLoop(): void {
     if (this.streamInterval) {
       clearInterval(this.streamInterval);
       this.streamInterval = null;
       this.currentPattern = null;
       log.info('stream stopped');
+      this.notifyPerkey({ mode: 'off' });
     }
   }
 
@@ -941,6 +978,11 @@ export class EffectEngine {
     this.state = null; // caller owns per-key state; daemon tracks nothing for now
     log.info({ keys: colors.size }, 'static frame sent (perkey.set)');
     this.notify();
+    this.notifyPerkey(
+      colors.size === 0
+        ? { mode: 'off' }
+        : { mode: 'static', colors: colorMapToHexRecord(colors) },
+    );
   }
 
   async startPattern(pattern: Pattern): Promise<void> {
@@ -950,6 +992,7 @@ export class EffectEngine {
     this.lastNamedEffect = null;
     this.currentPattern = pattern;
     this.streamStart = performance.now();
+    this.notifyPerkey({ mode: 'pattern', pattern });
 
     if (pattern.animType === 'pong') {
       const game = new PongEngine();

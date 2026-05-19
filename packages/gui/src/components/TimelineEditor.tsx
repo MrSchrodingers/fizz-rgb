@@ -101,7 +101,7 @@ export function TimelineEditor() {
   return (
     <div className="border-t border-zinc-800 bg-zinc-950/80 px-4 py-3">
       <div className="flex items-center gap-3 mb-2">
-        <h3 className="text-xs uppercase tracking-wider text-zinc-500 font-medium">Timeline Editor</h3>
+        <h3 className="text-xs uppercase tracking-wider text-zinc-400 font-medium">Timeline Editor</h3>
         <div className="flex gap-1">
           <button
             type="button"
@@ -134,14 +134,14 @@ export function TimelineEditor() {
             className="w-12 px-1 py-0.5 bg-zinc-900 border border-zinc-700 rounded text-xs"
           />
         </label>
-        <span className="text-xs text-zinc-600 ml-auto">
+        <span className="text-xs text-zinc-500 ml-auto">
           {frames.length} frame{frames.length !== 1 ? 's' : ''}
         </span>
       </div>
 
       <div className="flex gap-1.5 overflow-x-auto pb-1">
         {frames.length === 0 && (
-          <p className="text-xs text-zinc-600 py-2">
+          <p className="text-xs text-zinc-500 py-2">
             Pinta o teclado, depois clica "Add frame" pra capturar.
           </p>
         )}

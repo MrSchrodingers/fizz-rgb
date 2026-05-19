@@ -16,6 +16,11 @@ import { useEffectStore } from './stores/effectStore.js';
 import { useProfileStore } from './stores/profileStore.js';
 import { usePaintStore } from './stores/paintStore.js';
 import type { AnimType } from './stores/paintStore.js';
+import { useHistoryStore } from './stores/historyStore.js';
+import { useUIStore } from './stores/uiStore.js';
+import { useMediaQuery } from './lib/useMediaQuery.js';
+import { StatusBar } from './components/StatusBar.js';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { Preset, Profile } from '@fizz/core';
 
 export default function App() {
@@ -85,8 +90,52 @@ export default function App() {
     const unsubDevice = window.fizz.subscribeDeviceChanged((s) => {
       setDeviceStatus({ connected: s.connected, vid: 0x258a, pid: 0x0049 });
     });
-    return () => { unsubEffect(); unsubDevice(); };
+    const unsubPerkey = window.fizz.subscribePerkeyChanged((state) => {
+      hydrateFromPerkeyState(state);
+    });
+
+    // Initial hydrate: when GUI opens, sync to whatever the daemon is doing
+    // right now (covers the CLI-changed-it-while-GUI-was-closed case).
+    window.fizz.perkeyCurrent().then((state) => {
+      if (state.mode !== 'off') hydrateFromPerkeyState(state);
+    }).catch(() => { /* daemon offline; banner already shows it */ });
+
+    return () => { unsubEffect(); unsubDevice(); unsubPerkey(); };
   }, [setCurrent, setDeviceStatus]);
+
+  function hydrateFromPerkeyState(state: import('./types/window.js').PerkeyState) {
+    if (state.mode === 'off') {
+      // Don't wipe local edits on a transient 'off' — daemon emits this
+      // when streaming stops, but the user may still be authoring. Just
+      // clear the activePresetId flag.
+      usePaintStore.setState({ activePresetId: null });
+      return;
+    }
+    if (state.mode === 'static') {
+      const next = new Map<number, string>();
+      for (const [k, v] of Object.entries(state.colors)) next.set(Number(k), v);
+      usePaintStore.setState({
+        keyColors: next,
+        animType: 'solid',
+        mode: 'paint',
+      });
+      return;
+    }
+    // 'pattern'
+    const next = new Map<number, string>();
+    for (const [k, v] of Object.entries(state.pattern.keys)) next.set(Number(k), v);
+    const validAnimTypes: AnimType[] = ['solid', 'blink', 'chase', 'wave', 'typewriter', 'marquee', 'flag-wave', 'pong', 'snake', 'tetris', 'matrix-rain', 'breakout', 'fireworks', 'dvd', 'heart-rate', 'equalizer', 'rule30'];
+    const animType: AnimType = validAnimTypes.includes(state.pattern.animType as AnimType)
+      ? (state.pattern.animType as AnimType)
+      : 'solid';
+    usePaintStore.setState({
+      keyColors: next,
+      animType,
+      animSpeed: state.pattern.animSpeed,
+      lastSequence: state.pattern.sequence ?? [],
+      mode: 'paint',
+    });
+  }
 
   // Auto-save current paint state to localStorage (debounced 500ms).
   // IMPORTANT: subscribe to atomic fields individually — a Zustand selector
@@ -161,6 +210,41 @@ export default function App() {
       }, 1500);
     } catch { /* ignore */ }
   }, []); // run once on mount
+
+  // Global keyboard shortcuts: Ctrl+Z undo, Ctrl+Shift+Z / Ctrl+Y redo,
+  // Ctrl+A select all (paint mode), Esc clear selection.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Ignore when typing in an input/textarea.
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        const snap = useHistoryStore.getState().undo();
+        if (snap) {
+          usePaintStore.getState().applySnapshot(snap);
+          pushSnapshotToHardware(snap);
+        }
+        e.preventDefault();
+      } else if (mod && ((e.key.toLowerCase() === 'z' && e.shiftKey) || e.key.toLowerCase() === 'y')) {
+        const snap = useHistoryStore.getState().redo();
+        if (snap) {
+          usePaintStore.getState().applySnapshot(snap);
+          pushSnapshotToHardware(snap);
+        }
+        e.preventDefault();
+      } else if (mod && e.key.toLowerCase() === 'a' && usePaintStore.getState().mode === 'paint') {
+        usePaintStore.getState().selectAll();
+        e.preventDefault();
+      } else if (e.key === 'Escape' && usePaintStore.getState().mode === 'paint') {
+        usePaintStore.getState().clearSelection();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   async function handleApply() {
     if (!window.fizz) return;
@@ -324,6 +408,27 @@ export default function App() {
   // Suppress unused warning - setPaintKeyColors is held for future use
   void setPaintKeyColors;
 
+  function pushSnapshotToHardware(snap: {
+    keyColors: Map<number, string>;
+    animType: string;
+    animSpeed: number;
+    lastSequence: number[];
+  }) {
+    if (!window.fizz) return;
+    const colors: Record<string, string> = {};
+    snap.keyColors.forEach((hex, idx) => { colors[String(idx)] = hex; });
+    if (snap.animType === 'solid') {
+      window.fizz.perkeySet(colors).catch(() => {});
+    } else {
+      window.fizz.perkeyStartPattern({
+        keys: colors,
+        animType: snap.animType as AnimType,
+        animSpeed: snap.animSpeed,
+        ...(snap.lastSequence.length > 0 ? { sequence: snap.lastSequence } : {}),
+      }).catch(() => {});
+    }
+  }
+
   async function handleApplyPreset(preset: Preset | UserPreset, tintColor?: string) {
     const next = new Map<number, string>();
     for (const [k, v] of Object.entries(preset.pattern.keys)) {
@@ -337,6 +442,13 @@ export default function App() {
       animSpeed: preset.pattern.animSpeed,
       lastSequence: preset.pattern.sequence ?? [],
       mode: 'paint',
+      activePresetId: preset.id,
+    });
+    useHistoryStore.getState().push({
+      keyColors: next,
+      animType: preset.pattern.animType,
+      animSpeed: preset.pattern.animSpeed,
+      lastSequence: preset.pattern.sequence ?? [],
       activePresetId: preset.id,
     });
 
@@ -440,32 +552,127 @@ export default function App() {
     input.click();
   }
 
+  return <AppShell
+    paintMode={paintMode}
+    handleSavePattern={handleSavePattern}
+    handleProfileActivate={handleProfileActivate}
+    handleSaveProfile={handleSaveProfile}
+    handleDeleteProfile={handleDeleteProfile}
+    handleExportProfiles={handleExportProfiles}
+    handleImportProfiles={handleImportProfiles}
+    handleApplyPreset={handleApplyPreset}
+    handleApply={handleApply}
+    namePrompt={namePrompt}
+    setNamePrompt={setNamePrompt}
+    toast={toast}
+    setToast={setToast}
+  />;
+}
+
+interface AppShellProps {
+  paintMode: 'effect' | 'paint';
+  handleSavePattern: () => void;
+  handleProfileActivate: (name: string) => void;
+  handleSaveProfile: () => void;
+  handleDeleteProfile: (name: string) => void;
+  handleExportProfiles: () => void;
+  handleImportProfiles: () => void;
+  handleApplyPreset: (preset: Preset | UserPreset, tintColor?: string) => void;
+  handleApply: () => void;
+  namePrompt: { title: string; defaultValue: string; onConfirm: (name: string) => void } | null;
+  setNamePrompt: (p: AppShellProps['namePrompt']) => void;
+  toast: { msg: string; variant: 'success' | 'error' } | null;
+  setToast: (t: AppShellProps['toast']) => void;
+}
+
+function AppShell(props: AppShellProps) {
+  const {
+    paintMode, handleSavePattern, handleProfileActivate, handleSaveProfile,
+    handleDeleteProfile, handleExportProfiles, handleImportProfiles,
+    handleApplyPreset, handleApply, namePrompt, setNamePrompt, toast, setToast,
+  } = props;
+
+  const isNarrow = useMediaQuery('(max-width: 1400px)');
+  const leftCollapsed = useUIStore((s) => s.leftSidebarCollapsed) || isNarrow;
+  const rightCollapsed = useUIStore((s) => s.rightSidebarCollapsed) || isNarrow;
+  const toggleLeft = useUIStore((s) => s.toggleLeftSidebar);
+  const toggleRight = useUIStore((s) => s.toggleRightSidebar);
+
   return (
     <div className="flex flex-col h-full bg-zinc-950 text-zinc-100">
       <Header />
       <ConnectionBanner />
       <div className="flex flex-1 overflow-hidden">
-        <div className="flex flex-col">
-          <EffectSidebar />
-          <ProfileSidebar
-            onActivate={handleProfileActivate}
-            onSaveNew={handleSaveProfile}
-            onDelete={handleDeleteProfile}
-            onExport={handleExportProfiles}
-            onImport={handleImportProfiles}
-          />
-        </div>
+        {leftCollapsed ? (
+          <div className="flex flex-col items-center border-r border-zinc-800 bg-zinc-950/50">
+            <button
+              type="button"
+              onClick={toggleLeft}
+              className="p-2 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition"
+              aria-label="Expand effects sidebar"
+              title="Expand sidebar"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col relative">
+            <button
+              type="button"
+              onClick={toggleLeft}
+              className="absolute top-1 right-1 z-10 p-1 rounded hover:bg-zinc-800 text-zinc-500 hover:text-zinc-200 transition"
+              aria-label="Collapse effects sidebar"
+              title="Collapse"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+            <EffectSidebar />
+            <ProfileSidebar
+              onActivate={handleProfileActivate}
+              onSaveNew={handleSaveProfile}
+              onDelete={handleDeleteProfile}
+              onExport={handleExportProfiles}
+              onImport={handleImportProfiles}
+            />
+          </div>
+        )}
         <div className="flex-1 flex flex-col overflow-hidden">
           {paintMode === 'paint' && <PaintToolbar onSavePattern={handleSavePattern} />}
           <Keyboard3D />
         </div>
-        {paintMode === 'paint' ? (
-          <PresetGallery onApply={handleApplyPreset} />
+        {rightCollapsed ? (
+          <div className="flex flex-col items-center border-l border-zinc-800 bg-zinc-950/50">
+            <button
+              type="button"
+              onClick={toggleRight}
+              className="p-2 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition"
+              aria-label="Expand right sidebar"
+              title="Expand sidebar"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+          </div>
         ) : (
-          <ParametersPanel onApply={handleApply} />
+          <div className="relative">
+            <button
+              type="button"
+              onClick={toggleRight}
+              className="absolute top-1 left-1 z-10 p-1 rounded hover:bg-zinc-800 text-zinc-500 hover:text-zinc-200 transition"
+              aria-label="Collapse right sidebar"
+              title="Collapse"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+            {paintMode === 'paint' ? (
+              <PresetGallery onApply={handleApplyPreset} />
+            ) : (
+              <ParametersPanel onApply={handleApply} />
+            )}
+          </div>
         )}
       </div>
       {paintMode === 'paint' && <TimelineEditor />}
+      <StatusBar />
       {namePrompt && (
         <NamePromptModal
           title={namePrompt.title}

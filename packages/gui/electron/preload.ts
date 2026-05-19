@@ -22,6 +22,12 @@ const fizz = {
     ipcRenderer.on('fizz:deviceChanged', wrapped);
     return () => ipcRenderer.off('fizz:deviceChanged', wrapped);
   },
+  subscribePerkeyChanged: (handler: (s: any) => void) => {
+    const wrapped = (_e: unknown, params: any) => handler(params);
+    ipcRenderer.on('fizz:perkeyChanged', wrapped);
+    return () => ipcRenderer.off('fizz:perkeyChanged', wrapped);
+  },
+  perkeyCurrent: () => ipcRenderer.invoke('fizz:perkeyCurrent'),
   perkeySet: (colors: Record<string, string>) => ipcRenderer.invoke('fizz:perkeySet', colors),
   perkeyStartPattern: (pattern: any) => ipcRenderer.invoke('fizz:perkeyStartPattern', pattern),
   perkeyStopPattern: () => ipcRenderer.invoke('fizz:perkeyStopPattern'),
