@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Save, X, RotateCcw } from 'lucide-react';
+import { HexColorPicker } from 'react-colorful';
 import type { Preset } from '@fizz/core';
 import type { UserPreset } from './PresetGallery.js';
 import { uniqueColors, transformKeys, type Style, type StyleOptions } from '../lib/colorTransform.js';
@@ -73,7 +74,8 @@ export function PresetEditor({ preset, onPreview, onSaveAs, onClose }: Props) {
   function applyColorChange(newHex: string) {
     if (!editingColor) return;
     setColorMap((prev) => ({ ...prev, [editingColor]: newHex }));
-    setEditingColor(null);
+    // Don't close the picker on every onChange — react-colorful fires
+    // many times during drag. User dismisses via the × button.
   }
 
   function saveAs() {
@@ -184,24 +186,32 @@ export function PresetEditor({ preset, onPreview, onSaveAs, onClose }: Props) {
             })}
           </div>
           {editingColor && (
-            <div className="flex items-center gap-2 mt-1">
-              <input
-                type="color"
-                value={colorMap[editingColor] ?? editingColor}
-                onChange={(e) => applyColorChange(e.target.value)}
-                className="w-8 h-8 rounded cursor-pointer bg-transparent border border-zinc-700"
-                aria-label="Pick replacement color"
+            <div className="flex flex-col gap-2 mt-1 p-2 rounded bg-zinc-900 border border-zinc-700">
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-zinc-400 font-mono">{editingColor}</span>
+                <span className="text-zinc-500">→</span>
+                <span className="text-fuchsia-300 font-mono">{colorMap[editingColor] ?? editingColor}</span>
+                <button
+                  type="button"
+                  onClick={() => setEditingColor(null)}
+                  className="ml-auto text-zinc-500 hover:text-zinc-200"
+                  aria-label="Close picker"
+                >
+                  ×
+                </button>
+              </div>
+              <HexColorPicker
+                color={colorMap[editingColor] ?? editingColor}
+                onChange={(c) => applyColorChange(c)}
+                style={{ width: '100%', height: 130 }}
               />
-              <span className="text-xs text-zinc-400 font-mono">{editingColor}</span>
-              <span className="text-xs text-zinc-500">→</span>
-              <span className="text-xs text-fuchsia-300 font-mono">{colorMap[editingColor] ?? '?'}</span>
             </div>
           )}
         </div>
       )}
 
       {isStateful && statefulSlots && (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5 relative">
           <span className="text-[10px] uppercase tracking-wider text-zinc-500">
             Paleta do preset ({statefulSlots.length} cores)
           </span>
@@ -210,7 +220,7 @@ export function PresetEditor({ preset, onPreview, onSaveAs, onClose }: Props) {
               const effective = paletteOverrides[s.slot] ?? s.default;
               const isEditing = editingSlot === s.slot;
               return (
-                <div key={s.slot} className="flex items-center gap-2">
+                <div key={s.slot} className="flex items-center gap-2 relative">
                   <button
                     type="button"
                     onClick={() => setEditingSlot(isEditing ? null : s.slot)}
@@ -224,16 +234,8 @@ export function PresetEditor({ preset, onPreview, onSaveAs, onClose }: Props) {
                     )}
                     style={{ background: effective }}
                   />
-                  <span className="text-xs text-zinc-300 w-20">{s.label}</span>
-                  {isEditing && (
-                    <input
-                      type="color"
-                      value={effective}
-                      onChange={(e) => setPaletteOverrides((prev) => ({ ...prev, [s.slot]: e.target.value }))}
-                      className="w-7 h-7 rounded cursor-pointer bg-transparent border border-zinc-700"
-                      aria-label={`Pick ${s.label} color`}
-                    />
-                  )}
+                  <span className="text-xs text-zinc-300 flex-1 truncate">{s.label}</span>
+                  <span className="text-[10px] font-mono text-zinc-500">{effective}</span>
                   {paletteOverrides[s.slot] && (
                     <button
                       type="button"
@@ -247,6 +249,45 @@ export function PresetEditor({ preset, onPreview, onSaveAs, onClose }: Props) {
                     >
                       ↺
                     </button>
+                  )}
+                  {isEditing && (
+                    // Popover opens to the LEFT of the swatch so it doesn't
+                    // overflow off the right edge of the screen (PresetEditor
+                    // lives in the right sidebar). Width 200px + small gap.
+                    <div
+                      className="absolute z-50 right-full mr-2 top-0 bg-zinc-900 border border-zinc-700 rounded-lg p-2 shadow-2xl flex flex-col gap-2 animate-fade-in"
+                      style={{ width: 220 }}
+                    >
+                      <HexColorPicker
+                        color={effective}
+                        onChange={(c) => setPaletteOverrides((prev) => ({ ...prev, [s.slot]: c }))}
+                        style={{ width: '100%', height: 140 }}
+                      />
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={effective}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            if (/^#?[0-9a-fA-F]{6}$/.test(v)) {
+                              setPaletteOverrides((prev) => ({
+                                ...prev,
+                                [s.slot]: v.startsWith('#') ? v : '#' + v,
+                              }));
+                            }
+                          }}
+                          className="flex-1 px-2 py-1 text-xs rounded bg-zinc-950 border border-zinc-700 focus:outline-none focus:border-fuchsia-500 font-mono"
+                          aria-label="Hex color"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setEditingSlot(null)}
+                          className="px-2 py-1 text-xs rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200"
+                        >
+                          OK
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
               );
