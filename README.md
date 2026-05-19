@@ -50,29 +50,51 @@ See [`docs/design/specs/2026-05-18-fizz-rgb-controller-design.md`](docs/design/s
 
 ## Install
 
+### One-shot "easy mode" (CLI + daemon + GUI + autostart)
+
 ```bash
 git clone https://github.com/MrSchrodingers/fizz-rgb.git /var/www/fizz-rgb
 cd /var/www/fizz-rgb
-./tools/install.sh        # builds, links binaries, installs systemd unit + udev rule
-fizz daemon enable        # autostart on login
-fizz status               # sanity check
-fizz effect run fw-rainbow
+./tools/install.sh --easy   # everything: builds AppImage, installs autostart for daemon + GUI tray
+fizz status                 # sanity check
 ```
 
-The installer:
+With `--easy`, the installer:
 
 1. Runs `npm install && npm run build`.
-2. Symlinks `fizz` and `fizzd` into `~/.local/bin` (make sure it is on `$PATH`).
-3. Installs the systemd-user unit to `~/.config/systemd/user/fizzd.service`.
-4. Installs the udev rule (requires `sudo`) — see [SECURITY.md](SECURITY.md#threat-model-and-known-limitations) for the trade-offs.
+2. Symlinks `fizz` and `fizzd` into `~/.local/bin`.
+3. Installs the systemd-user unit and **enables it** (`systemctl --user enable --now fizzd`).
+4. Installs the udev rule (requires `sudo`).
+5. Builds the Electron GUI **AppImage** and copies it to `~/.local/bin/fizz-rgb.AppImage`.
+6. Installs an application icon + `Fizz RGB` entry in the app menu.
+7. Drops a `~/.config/autostart/fizz-rgb.desktop` so the GUI launches **hidden in the tray** on every login.
 
 Unplug and replug the keyboard once after install.
 
-### GUI
+### Minimal install (CLI + daemon only, no GUI)
+
+```bash
+./tools/install.sh          # CLI + daemon, auto-enables systemd unit
+fizz status
+fizz effect run fw-rainbow
+```
+
+### Available flags
+
+| Flag              | Effect                                                                                       |
+| ----------------- | -------------------------------------------------------------------------------------------- |
+| _(none)_          | Build + link binaries, install systemd unit + udev rule, auto-enable daemon.                 |
+| `--easy`          | Implies `--with-gui` and `--autostart-gui`. The recommended path for end users.              |
+| `--with-gui`      | Also build the AppImage, install the app menu launcher, and refresh icon caches.             |
+| `--autostart-gui` | Drop the autostart `.desktop` entry. Requires `--with-gui` (or an existing AppImage).        |
+| `--no-enable`     | Skip the automatic `systemctl --user enable --now fizzd`. Use if you want manual control.    |
+
+### GUI (dev / packaging)
 
 ```bash
 npm run dev -w fizz-gui              # development with hot reload
-npm run build:appimage -w fizz-gui   # produce a portable AppImage
+npm run build:appimage -w fizz-gui   # produce a portable AppImage manually
+~/.local/bin/fizz-rgb.AppImage --hidden   # launch minimized to tray (used by autostart)
 ```
 
 ## CLI cheatsheet

@@ -4,7 +4,10 @@ After=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/fizzd
+# @NODE@ is substituted by tools/install.sh with the absolute path to node,
+# because systemd user services run with a minimal PATH that may not include
+# nvm/fnm/asdf-managed node binaries.
+ExecStart=@NODE@ %h/.local/bin/fizzd
 Restart=on-failure
 RestartSec=2
 

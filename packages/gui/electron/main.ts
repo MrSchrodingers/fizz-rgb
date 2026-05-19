@@ -11,10 +11,13 @@ let tray: Tray | null = null;
 let isQuitting = false;
 const daemon = new DaemonClient(socketPath());
 
+const startHidden = process.argv.includes('--hidden');
+
 async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
+    show: !startHidden,
     backgroundColor: '#0e0e12',
     webPreferences: {
       preload: join(__dirname, 'preload.js'),

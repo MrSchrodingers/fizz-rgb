@@ -50,29 +50,51 @@ Veja [`docs/design/specs/2026-05-18-fizz-rgb-controller-design.md`](docs/design/
 
 ## Instalação
 
+### "Easy mode" de um comando só (CLI + daemon + GUI + autostart)
+
 ```bash
 git clone https://github.com/MrSchrodingers/fizz-rgb.git /var/www/fizz-rgb
 cd /var/www/fizz-rgb
-./tools/install.sh        # builda, linka binários, instala unit systemd + regra udev
-fizz daemon enable        # autostart no login
-fizz status               # sanity check
-fizz effect run fw-rainbow
+./tools/install.sh --easy   # tudo: builda AppImage, autostart de daemon e da GUI na tray
+fizz status                 # sanity check
 ```
 
-O installer:
+Com `--easy`, o installer:
 
 1. Roda `npm install && npm run build`.
-2. Faz symlink de `fizz` e `fizzd` em `~/.local/bin` (garanta que está no `$PATH`).
-3. Instala a unit systemd-user em `~/.config/systemd/user/fizzd.service`.
-4. Instala a regra udev (exige `sudo`) — veja [SECURITY.md](SECURITY.md#modelo-de-ameaça-e-limitações-conhecidas) pros trade-offs.
+2. Faz symlink de `fizz` e `fizzd` em `~/.local/bin`.
+3. Instala a unit systemd-user e **já habilita** (`systemctl --user enable --now fizzd`).
+4. Instala a regra udev (exige `sudo`).
+5. Builda o **AppImage** da GUI Electron e copia pra `~/.local/bin/fizz-rgb.AppImage`.
+6. Instala ícone + entrada `Fizz RGB` no menu de apps.
+7. Cria um `~/.config/autostart/fizz-rgb.desktop` que sobe a GUI **minimizada na tray** a cada login.
 
 Tira o teclado da tomada e reconecta uma vez após instalar.
 
-### GUI
+### Instalação mínima (só CLI + daemon, sem GUI)
+
+```bash
+./tools/install.sh          # CLI + daemon, já habilita a unit systemd
+fizz status
+fizz effect run fw-rainbow
+```
+
+### Flags disponíveis
+
+| Flag              | Efeito                                                                                          |
+| ----------------- | ----------------------------------------------------------------------------------------------- |
+| _(nenhuma)_       | Builda + linka binários, instala unit systemd + udev, auto-habilita o daemon.                   |
+| `--easy`          | Equivale a `--with-gui` + `--autostart-gui`. Caminho recomendado pro usuário final.             |
+| `--with-gui`      | Também builda o AppImage, instala launcher no menu de apps e atualiza cache de ícones.          |
+| `--autostart-gui` | Cria o `.desktop` de autostart. Exige `--with-gui` (ou um AppImage previamente construído).     |
+| `--no-enable`     | Pula o `systemctl --user enable --now fizzd`. Use se quiser controlar o start manualmente.      |
+
+### GUI (dev / empacotamento)
 
 ```bash
 npm run dev -w fizz-gui              # desenvolvimento com hot reload
-npm run build:appimage -w fizz-gui   # gera AppImage portátil
+npm run build:appimage -w fizz-gui   # gera AppImage portátil manualmente
+~/.local/bin/fizz-rgb.AppImage --hidden   # sobe minimizada na tray (usado pelo autostart)
 ```
 
 ## Cheatsheet do CLI

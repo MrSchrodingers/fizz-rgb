@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Fizz RGB (tray)
+GenericName=RGB Keyboard Controller
+Comment=Fizz RGB tray icon — starts hidden on login
+Exec=@EXEC@ --hidden
+Icon=fizz-rgb
+Terminal=false
+Categories=Utility;
+StartupNotify=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=2
+X-KDE-autostart-after=panel
