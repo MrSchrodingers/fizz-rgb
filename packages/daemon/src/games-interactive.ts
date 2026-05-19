@@ -18,6 +18,7 @@ import {
   KEY_TAB, KEY_CAPSLOCK, KEY_LEFTSHIFT, KEY_LEFTCTRL,
   KEY_BACKSLASH, KEY_ENTER, KEY_RIGHTSHIFT, KEY_RIGHTCTRL,
   KEY_W, KEY_A, KEY_S, KEY_D, KEY_SPACE,
+  KEY_1, KEY_2, KEY_3, KEY_4, KEY_5,
 } from './key-capture.js';
 
 const RED: Color = { r: 255, g: 0, b: 0 };
@@ -32,6 +33,42 @@ const CYAN: Color = { r: 0, g: 255, b: 255 };
 function findKeyLed(name: string): number | null {
   const k = K617_LAYOUT.keys.find((x) => x.name === name);
   return k ? k.ledIndex : null;
+}
+
+// ─── Difficulty menu (shared by Pacman / Space Invaders / Mario) ─────────────
+// Games start with difficulty = 0 (menu). The player presses a number key
+// 1..5 to choose, which sets the engine's difficulty and starts play.
+
+const KEY_DIGITS = [KEY_1, KEY_2, KEY_3, KEY_4, KEY_5];
+
+/** Returns 1..5 if `keycode` is a digit key, else 0. */
+function difficultyFromKeycode(keycode: number): number {
+  const idx = KEY_DIGITS.indexOf(keycode);
+  return idx >= 0 ? idx + 1 : 0;
+}
+
+// Easy → hard colour ramp shown on the number keys 1..5.
+const DIFFICULTY_COLORS: Color[] = [
+  { r: 0,   g: 255, b: 60  }, // 1 — green (easiest)
+  { r: 150, g: 255, b: 0   }, // 2 — lime
+  { r: 255, g: 210, b: 0   }, // 3 — yellow
+  { r: 255, g: 110, b: 0   }, // 4 — orange
+  { r: 255, g: 0,   b: 0   }, // 5 — red (hardest)
+];
+
+/** Render the difficulty-select screen: number keys 1..5 lit in a green→red
+ *  gradient (pulsing), everything else dark. */
+function renderDifficultyMenu(pulse: number): Map<number, Color> {
+  const out = new Map<number, Color>();
+  const b = 0.55 + 0.45 * Math.abs(Math.sin(pulse * 0.4));
+  for (let i = 0; i < 5; i++) {
+    const col = colOfName(0, String(i + 1)); // digit keys live on row 0
+    const led = keyLed(0, col);
+    if (led === null) continue;
+    const c = DIFFICULTY_COLORS[i]!;
+    out.set(led, { r: Math.round(c.r * b), g: Math.round(c.g * b), b: Math.round(c.b * b) });
+  }
+  return out;
 }
 
 // ─── Pong Multiplayer (P1 left, P2 right — both human) ──────────────────────
@@ -448,6 +485,9 @@ export class PacmanEngine {
   private ghostTick = 0;
   private ghostStepTicks = 12;
 
+  private difficulty = 0;   // 0 = difficulty menu; 1..5 once chosen
+  private ghostCount = 1;
+
   private overrides: Record<string, string> = {};
 
   // Sparse wall layouts per phase (by key name). The key graph stays richly
@@ -463,6 +503,12 @@ export class PacmanEngine {
 
   constructor() { this.resetLevel(); }
 
+  /** Difficulty 1..5 → ghost count (1/1/2/2/3). Ghost speed is folded into
+   *  applyPhase() below. The user asked for just one ghost on the easy end. */
+  private applyDifficulty(): void {
+    this.ghostCount = this.difficulty <= 2 ? 1 : this.difficulty <= 4 ? 2 : 3;
+  }
+
   setColorOverrides(o: Record<string, string>): void { this.overrides = o ?? {}; }
   private color(slot: string, fb: Color): Color {
     const hex = this.overrides[slot];
@@ -476,8 +522,10 @@ export class PacmanEngine {
   }
   private applyPhase(): void {
     this.stepTicks = this.baseStep;
-    // Ghosts start 4 ticks slower than Pacman and close the gap by phase 5.
-    this.ghostStepTicks = this.stepTicks + Math.max(1, 4 - this.phase);
+    // Ghost lag (extra ticks vs Pacman) shrinks with both difficulty and
+    // phase, so easy/early = sluggish ghosts, hard/late = near parity.
+    const diff = this.difficulty > 0 ? this.difficulty : 1;
+    this.ghostStepTicks = this.stepTicks + Math.max(1, 7 - diff - this.phase);
   }
 
   private cellKey(r: number, c: number): string { return `${r},${c}`; }
@@ -529,7 +577,8 @@ export class PacmanEngine {
       { row: 4, col: Math.floor(rowWidth(4) / 2), personality: 'ambush', slot: 'ghost-2' },
       { row: 0, col: 11,                        personality: 'random', slot: 'ghost-3' },
     ];
-    this.ghosts = spawns.map((s) => ({
+    // Only as many ghosts as the chosen difficulty calls for.
+    this.ghosts = spawns.slice(0, Math.max(1, this.ghostCount)).map((s) => ({
       row: s.row, col: s.col, dir: 'left' as Dir,
       home: { row: s.row, col: s.col },
       personality: s.personality, slot: s.slot, eaten: 0,
@@ -559,6 +608,11 @@ export class PacmanEngine {
 
   handleKey(keycode: number, value: number): void {
     if (value !== 1) return;
+    if (this.difficulty === 0) {
+      const d = difficultyFromKeycode(keycode);
+      if (d > 0) { this.difficulty = d; this.applyDifficulty(); this.resetLevel(); }
+      return;
+    }
     if (this.deathAnim > 0 || this.clearAnim > 0) return;
     if (keycode === KEY_W) this.queued = 'up';
     else if (keycode === KEY_S) this.queued = 'down';
@@ -568,6 +622,7 @@ export class PacmanEngine {
 
   step(): void {
     this.pulse += 0.3;
+    if (this.difficulty === 0) return; // waiting on difficulty menu
     if (this.deathAnim > 0) {
       this.deathAnim--;
       if (this.deathAnim === 0) {
@@ -697,6 +752,7 @@ export class PacmanEngine {
   }
 
   render(): Map<number, Color> {
+    if (this.difficulty === 0) return renderDifficultyMenu(this.pulse);
     const out = new Map<number, Color>();
     const WALL = this.color('wall', { r: 12, g: 12, b: 70 });
     const DOT = this.color('dot', { r: 45, g: 40, b: 22 });
@@ -1200,24 +1256,38 @@ export class SpaceInvadersEngine {
   private clearAnim = 0;
   private gameOverAnim = 0;
   private pulse = 0;
+  private difficulty = 0;   // 0 = difficulty menu; 1..5 once chosen
+  private bounces = 0;      // edge bounces since the last downward drop
 
   private tick = 0;
   private bulletTick = 0;
   private overrides: Record<string, string> = {};
 
-  // Formation is addressed in a 13-wide lane space (0..12) so it fits the
-  // narrowest occupied row. stepTicks: lower = faster march.
-  private readonly WAVES: ReadonlyArray<{ rows: number; cols: number; stepTicks: number; bulletTick: number; fireRate: number }> = [
-    { rows: 2, cols: 5, stepTicks: 20, bulletTick: 7, fireRate: 0.004 },
-    { rows: 2, cols: 6, stepTicks: 15, bulletTick: 6, fireRate: 0.006 },
-    { rows: 2, cols: 7, stepTicks: 11, bulletTick: 5, fireRate: 0.009 },
-    { rows: 2, cols: 7, stepTicks: 8,  bulletTick: 4, fireRate: 0.013 },
+  // Only the formation shape varies per wave; speeds/fire come from the
+  // chosen difficulty (and a gentle per-wave ramp). Formation lives in a
+  // 13-wide lane space (0..12) so it fits the narrowest occupied row.
+  private readonly WAVES: ReadonlyArray<{ rows: number; cols: number }> = [
+    { rows: 2, cols: 5 },
+    { rows: 2, cols: 6 },
+    { rows: 2, cols: 7 },
+    { rows: 2, cols: 7 },
   ];
 
-  constructor() { this.spawnWave(); }
+  constructor() { /* wait in difficulty menu */ this.spawnWave(); }
   setColorOverrides(o: Record<string, string>): void { this.overrides = o ?? {}; }
   private color(slot: string, fb: Color): Color { const h = this.overrides[slot]; return h ? parseHex(h) : fb; }
   setAnimSpeed(s: number): void { void s; }
+
+  // Difficulty- and wave-scaled timings. Higher difficulty = faster march,
+  // faster bullets, more fire, and dropping a row on fewer bounces.
+  private get diff(): number { return this.difficulty > 0 ? this.difficulty : 1; }
+  private marchTicks(): number { return Math.max(7, 30 - this.diff * 3 - this.wave * 2); }
+  private bulletTicks(): number { return Math.max(4, 9 - this.diff); }
+  private fireRate(): number { return (0.0025 + this.diff * 0.0014) * (1 + this.wave * 0.25); }
+  // The descent is the headline complaint: with only 5 rows it drops too
+  // fast. Now the formation just reverses at the edge and only steps DOWN
+  // every Nth bounce — N is large on easy so it descends gently.
+  private dropEvery(): number { return Math.max(1, 6 - this.diff); }
 
   private spawnWave(): void {
     const w = this.WAVES[this.wave]!;
@@ -1230,6 +1300,7 @@ export class SpaceInvadersEngine {
       }
     }
     this.dir = 1;
+    this.bounces = 0;
     this.playerBullet = null;
     this.alienBullets = [];
     this.shipCol = Math.floor(rowWidth(4) / 2);
@@ -1239,6 +1310,11 @@ export class SpaceInvadersEngine {
 
   handleKey(keycode: number, value: number): void {
     if (value !== 1) return;
+    if (this.difficulty === 0) {
+      const d = difficultyFromKeycode(keycode);
+      if (d > 0) { this.difficulty = d; this.wave = 0; this.lives = 3; this.score = 0; this.spawnWave(); }
+      return;
+    }
     if (this.deathAnim > 0 || this.clearAnim > 0 || this.gameOverAnim > 0) return;
     if (keycode === KEY_A) this.shipCol = Math.max(0, this.shipCol - 1);
     else if (keycode === KEY_D) this.shipCol = Math.min(rowWidth(4) - 1, this.shipCol + 1);
@@ -1249,6 +1325,7 @@ export class SpaceInvadersEngine {
 
   step(): void {
     this.pulse += 0.3;
+    if (this.difficulty === 0) return; // waiting on difficulty menu
     if (this.gameOverAnim > 0) {
       this.gameOverAnim--;
       if (this.gameOverAnim === 0) { this.lives = 3; this.score = 0; this.wave = 0; this.spawnWave(); }
@@ -1268,10 +1345,8 @@ export class SpaceInvadersEngine {
       return;
     }
 
-    const w = this.WAVES[this.wave]!;
-
     this.bulletTick++;
-    if (this.bulletTick >= w.bulletTick) {
+    if (this.bulletTick >= this.bulletTicks()) {
       this.bulletTick = 0;
       if (this.playerBullet) {
         this.playerBullet.row--;
@@ -1300,7 +1375,7 @@ export class SpaceInvadersEngine {
     }
 
     this.tick++;
-    if (this.tick >= w.stepTicks) {
+    if (this.tick >= this.marchTicks()) {
       this.tick = 0;
       const alive = this.aliens.filter((a) => a.alive);
       if (alive.length === 0) {
@@ -1313,22 +1388,29 @@ export class SpaceInvadersEngine {
       const right = this.dir === 1;
       const overflow = right ? maxC + 1 >= 13 : minC - 1 < 0;
       if (overflow) {
-        for (const a of this.aliens) if (a.alive) a.row++;
+        // Reverse on every edge hit, but only DROP a row every Nth bounce so
+        // the descent is gentle (few rows on this keyboard).
         this.dir = right ? -1 : 1;
-        for (const a of this.aliens) if (a.alive && a.row >= 4) {
-          this.lives = 0; this.gameOverAnim = 48;
-          log.info({ score: this.score }, 'invaders: landed');
-          return;
+        this.bounces++;
+        if (this.bounces >= this.dropEvery()) {
+          this.bounces = 0;
+          for (const a of this.aliens) if (a.alive) a.row++;
+          for (const a of this.aliens) if (a.alive && a.row >= 4) {
+            this.lives = 0; this.gameOverAnim = 48;
+            log.info({ score: this.score }, 'invaders: landed');
+            return;
+          }
         }
       } else {
         for (const a of this.aliens) if (a.alive) a.col += this.dir;
       }
     }
 
+    const fr = this.fireRate();
     const colsBusy = new Set(this.alienBullets.map((b) => Math.round(b.cx)));
     for (const a of this.aliens) {
       if (!a.alive) continue;
-      if (Math.random() < w.fireRate) {
+      if (Math.random() < fr) {
         let low = a;
         for (const o of this.aliens) if (o.alive && o.col === a.col && o.row > low.row) low = o;
         const cx = keyCx(low.row, low.col);
@@ -1339,6 +1421,7 @@ export class SpaceInvadersEngine {
   }
 
   render(): Map<number, Color> {
+    if (this.difficulty === 0) return renderDifficultyMenu(this.pulse);
     const out = new Map<number, Color>();
     const ALIEN = this.color('alien', { r: 0, g: 255, b: 90 });
     const SHIP = this.color('ship', { r: 90, g: 200, b: 255 });
@@ -1426,6 +1509,7 @@ export class MarioEngine {
   private clearAnim = 0;
   private gameOverAnim = 0;
   private pulse = 0;
+  private difficulty = 0;   // 0 = difficulty menu; 1..5 once chosen
 
   private solids = new Set<string>();
   private liveCoins = new Set<string>();
@@ -1434,7 +1518,7 @@ export class MarioEngine {
   private tick = 0;
   private stepTicks = 2;
   private goombaTick = 0;
-  private readonly GOOMBA_TICKS = 7;
+  private goombaTicks = 7;   // ticks per goomba step; lower = faster (set by difficulty)
   private overrides: Record<string, string> = {};
 
   private readonly JUMP_VY = -0.9;
@@ -1473,8 +1557,19 @@ export class MarioEngine {
     return this.vy === 0 && this.solidAtRow(Math.round(this.my) + 1, this.marioCx());
   }
 
+  /** Difficulty 1..5 → goomba speed (slow on easy, brisk on hard). */
+  private applyDifficulty(): void {
+    this.goombaTicks = Math.max(3, 11 - this.difficulty * 1.5) | 0;
+  }
+
   handleKey(keycode: number, value: number): void {
     const pressed = value === 1;
+    if (this.difficulty === 0) {
+      if (!pressed) return;
+      const d = difficultyFromKeycode(keycode);
+      if (d > 0) { this.difficulty = d; this.applyDifficulty(); this.lives = 3; this.score = 0; this.coins = 0; this.level = 0; this.loadLevel(); }
+      return;
+    }
     if (this.deathAnim > 0 || this.clearAnim > 0 || this.gameOverAnim > 0) return;
     if (keycode === KEY_A) this.aHeld = pressed;
     else if (keycode === KEY_D) this.dHeld = pressed;
@@ -1489,6 +1584,7 @@ export class MarioEngine {
 
   step(): void {
     this.pulse += 0.3;
+    if (this.difficulty === 0) return; // waiting on difficulty menu
     if (this.gameOverAnim > 0) { this.gameOverAnim--; if (this.gameOverAnim === 0) { this.lives = 3; this.score = 0; this.coins = 0; this.level = 0; this.loadLevel(); } return; }
     if (this.clearAnim > 0) { this.clearAnim--; if (this.clearAnim === 0) { this.level = (this.level + 1) % this.LEVELS.length; this.loadLevel(); } return; }
     if (this.deathAnim > 0) { this.deathAnim--; if (this.deathAnim === 0) { if (this.lives > 0) this.loadLevel(); else this.gameOverAnim = 48; } return; }
@@ -1525,7 +1621,7 @@ export class MarioEngine {
     if (this.liveCoins.has(ck)) { this.liveCoins.delete(ck); this.coins++; this.score += 50; }
 
     this.goombaTick++;
-    if (this.goombaTick >= this.GOOMBA_TICKS) {
+    if (this.goombaTick >= this.goombaTicks) {
       this.goombaTick = 0;
       for (const g of this.goombas) {
         const nl = g.lane + g.dir;
@@ -1552,6 +1648,7 @@ export class MarioEngine {
   private die(): void { this.lives--; this.deathAnim = 28; log.info({ lives: this.lives }, 'mario: died'); }
 
   render(): Map<number, Color> {
+    if (this.difficulty === 0) return renderDifficultyMenu(this.pulse);
     const out = new Map<number, Color>();
     const MARIO = this.color('mario', { r: 255, g: 40, b: 0 });
     const GROUND = this.color('ground', { r: 150, g: 70, b: 12 });

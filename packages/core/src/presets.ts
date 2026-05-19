@@ -1018,7 +1018,7 @@ export const BUILTIN_PRESETS: Preset[] = [
   {
     id: 'game-pacman',
     name: 'Pacman (WASD)',
-    description: 'WASD move o Pacman pelo labirinto. Coma os pontos, pegue os power pellets nas quinas pra deixar os 3 fantasmas azuis (comíveis!). 5 fases que ficam mais difíceis. 3 vidas',
+    description: 'No início escolha a dificuldade 1-5 (teclas 1 a 5). WASD move o Pacman pelo labirinto. Coma os pontos, pegue os power pellets nas quinas pra deixar os fantasmas azuis (comíveis!). No fácil é só 1 fantasma; sobe até 3 no difícil. 5 fases, 3 vidas',
     category: 'game',
     pattern: { keys: {}, animType: 'pacman', animSpeed: 0.5 },
   },
@@ -1032,14 +1032,14 @@ export const BUILTIN_PRESETS: Preset[] = [
   {
     id: 'game-space-invaders',
     name: 'Space Invaders',
-    description: 'A/D move a nave (fileira de baixo), Space atira. Destrua a formação de alienígenas antes que desçam até você. 4 ondas progressivas, 3 vidas',
+    description: 'No início escolha a dificuldade 1-5 (teclas 1 a 5). A/D move a nave (fileira de baixo), Space atira. A formação desce devagar (mais devagar no fácil) — destrua todos antes que cheguem. 4 ondas, 3 vidas',
     category: 'game',
     pattern: { keys: {}, animType: 'space-invaders', animSpeed: 0.5 },
   },
   {
     id: 'game-mario',
     name: 'Super Mario',
-    description: 'A/D anda, Space pula (segura pra pular mais alto). Pule nos goombas pra esmagá-los, pegue moedas, evite os buracos e chegue na bandeira verde. 2 fases, 3 vidas',
+    description: 'No início escolha a dificuldade 1-5 (teclas 1 a 5). A/D anda, Space pula (segura pra pular mais alto). Pule nos goombas pra esmagá-los, pegue moedas, evite os buracos e chegue na bandeira verde. 2 fases, 3 vidas',
     category: 'game',
     pattern: { keys: {}, animType: 'mario', animSpeed: 0.5 },
   },

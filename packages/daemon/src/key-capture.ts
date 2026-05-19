@@ -38,6 +38,12 @@ export const KEY_D = 32;
 export const KEY_Q = 16;
 export const KEY_E = 18;
 export const KEY_SPACE = 57;
+// Digit row 1..5 (evdev codes 2..6) — used by the game difficulty menus.
+export const KEY_1 = 2;
+export const KEY_2 = 3;
+export const KEY_3 = 4;
+export const KEY_4 = 5;
+export const KEY_5 = 6;
 
 /** Original PongInteractive paddle map (Tab/Caps/LShift/LCtrl → slot 0..3). */
 export const PADDLE_KEYCODES: Record<number, number> = {
