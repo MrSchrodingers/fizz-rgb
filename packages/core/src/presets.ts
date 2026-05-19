@@ -1043,6 +1043,13 @@ export const BUILTIN_PRESETS: Preset[] = [
     category: 'game',
     pattern: { keys: {}, animType: 'mario', animSpeed: 0.5 },
   },
+  {
+    id: 'game-genius',
+    name: 'Genius (memória)',
+    description: 'O clássico Genius/Simon. Escolha a dificuldade 1-5 (velocidade). O teclado divide em 4 quadrantes coloridos e pisca uma sequência — repita apertando a tecla do canto: Q (verde, sup-esq), P (vermelho, sup-dir), Z (amarelo, inf-esq), / (azul, inf-dir). Cada acerto aumenta a sequência',
+    category: 'game',
+    pattern: { keys: {}, animType: 'genius', animSpeed: 0.5 },
+  },
 
   // ── Themed cycles (host-streamed, layout-aware) ──────────────────────────
   {

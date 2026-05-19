@@ -19,6 +19,7 @@ import {
   MinecraftCloudsEngine,
   SpaceInvadersEngine,
   MarioEngine,
+  GeniusEngine,
 } from './games-interactive.js';
 
 /** Common surface every interactive engine implements so EffectEngine can
@@ -1848,6 +1849,11 @@ export class EffectEngine {
       },
       'mario': () => {
         const e = new MarioEngine();
+        e.setAnimSpeed(pattern.animSpeed);
+        return e;
+      },
+      'genius': () => {
+        const e = new GeniusEngine();
         e.setAnimSpeed(pattern.animSpeed);
         return e;
       },

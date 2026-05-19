@@ -624,6 +624,23 @@ function renderMario(t: number): string[] {
   return out;
 }
 
+function renderGenius(t: number): string[] {
+  const out: string[] = [];
+  // Four quadrants; one lights up at a time, cycling like a Simon sequence.
+  const quadColors = ['#00ff28', '#ff0000', '#ffd200', '#005aff'];
+  const active = Math.floor(t * 1.5) % 4;
+  for (let gy = 0; gy < THUMB_ROWS; gy++) {
+    for (let gx = 0; gx < THUMB_COLS; gx++) {
+      const top = gy <= 1 ? 0 : 2;            // rows 0-1 top, 2-4 bottom-ish
+      const left = gx < THUMB_COLS / 2 ? 0 : 1;
+      const q = top + left;
+      const qc = quadColors[q] ?? '#000000';
+      out.push(q === active ? qc : lerpHex(qc, '#000000', 0.82));
+    }
+  }
+  return out;
+}
+
 // ─── Main entry point ────────────────────────────────────────────────────────
 
 export function renderThumbnail(preset: Preset | UserPreset, t: number): string[] {
@@ -652,6 +669,7 @@ export function renderThumbnail(preset: Preset | UserPreset, t: number): string[
     case 'minecraft-clouds': return renderMinecraftClouds(t);
     case 'space-invaders': return renderSpaceInvaders(t);
     case 'mario': return renderMario(t);
+    case 'genius': return renderGenius(t);
   }
 
   const out: string[] = new Array(TOTAL);

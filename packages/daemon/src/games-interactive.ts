@@ -12,6 +12,7 @@ import { K617_LAYOUT, parseHex } from '@fizz/core';
 import { gridToLed } from './game-grid.js';
 import {
   ROW_COUNT, rowWidth, keyLed, keyCx, vNeighbor, colNearestCx, colOfName,
+  KEY_MATRIX,
 } from './key-matrix.js';
 import { log } from './log.js';
 import {
@@ -19,6 +20,7 @@ import {
   KEY_BACKSLASH, KEY_ENTER, KEY_RIGHTSHIFT, KEY_RIGHTCTRL,
   KEY_W, KEY_A, KEY_S, KEY_D, KEY_SPACE,
   KEY_1, KEY_2, KEY_3, KEY_4, KEY_5,
+  KEY_Q, KEY_P, KEY_Z, KEY_SLASH,
 } from './key-capture.js';
 
 const RED: Color = { r: 255, g: 0, b: 0 };
@@ -1691,6 +1693,183 @@ export class MarioEngine {
       const fl = this.deathAnim > 0 && this.deathAnim % 4 < 2;
       const b = 0.75 + 0.25 * Math.abs(Math.sin(this.pulse * 0.5));
       out.set(led, fl ? { r: 255, g: 255, b: 0 } : { r: Math.round(MARIO.r * b), g: Math.round(MARIO.g * b), b: Math.round(MARIO.b * b) });
+    }
+    return out;
+  }
+}
+
+// ─── Genius / Simon (memory game) ────────────────────────────────────────────
+
+/**
+ * Genius (the Brazilian "Simon"): the keyboard splits into four coloured
+ * quadrants and flashes a growing sequence; the player repeats it by
+ * pressing the corner key in each quadrant. One correct full repeat grows
+ * the sequence by one — the score is the longest sequence reached.
+ *
+ *   Quadrants & keys:
+ *     Q = top-left (green)      P = top-right (red)
+ *     Z = bottom-left (yellow)  / = bottom-right (blue)
+ *
+ * Difficulty 1-5 (chosen at the start) sets playback speed. A wrong press
+ * flashes red and restarts the sequence.
+ *
+ * Palette slots: q1, q2, q3, q4 (the four quadrant colours).
+ */
+export class GeniusEngine {
+  private difficulty = 0;
+  private sequence: number[] = [];
+  private mode: 'show' | 'input' | 'fail' | 'levelup' = 'show';
+  private showIndex = 0;
+  private showTimer = 0;
+  private showOn = false;
+  private inputIndex = 0;
+  private flashQuad = -1;
+  private flashTimer = 0;
+  private failTimer = 0;
+  private levelupTimer = 0;
+  private score = 0;
+  private pulse = 0;
+  private overrides: Record<string, string> = {};
+
+  private readonly KEY_QUAD: Record<number, number> = {
+    [KEY_Q]: 0, [KEY_P]: 1, [KEY_Z]: 2, [KEY_SLASH]: 3,
+  };
+
+  constructor() { /* wait in difficulty menu */ }
+
+  setColorOverrides(o: Record<string, string>): void { this.overrides = o ?? {}; }
+  private color(slot: string, fb: Color): Color { const h = this.overrides[slot]; return h ? parseHex(h) : fb; }
+  setAnimSpeed(s: number): void { void s; }
+
+  private get diff(): number { return this.difficulty > 0 ? this.difficulty : 1; }
+  private onTicks(): number { return Math.max(10, 30 - this.diff * 3); }
+  private gapTicks(): number { return Math.max(5, (this.onTicks() / 2) | 0); }
+
+  private quadColor(q: number): Color {
+    const def = [
+      { r: 0,   g: 255, b: 40  }, // green
+      { r: 255, g: 0,   b: 0   }, // red
+      { r: 255, g: 210, b: 0   }, // yellow
+      { r: 0,   g: 90,  b: 255 }, // blue
+    ][q]!;
+    return this.color(`q${q + 1}`, def);
+  }
+
+  private quadOf(row: number, cx: number): number {
+    const top = row <= 2 ? 0 : 2;
+    const left = cx < 7.5 ? 0 : 1;
+    return top + left;
+  }
+
+  private startGame(): void {
+    this.sequence = [Math.floor(Math.random() * 4)];
+    this.score = 0;
+    this.inputIndex = 0;
+    this.beginShow();
+  }
+  private beginShow(): void {
+    this.mode = 'show';
+    this.showIndex = 0;
+    this.showOn = true;
+    this.showTimer = this.onTicks();
+  }
+
+  handleKey(keycode: number, value: number): void {
+    if (value !== 1) return;
+    if (this.difficulty === 0) {
+      const d = difficultyFromKeycode(keycode);
+      if (d > 0) { this.difficulty = d; this.startGame(); }
+      return;
+    }
+    if (this.mode !== 'input') return;
+    const q = this.KEY_QUAD[keycode];
+    if (q === undefined) return;
+    this.flashQuad = q;
+    this.flashTimer = 8;
+    if (q === this.sequence[this.inputIndex]) {
+      this.inputIndex++;
+      if (this.inputIndex >= this.sequence.length) {
+        this.score = this.sequence.length;
+        this.mode = 'levelup';
+        this.levelupTimer = 24;
+        log.info({ score: this.score }, 'genius: round clear');
+      }
+    } else {
+      this.mode = 'fail';
+      this.failTimer = 36;
+      log.info({ score: this.score }, 'genius: wrong');
+    }
+  }
+
+  step(): void {
+    this.pulse += 0.3;
+    if (this.difficulty === 0) return;
+    if (this.flashTimer > 0) this.flashTimer--;
+
+    if (this.mode === 'fail') {
+      if (--this.failTimer <= 0) this.startGame();
+      return;
+    }
+    if (this.mode === 'levelup') {
+      if (--this.levelupTimer <= 0) {
+        this.sequence.push(Math.floor(Math.random() * 4));
+        this.inputIndex = 0;
+        this.beginShow();
+      }
+      return;
+    }
+    if (this.mode === 'show') {
+      if (--this.showTimer <= 0) {
+        if (this.showOn) {
+          this.showOn = false;
+          this.showTimer = this.gapTicks();
+        } else {
+          this.showIndex++;
+          if (this.showIndex >= this.sequence.length) {
+            this.mode = 'input';
+            this.inputIndex = 0;
+          } else {
+            this.showOn = true;
+            this.showTimer = this.onTicks();
+          }
+        }
+      }
+    }
+    // 'input' mode is untimed — the player presses at their own pace.
+  }
+
+  render(): Map<number, Color> {
+    if (this.difficulty === 0) return renderDifficultyMenu(this.pulse);
+    const out = new Map<number, Color>();
+
+    let activeQuad = -1;
+    if (this.mode === 'show' && this.showOn) activeQuad = this.sequence[this.showIndex]!;
+    else if (this.flashTimer > 0) activeQuad = this.flashQuad;
+
+    const fail = this.mode === 'fail';
+    const levelup = this.mode === 'levelup';
+    // Idle brightness: brighter while it's the player's turn so they know.
+    const idle = this.mode === 'input'
+      ? 0.22 + 0.12 * Math.abs(Math.sin(this.pulse * 0.4))
+      : 0.10;
+
+    for (const rowKeys of KEY_MATRIX) {
+      for (const cell of rowKeys) {
+        let c: Color;
+        if (fail) {
+          const f = this.failTimer % 8 < 4 ? 1 : 0.2;
+          c = { r: Math.round(220 * f), g: 0, b: 0 };
+        } else if (levelup) {
+          const f = this.levelupTimer % 6 < 3 ? 1 : 0.3;
+          c = { r: 0, g: Math.round(220 * f), b: 30 };
+        } else {
+          const q = this.quadOf(cell.row, cell.cx);
+          const base = this.quadColor(q);
+          const b = q === activeQuad ? 1 : idle;
+          c = { r: Math.round(base.r * b), g: Math.round(base.g * b), b: Math.round(base.b * b) };
+        }
+        out.set(cell.led, c);
+      }
     }
     return out;
   }

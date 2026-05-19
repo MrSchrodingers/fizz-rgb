@@ -44,6 +44,10 @@ export const KEY_2 = 3;
 export const KEY_3 = 4;
 export const KEY_4 = 5;
 export const KEY_5 = 6;
+// Corner keys used as the four Genius (Simon) quadrant buttons.
+export const KEY_P = 25;      // top-right
+export const KEY_Z = 44;      // bottom-left
+export const KEY_SLASH = 53;  // bottom-right (KEY_Q=16 is the top-left)
 
 /** Original PongInteractive paddle map (Tab/Caps/LShift/LCtrl → slot 0..3). */
 export const PADDLE_KEYCODES: Record<number, number> = {
