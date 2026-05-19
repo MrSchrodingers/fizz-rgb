@@ -1,9 +1,12 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { BUILTIN_PRESETS, K617_LAYOUT } from '@fizz/core';
-import type { Preset } from '@fizz/core';
+import { BUILTIN_PRESETS } from '@fizz/core';
+import type { Preset, AnimType } from '@fizz/core';
 import { usePaintStore } from '../stores/paintStore.js';
 import { NamePromptModal } from './NamePromptModal.js';
-import { Trash2, Plus } from 'lucide-react';
+import { Trash2, Plus, Sliders } from 'lucide-react';
+import { renderThumbnail, THUMB_COLS } from '../lib/thumbnailRenderer.js';
+import { useSharedClock } from '../lib/useSharedClock.js';
+import { PresetEditor } from './PresetEditor.js';
 
 export interface UserPreset {
   id: string;
@@ -12,7 +15,7 @@ export interface UserPreset {
   category: 'user';
   pattern: {
     keys: Record<string, string>;
-    animType: string;
+    animType: AnimType;
     animSpeed: number;
     sequence?: number[];
   };
@@ -40,6 +43,7 @@ export function PresetGallery({
   const [filter, setFilter] = useState<string>('all');
   const [userPresets, setUserPresets] = useState<UserPreset[]>(loadUserPresets);
   const [tintEnabled, setTintEnabled] = useState(false);
+  const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
   const [namePrompt, setNamePrompt] = useState<{
     title: string;
     defaultValue: string;
@@ -196,9 +200,10 @@ export function PresetGallery({
         )}
         {allPresets.map((preset) => {
           const isActive = activePresetId === preset.id;
+          const isEditing = editingPresetId === preset.id;
           return (
+          <div key={preset.id} className="flex flex-col">
           <div
-            key={preset.id}
             className={
               'group flex items-start gap-2 px-2 py-2 rounded-lg transition cursor-pointer ' +
               (isActive
@@ -215,6 +220,20 @@ export function PresetGallery({
               </div>
               <div className="text-xs text-zinc-500 truncate">{preset.description}</div>
             </div>
+            {isActive && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditingPresetId(isEditing ? null : preset.id);
+                }}
+                aria-label={isEditing ? 'Fechar editor' : 'Editar tonalidade'}
+                title="Editar tonalidade"
+                className="p-1 rounded hover:bg-fuchsia-500/20 text-fuchsia-300"
+              >
+                <Sliders className="w-3.5 h-3.5" />
+              </button>
+            )}
             {preset.category === 'user' && (
               <button
                 type="button"
@@ -227,6 +246,31 @@ export function PresetGallery({
                 <Trash2 className="w-3 h-3" />
               </button>
             )}
+          </div>
+          {isEditing && (
+            <PresetEditor
+              preset={preset}
+              onPreview={(transformed) => onApply(transformed, undefined)}
+              onSaveAs={(transformed, name) => {
+                const newPreset: UserPreset = {
+                  id: `user-${Date.now()}`,
+                  name,
+                  description: `Editado de ${preset.name}`,
+                  category: 'user',
+                  pattern: {
+                    keys: transformed.pattern.keys,
+                    animType: transformed.pattern.animType,
+                    animSpeed: transformed.pattern.animSpeed,
+                    ...(transformed.pattern.sequence ? { sequence: transformed.pattern.sequence } : {}),
+                  },
+                };
+                const next = [...userPresets, newPreset];
+                setUserPresets(next);
+                saveUserPresets(next);
+              }}
+              onClose={() => setEditingPresetId(null)}
+            />
+          )}
           </div>
           );
         })}
@@ -246,26 +290,14 @@ export function PresetGallery({
 }
 
 function PresetThumbnail({ preset }: { preset: Preset | UserPreset }) {
-  // Build a 5×6 dot grid sampling up to 30 colored entries from the K617 layout order.
-  // We iterate K617_LAYOUT.keys (in ledIndex order) to get spatially-meaningful dots.
-  const colorByLed = new Map<number, string>();
-  for (const [ledStr, hex] of Object.entries(preset.pattern.keys)) {
-    colorByLed.set(Number(ledStr), hex);
-  }
-
-  // Sample at most 30 keys from the layout in physical order (ledIndex 0..60).
-  const dots: string[] = [];
-  for (const k of K617_LAYOUT.keys) {
-    if (dots.length >= 30) break;
-    dots.push(colorByLed.get(k.ledIndex) ?? '#1a1a1f');
-  }
-  // Pad to 30 if fewer keys defined.
-  while (dots.length < 30) dots.push('#1a1a1f');
-
+  // Tick the shared clock so the thumbnail animates. Throttled to ~12fps —
+  // enough to read motion, easy on CPU when 40 thumbs render at once.
+  const t = useSharedClock(12);
+  const dots = renderThumbnail(preset as Preset, t);
   return (
     <div
       className="grid gap-0.5 flex-shrink-0 mt-0.5"
-      style={{ gridTemplateColumns: 'repeat(6, 1fr)', width: '3rem', height: '2.5rem' }}
+      style={{ gridTemplateColumns: `repeat(${THUMB_COLS}, 1fr)`, width: '3rem', height: '2.5rem' }}
     >
       {dots.map((color, i) => (
         <div key={i} className="rounded-sm" style={{ background: color }} />

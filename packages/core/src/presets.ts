@@ -572,13 +572,18 @@ export const BUILTIN_PRESETS: Preset[] = [
   {
     id: 'theme-vaporwave',
     name: 'Vaporwave',
-    description: 'Pink + roxo + ciano — A E S T H E T I C',
+    description: 'Pink + roxo + ciano saturados — A E S T H E T I C',
     category: 'theme',
     pattern: {
-      keys: buildKeys(ALL_KEYS_NAMES.map((n, i) => {
-        const palette = ['#ff71ce', '#b967ff', '#01cdfe', '#05ffa1', '#fffb96'];
-        return [n, palette[i % palette.length]!] as [string, string];
-      })),
+      keys: (() => {
+        const entries: Array<[string, string]> = [];
+        // Stripes by row to give a horizon feel instead of random checker.
+        const palette = ['#ff00d4', '#b400ff', '#00d4ff', '#00ff95', '#ffff00'];
+        for (const k of _layout.keys) {
+          entries.push([k.name, palette[k.row % palette.length]!]);
+        }
+        return buildKeys(entries);
+      })(),
       animType: 'wave',
       animSpeed: 0.3,
     },
@@ -586,12 +591,13 @@ export const BUILTIN_PRESETS: Preset[] = [
   {
     id: 'theme-synthwave',
     name: 'Synthwave',
-    description: 'Gradient sunset rosa-laranja-roxo',
+    description: 'Gradient sunset saturado: roxo→rosa→laranja→amarelo',
     category: 'theme',
     pattern: {
       keys: (() => {
         const entries: Array<[string, string]> = [];
-        const palette = ['#3a86ff', '#8338ec', '#ff006e', '#fb5607', '#ffbe0b'];
+        // Top=céu roxo, descendo até amarelo-laranja no horizonte.
+        const palette = ['#2400ff', '#a000ff', '#ff0080', '#ff5e00', '#ffd400'];
         for (const k of _layout.keys) {
           const idx = Math.min(palette.length - 1, Math.floor((k.row / _maxRow) * palette.length));
           entries.push([k.name, palette[idx]!]);
@@ -638,10 +644,9 @@ export const BUILTIN_PRESETS: Preset[] = [
     pattern: {
       keys: (() => {
         const entries: Array<[string, string]> = [];
-        const palette = ['#0a3d3a', '#1abc9c', '#3ddc97', '#5b8def', '#a16ae8'];
+        // Verdes e roxos vivos pra aurora ler bem mesmo dimm no wave.
+        const palette = ['#00ff88', '#00ffd5', '#0099ff', '#a020f0', '#ff00d4'];
         for (const k of _layout.keys) {
-          // k.col can be fractional (modifiers span 1.25, 1.5 etc.), so floor
-          // before modding so the result stays integer in [0, palette.length).
           const idx = Math.abs(Math.floor(k.col) + Math.floor(k.row)) % palette.length;
           entries.push([k.name, palette[idx]!]);
         }
@@ -659,7 +664,8 @@ export const BUILTIN_PRESETS: Preset[] = [
     pattern: {
       keys: (() => {
         const entries: Array<[string, string]> = [];
-        const palette = ['#ffeaa7', '#fdcb6e', '#fab1a0', '#e17055', '#d63031'];
+        // Brasa quente: amarelo brilhante no topo (chama), vermelho profundo na base.
+        const palette = ['#ffff00', '#ffaa00', '#ff5500', '#ff0000', '#990000'];
         for (const k of _layout.keys) {
           const heat = (_maxRow - k.row) / _maxRow;
           const idx = Math.min(palette.length - 1, Math.floor(heat * palette.length));
@@ -667,7 +673,7 @@ export const BUILTIN_PRESETS: Preset[] = [
         }
         return buildKeys(entries);
       })(),
-      animType: 'wave',
+      animType: 'flag-wave',
       animSpeed: 0.55,
     },
   },
@@ -915,7 +921,8 @@ export const BUILTIN_PRESETS: Preset[] = [
     pattern: {
       keys: (() => {
         const entries: Array<[string, string]> = [];
-        const palette = ['#5e60ce', '#7400b8', '#c77dff', '#ff5d8f', '#ff8fab'];
+        // Plasma elétrico com saturação alta.
+        const palette = ['#5500ff', '#a000ff', '#ff00ff', '#ff0066', '#ff3399'];
         for (const k of _layout.keys) {
           const idx = Math.abs(Math.floor(k.col) + Math.floor(k.row) * 3) % palette.length;
           entries.push([k.name, palette[idx]!]);

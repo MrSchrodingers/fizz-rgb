@@ -992,15 +992,16 @@ class MinecraftDayEngine {
 
   private skyColor(): { top: Color; bottom: Color } {
     const p = this.phase;
-    // Palette anchors (clockwise around the day):
-    const NIGHT_TOP: Color = { r: 6, g: 4, b: 28 };
-    const NIGHT_BOTTOM: Color = { r: 16, g: 12, b: 50 };
-    const DAWN_TOP: Color = { r: 80, g: 60, b: 130 };
-    const DAWN_BOTTOM: Color = { r: 255, g: 140, b: 90 };
-    const DAY_TOP: Color = { r: 60, g: 140, b: 255 };
-    const DAY_BOTTOM: Color = { r: 140, g: 200, b: 255 };
-    const DUSK_TOP: Color = { r: 90, g: 50, b: 100 };
-    const DUSK_BOTTOM: Color = { r: 255, g: 110, b: 60 };
+    // Palette anchors saturated for the K617's white keycaps — pastel sky
+    // gets dominated by keycap plastic and looks washed out.
+    const NIGHT_TOP: Color = { r: 4, g: 0, b: 48 };
+    const NIGHT_BOTTOM: Color = { r: 12, g: 0, b: 90 };
+    const DAWN_TOP: Color = { r: 140, g: 60, b: 200 };
+    const DAWN_BOTTOM: Color = { r: 255, g: 120, b: 60 };
+    const DAY_TOP: Color = { r: 0, g: 140, b: 255 };
+    const DAY_BOTTOM: Color = { r: 80, g: 200, b: 255 };
+    const DUSK_TOP: Color = { r: 180, g: 40, b: 120 };
+    const DUSK_BOTTOM: Color = { r: 255, g: 90, b: 30 };
 
     if (p < 0.06) {
       // Dawn (0.00 - 0.06): night → dawn
@@ -1032,9 +1033,9 @@ class MinecraftDayEngine {
   render(): Map<number, Color> {
     const out = new Map<number, Color>();
     const { top: skyTop, bottom: skyBottom } = this.skyColor();
-    const DIRT: Color = { r: 86, g: 51, b: 28 };
-    const GRASS: Color = { r: 56, g: 142, b: 60 };
-    const GRASS_TOP: Color = { r: 74, g: 168, b: 76 };
+    // Vivid earth-tones so they punch through the white keycap plastic.
+    const DIRT: Color = { r: 140, g: 70, b: 20 };
+    const GRASS: Color = { r: 30, g: 220, b: 50 };
 
     // Daylight visibility 0..1 — clouds/sun fade in/out with the day.
     const dayVisibility =
@@ -1081,16 +1082,12 @@ class MinecraftDayEngine {
       } else if (k.row === 3) color = DIRT;
       else color = GRASS;
 
-      // Grass top edge (last row sometimes gets a lighter strip on the
-      // "front" keys to suggest a flat block top).
-      if (k.row === 4 && (k.col + k.width / 2) % 2 < 1) color = GRASS_TOP;
-
       // Sun: 1-key-wide bright yellow at the arc position.
       if (sunArcRow === k.row && k.row <= 1) {
         const dSun = Math.abs(cx - sunCol);
         if (dSun < 1.0) {
           const halo = 1 - dSun;
-          color = lerpColor(color, { r: 255, g: 225, b: 90 }, Math.max(0, halo));
+          color = lerpColor(color, { r: 255, g: 220, b: 0 }, Math.max(0, halo));
         }
       }
 
@@ -1180,11 +1177,12 @@ class AquariumEngine {
 
   render(): Map<number, Color> {
     const out = new Map<number, Color>();
-    // Vertical depth gradient: row 0 (surface) is lighter, row 4 (floor) is deep.
-    const SURFACE: Color = { r: 60, g: 175, b: 220 };
-    const MID: Color = { r: 18, g: 90, b: 160 };
-    const FLOOR: Color = { r: 8, g: 32, b: 78 };
-    const SAND: Color = { r: 195, g: 175, b: 110 };
+    // Saturated underwater palette so the depth gradient is readable even
+    // on the K617's white keycaps.
+    const SURFACE: Color = { r: 40, g: 220, b: 255 };
+    const MID: Color = { r: 0, g: 120, b: 230 };
+    const FLOOR: Color = { r: 0, g: 30, b: 130 };
+    const SAND: Color = { r: 255, g: 200, b: 60 };
 
     // Fish position — sinusoidal sway in row, linear sweep across cols.
     const fishCol = -1 + this.fishPhase * 16; // -1..15 so it enters/exits
