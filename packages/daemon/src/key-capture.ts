@@ -35,6 +35,9 @@ export const KEY_W = 17;
 export const KEY_A = 30;
 export const KEY_S = 31;
 export const KEY_D = 32;
+export const KEY_Q = 16;
+export const KEY_E = 18;
+export const KEY_SPACE = 57;
 
 /** Original PongInteractive paddle map (Tab/Caps/LShift/LCtrl → slot 0..3). */
 export const PADDLE_KEYCODES: Record<number, number> = {

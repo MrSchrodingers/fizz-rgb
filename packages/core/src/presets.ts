@@ -1022,6 +1022,13 @@ export const BUILTIN_PRESETS: Preset[] = [
     category: 'game',
     pattern: { keys: {}, animType: 'pacman', animSpeed: 0.5 },
   },
+  {
+    id: 'game-doom',
+    name: 'DOOM',
+    description: 'Raycaster FPS no teclado. WASD move/gira, Space atira. HP fileira 1-7, ammo no canto. Mata os imps vermelhos sem deixar eles te encostarem',
+    category: 'game',
+    pattern: { keys: {}, animType: 'doom', animSpeed: 0.5 },
+  },
 
   // ── Themed cycles (host-streamed, layout-aware) ──────────────────────────
   {
@@ -1030,6 +1037,13 @@ export const BUILTIN_PRESETS: Preset[] = [
     description: 'Chão verde, céu azul, sol cruza o céu, nuvens brancas, depois noite com lua e estrelas',
     category: 'theme',
     pattern: { keys: {}, animType: 'minecraft-day', animSpeed: 0.5 },
+  },
+  {
+    id: 'theme-minecraft-clouds',
+    name: 'Minecraft Clouds',
+    description: 'Dia eterno: céu azul, sol no centro, nuvens brancas drifting, grama + terra. Modo ambient calmo sem o ciclo noite',
+    category: 'theme',
+    pattern: { keys: {}, animType: 'minecraft-clouds', animSpeed: 0.5 },
   },
   {
     id: 'theme-aquarium',

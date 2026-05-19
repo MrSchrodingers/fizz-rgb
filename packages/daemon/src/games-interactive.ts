@@ -14,7 +14,7 @@ import { log } from './log.js';
 import {
   KEY_TAB, KEY_CAPSLOCK, KEY_LEFTSHIFT, KEY_LEFTCTRL,
   KEY_BACKSLASH, KEY_ENTER, KEY_RIGHTSHIFT, KEY_RIGHTCTRL,
-  KEY_W, KEY_A, KEY_S, KEY_D,
+  KEY_W, KEY_A, KEY_S, KEY_D, KEY_SPACE,
 } from './key-capture.js';
 
 const RED: Color = { r: 255, g: 0, b: 0 };
@@ -423,11 +423,8 @@ export class PacmanEngine {
   }
 
   private spawnGhosts(): void {
-    this.ghosts = [
-      { x: 1, y: 0, color: { r: 255, g: 0, b: 60 } },        // Blinky red
-      { r: 0, y: 4, color: { r: 0, g: 200, b: 255 } } as unknown as { x: number; y: number; color: Color }, // placeholder
-    ];
-    // Fix: corrected above to use proper x,y. Use clean version:
+    // Blinky (red) spawns top-left, Inky (cyan) spawns bottom-right —
+    // opposite corners from Pacman so the first second isn't an instant death.
     this.ghosts = [
       { x: 1, y: 0, color: { r: 255, g: 0, b: 60 } },
       { x: 13, y: 4, color: { r: 0, g: 200, b: 255 } },
@@ -539,6 +536,373 @@ export class PacmanEngine {
     }
     return out;
   }
+}
+
+// ─── DOOM (raycaster FPS on a 14×5 LED grid) ────────────────────────────────
+
+/**
+ * Doom-flavoured raycaster. The world is an 8×8 grid of walls and open
+ * floor; the player navigates with WASD (W/S = forward/back, A/D = turn)
+ * and shoots with Space. The 14-column LED viewport renders one ray per
+ * column, with wall slice height proportional to 1/distance. Enemies
+ * (imps) are rendered in red when a ray hits them first.
+ *
+ * HUD on row 0:
+ *   keys 1-7   = HP bar (red)
+ *   key  8     = kill flash + muzzle flash
+ *   keys 0,-,=,Backspace = ammo bar (yellow, max 4)
+ *   key Esc    = weapon ready indicator (cyan if armed)
+ * Row 4 is the floor (dim brown).
+ */
+export class DoomEngine {
+  // World map: 1 = wall, 0 = empty. 8×8 box with two pillars.
+  private map: number[][] = [
+    [1, 1, 1, 1, 1, 1, 1, 1],
+    [1, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 1, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 1, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 1],
+    [1, 1, 1, 1, 1, 1, 1, 1],
+  ];
+
+  // Player
+  private px = 4;
+  private py = 4;
+  private angle = 0;   // radians, 0 = facing +x
+  private hp = 7;
+  private ammo = 4;
+  private kills = 0;
+
+  // Enemies
+  private enemies: Array<{ x: number; y: number; hp: number }> = [];
+
+  // Animation state
+  private muzzleFlash = 0;
+  private damageFlash = 0;
+  private deathScreen = 0;
+  private tickCounter = 0;
+  private ticksPerStep = 3;
+
+  // Constants
+  private readonly FOV = Math.PI / 2.5;   // ~72° — slightly wider for a small viewport
+  private readonly MOVE_SPEED = 0.25;
+  private readonly TURN_SPEED = 0.30;
+  private readonly MAX_DIST = 7.0;
+  private readonly ENEMY_SPEED = 0.06;
+  private readonly MAX_AMMO = 4;
+  private readonly MAX_HP = 7;
+
+  constructor() {
+    this.spawnEnemies();
+  }
+
+  setAnimSpeed(s: number): void {
+    const c = Math.max(0, Math.min(1, s));
+    this.ticksPerStep = Math.round(5 - c * 3);
+  }
+
+  private spawnEnemies(): void {
+    this.enemies = [
+      { x: 2.5, y: 2.5, hp: 1 },
+      { x: 5.5, y: 5.5, hp: 1 },
+      { x: 6.5, y: 1.5, hp: 1 },
+    ];
+  }
+
+  private isWall(x: number, y: number): boolean {
+    const ix = Math.floor(x);
+    const iy = Math.floor(y);
+    if (ix < 0 || ix >= 8 || iy < 0 || iy >= 8) return true;
+    return this.map[iy]![ix] === 1;
+  }
+
+  private normalize(a: number): number {
+    while (a > Math.PI) a -= 2 * Math.PI;
+    while (a < -Math.PI) a += 2 * Math.PI;
+    return a;
+  }
+
+  handleKey(keycode: number, value: number): void {
+    if (value !== 1) return;
+    if (this.deathScreen > 0) return; // can't act while dying
+    if (keycode === KEY_W) this.moveForward(this.MOVE_SPEED);
+    else if (keycode === KEY_S) this.moveForward(-this.MOVE_SPEED);
+    else if (keycode === KEY_A) this.angle = this.normalize(this.angle - this.TURN_SPEED);
+    else if (keycode === KEY_D) this.angle = this.normalize(this.angle + this.TURN_SPEED);
+    else if (keycode === KEY_SPACE) this.shoot();
+  }
+
+  private moveForward(amount: number): void {
+    const nx = this.px + Math.cos(this.angle) * amount;
+    const ny = this.py + Math.sin(this.angle) * amount;
+    // Slide along walls: try X and Y axes independently.
+    if (!this.isWall(nx, this.py)) this.px = nx;
+    if (!this.isWall(this.px, ny)) this.py = ny;
+  }
+
+  private shoot(): void {
+    if (this.ammo <= 0) return;
+    this.ammo--;
+    this.muzzleFlash = 6;
+    // Find nearest enemy whose angle from player is within ±0.2 rad of player angle.
+    let bestIdx = -1;
+    let bestDist = Infinity;
+    for (let i = 0; i < this.enemies.length; i++) {
+      const e = this.enemies[i]!;
+      const dx = e.x - this.px;
+      const dy = e.y - this.py;
+      const eAngle = Math.atan2(dy, dx);
+      const diff = Math.abs(this.normalize(eAngle - this.angle));
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (diff < 0.2 && dist < bestDist) {
+        bestDist = dist;
+        bestIdx = i;
+      }
+    }
+    if (bestIdx >= 0) {
+      this.enemies[bestIdx]!.hp--;
+      if (this.enemies[bestIdx]!.hp <= 0) {
+        this.enemies.splice(bestIdx, 1);
+        this.kills++;
+        this.ammo = Math.min(this.MAX_AMMO, this.ammo + 1); // ammo refund on kill
+        log.info({ kills: this.kills, remaining: this.enemies.length }, 'doom: kill');
+        if (this.enemies.length === 0) {
+          this.hp = Math.min(this.MAX_HP, this.hp + 2); // health pickup on round clear
+          this.ammo = this.MAX_AMMO;
+          this.spawnEnemies();
+        }
+      }
+    }
+  }
+
+  step(): void {
+    if (this.muzzleFlash > 0) this.muzzleFlash--;
+    if (this.damageFlash > 0) this.damageFlash--;
+    if (this.deathScreen > 0) {
+      this.deathScreen--;
+      if (this.deathScreen === 0) this.respawn();
+      return;
+    }
+    this.tickCounter++;
+    if (this.tickCounter < this.ticksPerStep) return;
+    this.tickCounter = 0;
+
+    // Enemy AI: move toward player; damage on contact.
+    for (let i = this.enemies.length - 1; i >= 0; i--) {
+      const e = this.enemies[i]!;
+      const dx = this.px - e.x;
+      const dy = this.py - e.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 0.55) {
+        this.hp--;
+        this.damageFlash = 8;
+        if (this.hp <= 0) {
+          this.deathScreen = 30;
+          log.info({ kills: this.kills }, 'doom: died');
+          return;
+        }
+      } else {
+        const nx = e.x + (dx / dist) * this.ENEMY_SPEED;
+        const ny = e.y + (dy / dist) * this.ENEMY_SPEED;
+        if (!this.isWall(nx, e.y)) e.x = nx;
+        if (!this.isWall(e.x, ny)) e.y = ny;
+      }
+    }
+  }
+
+  private respawn(): void {
+    this.px = 4;
+    this.py = 4;
+    this.angle = 0;
+    this.hp = this.MAX_HP;
+    this.ammo = this.MAX_AMMO;
+    this.kills = 0;
+    this.spawnEnemies();
+  }
+
+  render(): Map<number, Color> {
+    const out = new Map<number, Color>();
+
+    // Death screen: full red, ignore everything else.
+    if (this.deathScreen > 0) {
+      for (const k of K617_LAYOUT.keys) {
+        out.set(k.ledIndex, { r: 200, g: 0, b: 0 });
+      }
+      return out;
+    }
+
+    // ── HUD row 0 ──────────────────────────────────────────────────────
+    // Esc = weapon ready (cyan when has ammo)
+    const escLed = findKeyLed('Escape');
+    if (escLed !== null) {
+      out.set(escLed, this.ammo > 0 ? CYAN : { r: 80, g: 40, b: 0 });
+    }
+    // 1..7 = HP bar
+    const HP_KEYS = ['1', '2', '3', '4', '5', '6', '7'];
+    for (let i = 0; i < this.hp && i < HP_KEYS.length; i++) {
+      const led = findKeyLed(HP_KEYS[i]!);
+      if (led !== null) out.set(led, RED);
+    }
+    // 8 = muzzle flash / kill flash
+    if (this.muzzleFlash > 0) {
+      const led = findKeyLed('8');
+      if (led !== null) out.set(led, WHITE);
+    }
+    // 0,Minus,Equal,Backspace = ammo (4 slots)
+    const AMMO_KEYS = ['0', 'Minus', 'Equal', 'Backspace'];
+    for (let i = 0; i < this.ammo && i < AMMO_KEYS.length; i++) {
+      const led = findKeyLed(AMMO_KEYS[i]!);
+      if (led !== null) out.set(led, YELLOW);
+    }
+
+    // ── 3D viewport — rays for cols 0..13, rows 1..3 ───────────────────
+    const COLS = 14;
+    for (let col = 0; col < COLS; col++) {
+      const rayAngle = this.angle + ((col / (COLS - 1)) - 0.5) * this.FOV;
+      const rdx = Math.cos(rayAngle);
+      const rdy = Math.sin(rayAngle);
+
+      // DDA: step forward until we hit a wall or hit MAX_DIST.
+      let dist = 0;
+      while (dist < this.MAX_DIST) {
+        dist += 0.05;
+        if (this.isWall(this.px + rdx * dist, this.py + rdy * dist)) break;
+      }
+
+      // Check if any enemy lies along this ray BEFORE the wall.
+      let enemyDist = Infinity;
+      for (const e of this.enemies) {
+        const ex = e.x - this.px;
+        const ey = e.y - this.py;
+        const eD = Math.sqrt(ex * ex + ey * ey);
+        const eA = Math.atan2(ey, ex);
+        const diff = Math.abs(this.normalize(eA - rayAngle));
+        // Tighter angle tolerance for distant enemies (perspective)
+        const tol = Math.max(0.08, 0.18 - eD * 0.02);
+        if (diff < tol && eD < dist && eD < enemyDist) enemyDist = eD;
+      }
+
+      const useDist = enemyDist < Infinity ? enemyDist : dist;
+      const isEnemy = enemyDist < Infinity;
+      // Distance-based fade: closer = brighter.
+      const fade = Math.max(0.2, 1 - useDist / this.MAX_DIST);
+      const slice: Color = isEnemy
+        ? { r: Math.round(255 * fade), g: 0, b: Math.round(80 * fade) }
+        : { r: Math.round(110 * fade), g: Math.round(110 * fade), b: Math.round(160 * fade) };
+
+      // Slice height: closer = taller. 3 rows max (rows 1..3).
+      const sliceHeight = useDist < 1.0 ? 3 : useDist < 2.5 ? 2 : useDist < 5.0 ? 1 : 0;
+      // Center the slice on row 2.
+      const startRow = sliceHeight === 3 ? 1 : sliceHeight === 2 ? 1 : 2;
+      const endRow = startRow + sliceHeight - 1;
+      for (let row = startRow; row <= endRow; row++) {
+        const led = gridToLed(col, row);
+        if (led !== null) out.set(led, slice);
+      }
+
+      // Floor on row 4.
+      const floorLed = gridToLed(col, 4);
+      if (floorLed !== null) out.set(floorLed, { r: 60, g: 30, b: 5 });
+    }
+
+    // ── Damage flash overlay (red wash) ────────────────────────────────
+    if (this.damageFlash > 0) {
+      const i = this.damageFlash / 8;
+      out.forEach((c, idx) => {
+        out.set(idx, {
+          r: Math.min(255, Math.round(c.r * (1 - i * 0.4) + 220 * i)),
+          g: Math.round(c.g * (1 - i * 0.7)),
+          b: Math.round(c.b * (1 - i * 0.7)),
+        });
+      });
+    }
+
+    return out;
+  }
+}
+
+// ─── Minecraft "just clouds" (eternal day) ──────────────────────────────────
+
+/**
+ * Variant of MinecraftDayEngine that stays at high noon forever — sky stays
+ * day-blue, sun stays at the center top, clouds drift across rows 0-1. Same
+ * grass + dirt layers on rows 3-4. Useful as a calm ambient mode without the
+ * dusk/night transitions.
+ */
+export class MinecraftCloudsEngine {
+  private tickCounter = 0;
+  // Three clouds drifting at independent speeds so they overlap interestingly.
+  private readonly clouds = [
+    { offset: 0.00, rate: 1.0, row: 0 },
+    { offset: 0.35, rate: 1.3, row: 1 },
+    { offset: 0.70, rate: 0.7, row: 0 },
+  ];
+
+  step(): void { this.tickCounter++; }
+
+  handleKey(_keycode: number, _value: number): void { /* no input */ }
+
+  render(): Map<number, Color> {
+    const out = new Map<number, Color>();
+    const SKY_TOP: Color = { r: 0, g: 140, b: 255 };
+    const SKY_BOTTOM: Color = { r: 80, g: 200, b: 255 };
+    const DIRT: Color = { r: 160, g: 80, b: 20 };
+    const GRASS: Color = { r: 0, g: 255, b: 40 };
+    const SUN: Color = { r: 255, g: 220, b: 0 };
+
+    // Continuous cloud drift parameter — bigger denominator = slower drift.
+    const phase = (this.tickCounter / 900) % 1;
+    const cloudPositions = this.clouds.map((c) => ({
+      col: ((phase * c.rate + c.offset) * 16) % 16 - 1,
+      row: c.row,
+    }));
+
+    // Sun parked at the top center.
+    const sunCol = 7;
+    const sunRow = 0;
+
+    for (const k of K617_LAYOUT.keys) {
+      const cx = k.col + k.width / 2;
+      let color: Color;
+      if (k.row === 0) color = SKY_TOP;
+      else if (k.row === 1) color = SKY_BOTTOM;
+      else if (k.row === 2) color = SKY_BOTTOM;
+      else if (k.row === 3) color = GRASS;
+      else color = DIRT;
+
+      // Sun glow at top-center.
+      if (k.row === sunRow) {
+        const d = Math.abs(cx - sunCol);
+        if (d < 1.5) color = lerpColor(color, SUN, Math.max(0, 1 - d / 1.5));
+      }
+
+      // Clouds.
+      if (k.row <= 1) {
+        for (const c of cloudPositions) {
+          if (c.row !== k.row) continue;
+          const d = Math.abs(cx - c.col);
+          if (d < 1.2) {
+            const puff = (1 - d / 1.2) * 0.45;
+            color = lerpColor(color, { r: 255, g: 255, b: 255 }, puff);
+          }
+        }
+      }
+
+      out.set(k.ledIndex, color);
+    }
+    return out;
+  }
+}
+
+function lerpColor(a: Color, b: Color, t: number): Color {
+  const k = Math.max(0, Math.min(1, t));
+  return {
+    r: Math.round(a.r + (b.r - a.r) * k),
+    g: Math.round(a.g + (b.g - a.g) * k),
+    b: Math.round(a.b + (b.b - a.b) * k),
+  };
 }
 
 // Suppress unused-import warnings for engines that don't use every keycode.

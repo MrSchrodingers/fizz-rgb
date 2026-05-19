@@ -497,6 +497,76 @@ function renderPacman(t: number): string[] {
   return out;
 }
 
+function renderDoom(t: number): string[] {
+  const out: string[] = [];
+  // Fake a 3D corridor: walls converging to a vanishing point at center.
+  // Two enemy "imps" appear at distance, pulsing red.
+  const enemyDist = 1.5 + Math.sin(t * 1.2) * 1.0; // 0.5..2.5
+  const enemyCol = 3 + Math.floor(Math.sin(t * 0.8) * 0.5 + 0.5);
+  const flash = Math.sin(t * 8) > 0;
+
+  for (let gy = 0; gy < THUMB_ROWS; gy++) {
+    for (let gx = 0; gx < THUMB_COLS; gx++) {
+      let color = BG;
+      // HUD row 0: HP bar (left half red) + ammo (right cyan)
+      if (gy === 0) {
+        if (gx <= 2) color = '#ff0000';
+        else if (gx >= 4) color = '#ffdc00';
+        out.push(color);
+        continue;
+      }
+      // Floor row 4
+      if (gy === 4) { out.push('#3c1e05'); continue; }
+      // 3D view rows 1-3: wall slices converging toward center column.
+      const distFromCenter = Math.abs(gx - (THUMB_COLS - 1) / 2);
+      const wallSliceHeight = Math.max(1, 3 - Math.floor(distFromCenter));
+      const sliceTop = 2 - Math.floor((wallSliceHeight - 1) / 2);
+      const sliceBottom = sliceTop + wallSliceHeight - 1;
+      if (gy >= sliceTop && gy <= sliceBottom) {
+        const fade = 1 - distFromCenter / 4;
+        // Enemy: column matches & near distance
+        if (gx === enemyCol && enemyDist < 1.5 && gy === 2) {
+          color = flash ? '#ff0050' : '#a00040';
+        } else {
+          const v = Math.round(140 * fade);
+          color = '#' + v.toString(16).padStart(2, '0').repeat(2) + Math.round(160 * fade).toString(16).padStart(2, '0');
+        }
+      }
+      out.push(color);
+    }
+  }
+  return out;
+}
+
+function renderMinecraftClouds(t: number): string[] {
+  const out: string[] = [];
+  const SKY_TOP = '#008cff';
+  const SKY_BOTTOM = '#50c8ff';
+  const cloud1 = ((t * 0.18) % 1) * THUMB_COLS;
+  const cloud2 = ((t * 0.12 + 0.4) % 1) * THUMB_COLS;
+  for (let gy = 0; gy < THUMB_ROWS; gy++) {
+    for (let gx = 0; gx < THUMB_COLS; gx++) {
+      let color: string;
+      if (gy === 0) color = SKY_TOP;
+      else if (gy === 1 || gy === 2) color = SKY_BOTTOM;
+      else if (gy === 3) color = '#1edc32';
+      else color = '#8c4614';
+      // Sun
+      if (gy === 0 && Math.abs(gx + 0.5 - THUMB_COLS / 2) < 0.7) {
+        color = lerpHex(color, '#ffdc00', 0.8);
+      }
+      // Clouds
+      if (gy === 0 || gy === 1) {
+        const cloudCol = gy === 0 ? cloud1 : cloud2;
+        const d = Math.abs(gx + 0.5 - cloudCol);
+        if (d < 1.0) color = lerpHex(color, '#ffffff', (1 - d / 1.0) * 0.7);
+      }
+      out.push(color);
+    }
+  }
+  return out;
+}
+
 // ─── Main entry point ────────────────────────────────────────────────────────
 
 export function renderThumbnail(preset: Preset | UserPreset, t: number): string[] {
@@ -521,6 +591,8 @@ export function renderThumbnail(preset: Preset | UserPreset, t: number): string[
     case 'snake-interactive': return renderSnake(t);
     case 'breakout-interactive': return renderBreakout(t);
     case 'pacman': return renderPacman(t);
+    case 'doom': return renderDoom(t);
+    case 'minecraft-clouds': return renderMinecraftClouds(t);
   }
 
   const out: string[] = new Array(TOTAL);

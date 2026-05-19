@@ -15,6 +15,8 @@ import {
   SnakeInteractiveEngine,
   BreakoutInteractiveEngine,
   PacmanEngine,
+  DoomEngine,
+  MinecraftCloudsEngine,
 } from './games-interactive.js';
 
 /** Common surface every interactive engine implements so EffectEngine can
@@ -1829,6 +1831,12 @@ export class EffectEngine {
         e.setAnimSpeed(pattern.animSpeed);
         return e;
       },
+      'doom': () => {
+        const e = new DoomEngine();
+        e.setAnimSpeed(pattern.animSpeed);
+        return e;
+      },
+      'minecraft-clouds': () => new MinecraftCloudsEngine(),
     };
     const builder = interactiveBuilders[pattern.animType];
     if (builder) {
