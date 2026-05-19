@@ -36,6 +36,8 @@ interface PaintState {
   animSpeed: number;
   /** Sequential order of keys last set via paintByText (for typewriter/marquee). */
   lastSequence: number[];
+  /** Currently applied preset id (null when user has diverged from any preset). */
+  activePresetId: string | null;
   setMode: (m: 'effect' | 'paint') => void;
   toggleKey: (ledIndex: number, additive: boolean) => void;
   clearSelection: () => void;
@@ -46,6 +48,7 @@ interface PaintState {
   paintByText: (text: string) => void;
   setAnimType: (t: AnimType) => void;
   setAnimSpeed: (s: number) => void;
+  setActivePresetId: (id: string | null) => void;
 }
 
 export const usePaintStore = create<PaintState>((set, get) => ({
@@ -56,6 +59,7 @@ export const usePaintStore = create<PaintState>((set, get) => ({
   animType: 'solid',
   animSpeed: 0.5,
   lastSequence: [],
+  activePresetId: null,
   setMode: (mode) => set({ mode, selected: new Set() }),
   toggleKey: (ledIndex, additive) =>
     set((s) => {
@@ -74,10 +78,10 @@ export const usePaintStore = create<PaintState>((set, get) => ({
     const { selected, brushColor, keyColors } = get();
     const next = new Map(keyColors);
     selected.forEach((i) => next.set(i, brushColor));
-    set({ keyColors: next, selected: new Set() });
+    set({ keyColors: next, selected: new Set(), activePresetId: null });
   },
   setBrushColor: (brushColor) => set({ brushColor }),
-  resetKeys: () => set({ keyColors: new Map(), selected: new Set() }),
+  resetKeys: () => set({ keyColors: new Map(), selected: new Set(), activePresetId: null }),
   paintByText: (text) => {
     const { brushColor, keyColors } = get();
     const next = new Map(keyColors);
@@ -90,8 +94,9 @@ export const usePaintStore = create<PaintState>((set, get) => ({
       next.set(keyDef.ledIndex, brushColor);
       sequence.push(keyDef.ledIndex);
     }
-    set({ keyColors: next, lastSequence: sequence });
+    set({ keyColors: next, lastSequence: sequence, activePresetId: null });
   },
   setAnimType: (animType) => set({ animType }),
   setAnimSpeed: (animSpeed) => set({ animSpeed }),
+  setActivePresetId: (activePresetId) => set({ activePresetId }),
 }));

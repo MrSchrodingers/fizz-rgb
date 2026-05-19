@@ -337,6 +337,7 @@ export default function App() {
       animSpeed: preset.pattern.animSpeed,
       lastSequence: preset.pattern.sequence ?? [],
       mode: 'paint',
+      activePresetId: preset.id,
     });
 
     console.log('[applyPreset]', preset.id, 'animType=', preset.pattern.animType, tintColor ? `tint=${tintColor}` : '');

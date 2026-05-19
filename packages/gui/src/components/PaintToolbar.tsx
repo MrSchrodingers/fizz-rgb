@@ -37,13 +37,17 @@ export function PaintToolbar({ onSavePattern }: Props) {
 
   const handleAnimTypeChange = async (newType: AnimType) => {
     setAnimType(newType);
-    if (keyColors.size === 0 || !window.fizz) return;
+    // Diverging from an active preset: drop the highlight in the sidebar.
+    usePaintStore.getState().setActivePresetId(null);
+    if (!window.fizz) return;
     const colors: Record<string, string> = {};
     keyColors.forEach((hex, idx) => { colors[String(idx)] = hex; });
     try {
       if (newType === 'solid') {
         await window.fizz.perkeySet(colors);
       } else {
+        // Game animations (pong/snake/tetris/...) generate frames from internal
+        // state, so empty `colors` is valid — don't gate this on keyColors.size.
         await window.fizz.perkeyStartPattern({
           keys: colors,
           animType: newType,
@@ -58,10 +62,12 @@ export function PaintToolbar({ onSavePattern }: Props) {
 
   const handleSpeedChange = async (newSpeed: number) => {
     setAnimSpeed(newSpeed);
-    if (keyColors.size === 0 || !window.fizz || animType === 'solid') return;
+    if (!window.fizz || animType === 'solid') return;
     const colors: Record<string, string> = {};
     keyColors.forEach((hex, idx) => { colors[String(idx)] = hex; });
     try {
+      // Same reasoning as handleAnimTypeChange: game animations have no
+      // pre-painted keys, but their speed still needs to reach the daemon.
       await window.fizz.perkeyStartPattern({
         keys: colors,
         animType,

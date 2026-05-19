@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { BUILTIN_PRESETS, K617_LAYOUT } from '@fizz/core';
 import type { Preset } from '@fizz/core';
 import { usePaintStore } from '../stores/paintStore.js';
@@ -51,6 +51,21 @@ export function PresetGallery({
   const animSpeed = usePaintStore((s) => s.animSpeed);
   const lastSequence = usePaintStore((s) => s.lastSequence);
   const brushColor = usePaintStore((s) => s.brushColor);
+  const activePresetId = usePaintStore((s) => s.activePresetId);
+
+  // Re-tint the active preset when the brush color changes while tint mode
+  // is on, so the user sees the new color immediately instead of having to
+  // re-click the preset card.
+  const prevBrush = useRef(brushColor);
+  useEffect(() => {
+    if (prevBrush.current === brushColor) return;
+    prevBrush.current = brushColor;
+    if (!tintEnabled || !activePresetId) return;
+    const builtin = (BUILTIN_PRESETS as (Preset | UserPreset)[]).find((p) => p.id === activePresetId);
+    const user = userPresets.find((p) => p.id === activePresetId);
+    const active = builtin ?? user;
+    if (active) onApply(active, brushColor);
+  }, [brushColor, tintEnabled, activePresetId, userPresets, onApply]);
 
   const categories = ['all', 'word', 'shape', 'pattern', 'gradient', 'theme', 'game', 'user'];
 
@@ -179,15 +194,25 @@ export function PresetGallery({
             Nenhum preset nessa categoria.
           </p>
         )}
-        {allPresets.map((preset) => (
+        {allPresets.map((preset) => {
+          const isActive = activePresetId === preset.id;
+          return (
           <div
             key={preset.id}
-            className="group flex items-start gap-2 px-2 py-2 rounded-lg hover:bg-zinc-800/50 transition cursor-pointer"
+            className={
+              'group flex items-start gap-2 px-2 py-2 rounded-lg transition cursor-pointer ' +
+              (isActive
+                ? 'bg-fuchsia-500/15 ring-1 ring-fuchsia-500/60'
+                : 'hover:bg-zinc-800/50')
+            }
             onClick={() => onApply(preset, tintEnabled ? brushColor : undefined)}
           >
             <PresetThumbnail preset={preset} />
             <div className="flex-1 min-w-0">
-              <div className="text-sm text-zinc-200 font-medium truncate">{preset.name}</div>
+              <div className={'text-sm font-medium truncate ' + (isActive ? 'text-fuchsia-100' : 'text-zinc-200')}>
+                {preset.name}
+                {isActive && <span className="ml-2 text-[10px] uppercase tracking-wider text-fuchsia-400/80">ativo</span>}
+              </div>
               <div className="text-xs text-zinc-500 truncate">{preset.description}</div>
             </div>
             {preset.category === 'user' && (
@@ -203,7 +228,8 @@ export function PresetGallery({
               </button>
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Name prompt modal */}
