@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Save, X, RotateCcw } from 'lucide-react';
 import type { Preset } from '@fizz/core';
 import type { UserPreset } from './PresetGallery.js';
 import { uniqueColors, transformKeys, type Style, type StyleOptions } from '../lib/colorTransform.js';
+import { STATEFUL_PALETTES } from '../lib/statefulPalettes.js';
 import { cn } from '../lib/classnames.js';
 
 interface Props {
@@ -26,17 +27,23 @@ export function PresetEditor({ preset, onPreview, onSaveAs, onClose }: Props) {
   const [style, setStyle] = useState<Style>('original');
   const [vibrancy, setVibrancy] = useState(1);
   const [colorMap, setColorMap] = useState<Record<string, string>>({});
+  /** Per-palette-slot overrides for stateful animations. Sent as
+   *  pattern.colorOverrides; the daemon engine reads them in render(). */
+  const [paletteOverrides, setPaletteOverrides] = useState<Record<string, string>>({});
   const [editingColor, setEditingColor] = useState<string | null>(null);
+  const [editingSlot, setEditingSlot] = useState<string | null>(null);
   const [saveName, setSaveName] = useState('');
   const [showSave, setShowSave] = useState(false);
 
   const colors = uniqueColors(preset.pattern.keys);
+  const statefulSlots = useMemo(() => STATEFUL_PALETTES[preset.pattern.animType] ?? null, [preset.pattern.animType]);
   const isStateful = colors.length === 0;
 
   // Apply the current transformation and notify the host whenever any knob
   // changes — drives the live preview on hardware.
   useEffect(() => {
     const opts: StyleOptions = { style, vibrancy, colorMap };
+    const hasOverrides = Object.keys(paletteOverrides).length > 0;
     const transformed = {
       ...preset,
       pattern: {
@@ -44,6 +51,7 @@ export function PresetEditor({ preset, onPreview, onSaveAs, onClose }: Props) {
         animType: preset.pattern.animType,
         animSpeed: preset.pattern.animSpeed,
         ...(preset.pattern.sequence ? { sequence: preset.pattern.sequence } : {}),
+        ...(hasOverrides ? { colorOverrides: paletteOverrides } : {}),
       },
     } as Preset | UserPreset;
     onPreview(transformed);
@@ -51,13 +59,15 @@ export function PresetEditor({ preset, onPreview, onSaveAs, onClose }: Props) {
     // closure each render, which would loop. The values that actually drive
     // a re-apply are the knobs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [style, vibrancy, colorMap, preset]);
+  }, [style, vibrancy, colorMap, paletteOverrides, preset]);
 
   function reset() {
     setStyle('original');
     setVibrancy(1);
     setColorMap({});
+    setPaletteOverrides({});
     setEditingColor(null);
+    setEditingSlot(null);
   }
 
   function applyColorChange(newHex: string) {
@@ -190,11 +200,65 @@ export function PresetEditor({ preset, onPreview, onSaveAs, onClose }: Props) {
         </div>
       )}
 
-      {isStateful && (
+      {isStateful && statefulSlots && (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[10px] uppercase tracking-wider text-zinc-500">
+            Paleta do preset ({statefulSlots.length} cores)
+          </span>
+          <div className="flex flex-col gap-1">
+            {statefulSlots.map((s) => {
+              const effective = paletteOverrides[s.slot] ?? s.default;
+              const isEditing = editingSlot === s.slot;
+              return (
+                <div key={s.slot} className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingSlot(isEditing ? null : s.slot)}
+                    title={`${s.label} (${effective})`}
+                    aria-label={`Edit ${s.label}`}
+                    className={cn(
+                      'w-6 h-6 rounded border transition shrink-0',
+                      isEditing
+                        ? 'border-fuchsia-400 ring-2 ring-fuchsia-500/50'
+                        : 'border-zinc-700 hover:border-zinc-500',
+                    )}
+                    style={{ background: effective }}
+                  />
+                  <span className="text-xs text-zinc-300 w-20">{s.label}</span>
+                  {isEditing && (
+                    <input
+                      type="color"
+                      value={effective}
+                      onChange={(e) => setPaletteOverrides((prev) => ({ ...prev, [s.slot]: e.target.value }))}
+                      className="w-7 h-7 rounded cursor-pointer bg-transparent border border-zinc-700"
+                      aria-label={`Pick ${s.label} color`}
+                    />
+                  )}
+                  {paletteOverrides[s.slot] && (
+                    <button
+                      type="button"
+                      onClick={() => setPaletteOverrides((prev) => {
+                        const next = { ...prev };
+                        delete next[s.slot];
+                        return next;
+                      })}
+                      className="text-[10px] text-zinc-500 hover:text-zinc-200"
+                      title="Restaurar padrão"
+                    >
+                      ↺
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {isStateful && !statefulSlots && (
         <p className="text-[11px] text-zinc-500 leading-relaxed">
-          Este preset é uma animação stateful (cores são geradas pelo daemon). Vibrância/estilo
-          afetam só visualmente nos presets de cor-base — pra animações vivas tipo Minecraft, o
-          ajuste real precisa de uma flag no daemon (próxima versão).
+          Animação stateful sem paleta editável ainda. Vibrância funciona; estilo afeta só
+          presets de cor-base.
         </p>
       )}
 

@@ -27,6 +27,9 @@ interface InteractiveEngine {
   /** Called on every keydown (value === 1). Engines that want key-up should
    *  inspect value themselves; most don't. */
   handleKey(keycode: number, value: number): void;
+  /** Optional: receive per-palette-slot color overrides from
+   *  pattern.colorOverrides so the GUI can recolor stateful animations. */
+  setColorOverrides?(overrides: Record<string, string>): void;
 }
 
 export interface CurrentEffect {
@@ -1841,6 +1844,11 @@ export class EffectEngine {
     const builder = interactiveBuilders[pattern.animType];
     if (builder) {
       const eng = builder();
+      // Hand off any per-slot color overrides from the pattern before the
+      // first render. Engines that don't care silently ignore.
+      if (pattern.colorOverrides && eng.setColorOverrides) {
+        eng.setColorOverrides(pattern.colorOverrides);
+      }
       this.interactiveEngine = eng;
       const capture = new KeyCapture();
       capture.onKey((keycode, value) => eng.handleKey(keycode, value));

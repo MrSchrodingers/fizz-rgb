@@ -474,7 +474,8 @@ export default function App() {
         try { await window.fizz.perkeySet(colors); } catch (err) { console.warn(err); }
       } else {
         const vibrancy = (preset.pattern as { vibrancy?: number }).vibrancy;
-        console.log('[applyPreset] → perkeyStartPattern (animated)', preset.pattern.animType, vibrancy ? `vibrancy=${vibrancy}` : '');
+        const colorOverrides = (preset.pattern as { colorOverrides?: Record<string, string> }).colorOverrides;
+        console.log('[applyPreset] → perkeyStartPattern (animated)', preset.pattern.animType, vibrancy ? `vibrancy=${vibrancy}` : '', colorOverrides ? `overrides=${Object.keys(colorOverrides).length}` : '');
         try {
           await window.fizz.perkeyStartPattern({
             keys: colors,
@@ -482,6 +483,7 @@ export default function App() {
             animSpeed: preset.pattern.animSpeed,
             ...(preset.pattern.sequence != null ? { sequence: preset.pattern.sequence } : {}),
             ...(vibrancy !== undefined && vibrancy !== 1 ? { vibrancy } : {}),
+            ...(colorOverrides && Object.keys(colorOverrides).length > 0 ? { colorOverrides } : {}),
           });
         } catch (err) { console.warn(err); }
       }

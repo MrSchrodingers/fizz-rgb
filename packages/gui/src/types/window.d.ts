@@ -23,6 +23,7 @@ export interface FizzApi {
     animSpeed: number;
     sequence?: number[];
     vibrancy?: number;
+    colorOverrides?: Record<string, string>;
   }): Promise<void>;
   perkeyStopPattern(): Promise<void>;
   perkeyGameInput(slot: number): Promise<void>;

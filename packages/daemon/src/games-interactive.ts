@@ -8,7 +8,7 @@
  */
 
 import type { Color } from '@fizz/core';
-import { K617_LAYOUT } from '@fizz/core';
+import { K617_LAYOUT, parseHex } from '@fizz/core';
 import { gridToLed } from './game-grid.js';
 import { log } from './log.js';
 import {
@@ -832,6 +832,17 @@ export class DoomEngine {
  */
 export class MinecraftCloudsEngine {
   private tickCounter = 0;
+  private overrides: Record<string, string> = {};
+
+  setColorOverrides(o: Record<string, string>): void {
+    this.overrides = o ?? {};
+  }
+
+  private color(slot: string, fallback: Color): Color {
+    const hex = this.overrides[slot];
+    return hex ? parseHex(hex) : fallback;
+  }
+
   // Five clouds drifting at independent speeds so the sky looks lively
   // (was three at very slow rates — barely visible motion). Each tick is
   // one frame at 30fps; CLOUD_CYCLE controls how long a cloud takes to
@@ -852,14 +863,15 @@ export class MinecraftCloudsEngine {
 
   render(): Map<number, Color> {
     const out = new Map<number, Color>();
-    // Saturated palette — every channel pushed close to pure for maximum
-    // contrast on the K617's white keycaps.
-    const SKY_TOP: Color = { r: 0, g: 100, b: 255 };       // vivid royal blue
-    const SKY_BOTTOM: Color = { r: 40, g: 180, b: 255 };   // sky cyan-blue
-    const DIRT: Color = { r: 200, g: 90, b: 10 };          // rich brown
-    const GRASS: Color = { r: 0, g: 255, b: 0 };           // pure green
-    const SUN: Color = { r: 255, g: 110, b: 0 };           // orange (was yellow)
-    const CLOUD: Color = { r: 255, g: 255, b: 255 };       // pure white
+    // Defaults: vivid + darker sky per user request. Each slot is editable
+    // via pattern.colorOverrides — see GUI's statefulPalettes for the slot
+    // names and friendly labels.
+    const SKY_TOP    = this.color('sky-top',    { r: 0,   g: 40,  b: 180 }); // darker royal
+    const SKY_BOTTOM = this.color('sky-bottom', { r: 0,   g: 100, b: 220 }); // mid-blue
+    const DIRT       = this.color('dirt',       { r: 180, g: 70,  b: 0   });
+    const GRASS      = this.color('grass',      { r: 0,   g: 255, b: 0   });
+    const SUN        = this.color('sun',        { r: 255, g: 60,  b: 0   }); // intense orange-red
+    const CLOUD      = this.color('cloud',      { r: 255, g: 255, b: 255 });
 
     // Continuous cloud drift parameter.
     const phase = (this.tickCounter / this.CLOUD_CYCLE) % 1;

@@ -93,6 +93,11 @@ export const PatternSchema = z.object({
    *  honour the global tonality slider that already affects color-bearing
    *  presets via client-side transformation. */
   vibrancy: z.number().min(0.1).max(3).optional(),
+  /** Per-palette-slot color overrides for stateful animations. Each engine
+   *  defines its own slot names (e.g. minecraft-clouds: 'sky-top',
+   *  'sky-bottom', 'grass', 'dirt', 'sun', 'cloud'). Values that aren't
+   *  present fall back to engine defaults. */
+  colorOverrides: z.record(z.string(), HexColorSchema).optional(),
 });
 export type Pattern = z.infer<typeof PatternSchema>;
 /** @deprecated use Pattern */
