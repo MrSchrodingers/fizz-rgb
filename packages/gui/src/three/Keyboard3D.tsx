@@ -235,10 +235,15 @@ function KeyboardKeys() {
       const PADDLE_KEY_NAMES = ['Tab', 'CapsLock', 'LShift', 'LCtrl'] as const;
       const def = K617_LAYOUT.keys.find((x) => x.ledIndex === ledIndex);
       const slot = def ? PADDLE_KEY_NAMES.indexOf(def.name as (typeof PADDLE_KEY_NAMES)[number]) : -1;
+      console.log('[pong] click ledIndex=', ledIndex, 'name=', def?.name, 'slot=', slot);
       if (slot >= 0) {
-        window.fizz.perkeyGameInput(slot).catch(() => {});
+        window.fizz.perkeyGameInput(slot)
+          .then(() => console.log('[pong] paddle moved to slot', slot))
+          .catch((err) => console.warn('[pong] gameInput failed', err));
         return;
       }
+      // Click was on a non-paddle key during pong; consume so we don't paint.
+      return;
     }
     if (paintMode !== 'paint') return;
     if (tapToTestMode && window.fizz) {

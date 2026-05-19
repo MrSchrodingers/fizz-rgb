@@ -1281,24 +1281,51 @@ class AquariumEngine {
  * toward it but with a configurable miss rate so the player can actually
  * score.
  */
+/**
+ * Pong variant where the LEFT paddle is the player and the RIGHT paddle is
+ * a deliberately fallible AI. Layout on the K617:
+ *   - Number row 1-4 (left half):    player score (red)
+ *   - Number row 6-9 (right half):   AI score (blue)
+ *   - Number row 5 (center):         serve indicator (white pulse)
+ *   - Left edge (Tab/Caps/LShift/LCtrl): player paddle, slot 0..3 = row 1..4
+ *   - Right edge (Backslash/Enter/RShift/RCtrl): AI paddle
+ *   - Play area: rows 1..4 (cols 1..13) — the four physical key rows below
+ *     the scoreboard. Integer ball coordinates so the render maps cleanly
+ *     to one key per frame.
+ *
+ * Player input flows in via setPaddleSlot(0..3). AI is "permissible": it
+ * recomputes its target every few ticks and only follows the ball with a
+ * configurable miss rate, so the player can actually score.
+ */
 class PongInteractiveEngine {
-  private paddleSlot = 1; // player slot 0..3 (Tab/Caps/LShift/LCtrl)
-  private aiY = 1.5; // AI paddle vertical position (continuous)
-  private ballX = 7;
-  private ballY = 1.5;
-  private ballVX = 1;
-  private ballVY = 0.6;
+  // ── Player + AI paddle slots (0..3 → rows 1..4) ──────────────────────────
+  private paddleSlot = 1;
+  private aiSlot = 1;
+  private aiTargetSlot = 1;
+
+  // ── Integer ball state ──────────────────────────────────────────────────
+  private ballCol = 7;
+  private ballRow = 2;
+  private ballVCol: -1 | 1 = 1;
+  private ballVRow: -1 | 0 | 1 = 1;
+
   private scorePlayer = 0;
   private scoreAi = 0;
-  private resetCountdown = 0; // frames remaining before next ball serve
+  private resetCountdown = 30;
   private tickCounter = 0;
-  private readonly TICKS_PER_STEP = 4; // ~7.5Hz ball motion at 30fps
-  private readonly AI_MISS_RATE = 0.35;
-  private readonly PLAY_TOP = 1;     // ball constrained rows 1..3 (row 0 is scoreboard)
-  private readonly PLAY_BOTTOM = 3;
+  private aiTargetCooldown = 0;
+
+  private readonly TICKS_PER_STEP = 6;   // ~5 ball steps per second at 30fps
+  private readonly AI_TARGET_LAG = 3;    // ticks between AI target updates
+  private readonly AI_MISS_RATE = 0.4;   // chance AI picks a wrong row
+  private readonly MAX_SCORE = 4;        // first to MAX_SCORE wins → reset
+  private readonly PLAY_TOP = 1;         // ball lives in rows 1..4
+  private readonly PLAY_BOTTOM = 4;
 
   setPaddleSlot(slot: number): void {
-    if (Number.isInteger(slot) && slot >= 0 && slot <= 3) this.paddleSlot = slot;
+    if (Number.isInteger(slot) && slot >= 0 && slot <= 3) {
+      this.paddleSlot = slot;
+    }
   }
 
   step(): void {
@@ -1307,97 +1334,110 @@ class PongInteractiveEngine {
     if (this.tickCounter < this.TICKS_PER_STEP) return;
     this.tickCounter = 0;
 
-    this.ballX += this.ballVX;
-    this.ballY += this.ballVY;
-
-    // Bounce top/bottom (within play area)
-    if (this.ballY <= this.PLAY_TOP) { this.ballY = this.PLAY_TOP; this.ballVY = Math.abs(this.ballVY); }
-    if (this.ballY >= this.PLAY_BOTTOM) { this.ballY = this.PLAY_BOTTOM; this.ballVY = -Math.abs(this.ballVY); }
-
-    // AI motion: tracks ball when it's heading right, with random miss bias.
-    if (this.ballVX > 0) {
-      // Predict ball Y at column 13 using simple linear (good enough for short distances).
-      const stepsToReach = Math.max(1, 13 - this.ballX);
-      const predicted = this.ballY + this.ballVY * stepsToReach;
-      const target = Math.max(this.PLAY_TOP, Math.min(this.PLAY_BOTTOM, predicted));
-      // Forgiving AI: most ticks we lag by 1 row, sometimes more.
-      const miss = Math.random() < this.AI_MISS_RATE ? (Math.random() - 0.5) * 2 : 0;
-      const aiTarget = target + miss;
-      const dy = aiTarget - this.aiY;
-      this.aiY += Math.sign(dy) * Math.min(Math.abs(dy), 0.35); // speed cap
-      this.aiY = Math.max(this.PLAY_TOP, Math.min(this.PLAY_BOTTOM, this.aiY));
+    // ── Advance ball ──────────────────────────────────────────────────────
+    this.ballCol += this.ballVCol;
+    this.ballRow += this.ballVRow;
+    if (this.ballRow < this.PLAY_TOP) {
+      this.ballRow = this.PLAY_TOP;
+      this.ballVRow = 1;
+    }
+    if (this.ballRow > this.PLAY_BOTTOM) {
+      this.ballRow = this.PLAY_BOTTOM;
+      this.ballVRow = -1;
     }
 
-    // Player paddle: paddleSlot maps to a Y in the play area. Slot 0..3 → row 0..3,
-    // but ball lives in rows 1..3, so we clamp to that range with a 2-row paddle.
-    const playerCenter = Math.max(this.PLAY_TOP, Math.min(this.PLAY_BOTTOM, this.paddleSlot));
+    // ── AI update ────────────────────────────────────────────────────────
+    // Only re-target when the ball is moving toward the AI, and even then
+    // throttle by AI_TARGET_LAG so the AI lags. AI_MISS_RATE intentionally
+    // sends it to a wrong row sometimes.
+    if (this.ballVCol > 0) {
+      this.aiTargetCooldown--;
+      if (this.aiTargetCooldown <= 0) {
+        this.aiTargetCooldown = this.AI_TARGET_LAG;
+        const correctSlot = this.ballRow - 1; // row 1..4 → slot 0..3
+        if (Math.random() < this.AI_MISS_RATE) {
+          // pick an adjacent slot to miss
+          const offset = Math.random() < 0.5 ? -1 : 1;
+          this.aiTargetSlot = Math.max(0, Math.min(3, correctSlot + offset));
+        } else {
+          this.aiTargetSlot = Math.max(0, Math.min(3, correctSlot));
+        }
+      }
+      if (this.aiSlot < this.aiTargetSlot) this.aiSlot++;
+      else if (this.aiSlot > this.aiTargetSlot) this.aiSlot--;
+    }
 
-    // Left wall hit
-    if (this.ballX <= 1) {
-      this.ballX = 1;
-      if (Math.abs(this.ballY - playerCenter) < 1.2) {
-        // Reflect, with a small angle nudge based on contact offset.
-        this.ballVX = Math.abs(this.ballVX);
-        this.ballVY = (this.ballY - playerCenter) * 0.5;
+    // ── Hit detection ────────────────────────────────────────────────────
+    const playerRow = this.paddleSlot + 1;
+    const aiRow = this.aiSlot + 1;
+
+    if (this.ballCol <= 1) {
+      this.ballCol = 1;
+      if (this.ballRow === playerRow) {
+        this.ballVCol = 1;
+        this.ballVRow = this.pickBounceRow();
       } else {
-        this.scoreAi = Math.min(9, this.scoreAi + 1);
+        this.scoreAi += 1;
         this.resetServe(1);
       }
     }
-    // Right wall hit
-    if (this.ballX >= 12) {
-      this.ballX = 12;
-      if (Math.abs(this.ballY - this.aiY) < 1.2) {
-        this.ballVX = -Math.abs(this.ballVX);
-        this.ballVY = (this.ballY - this.aiY) * 0.5;
+    if (this.ballCol >= 13) {
+      this.ballCol = 13;
+      if (this.ballRow === aiRow) {
+        this.ballVCol = -1;
+        this.ballVRow = this.pickBounceRow();
       } else {
-        this.scorePlayer = Math.min(9, this.scorePlayer + 1);
+        this.scorePlayer += 1;
         this.resetServe(-1);
       }
     }
   }
 
+  private pickBounceRow(): -1 | 0 | 1 {
+    const r = Math.random();
+    if (r < 0.33) return -1;
+    if (r < 0.66) return 0;
+    return 1;
+  }
+
   private resetServe(dir: -1 | 1): void {
-    this.ballX = 7;
-    this.ballY = 2;
-    this.ballVX = dir;
-    this.ballVY = (Math.random() - 0.5) * 1.4;
-    this.resetCountdown = 18; // ~0.6s pause for visual punctuation
-    // Reset run when someone hits 9
-    if (this.scorePlayer === 9 || this.scoreAi === 9) {
+    if (this.scorePlayer >= this.MAX_SCORE || this.scoreAi >= this.MAX_SCORE) {
       this.scorePlayer = 0;
       this.scoreAi = 0;
     }
+    this.ballCol = 7;
+    this.ballRow = 2 + Math.floor(Math.random() * 2); // 2 or 3
+    this.ballVCol = dir;
+    this.ballVRow = Math.random() < 0.5 ? -1 : 1;
+    this.resetCountdown = 25; // ~0.83s pause between serves
+    this.aiTargetCooldown = 0;
   }
 
   render(): Map<number, Color> {
     const out = new Map<number, Color>();
     const RED: Color = { r: 255, g: 0, b: 0 };
-    const BLUE: Color = { r: 0, g: 30, b: 255 };
+    const BLUE: Color = { r: 0, g: 60, b: 255 };
     const WHITE: Color = { r: 255, g: 255, b: 255 };
-    // Sparse rendering: only LEDs we explicitly set get color, everything
-    // else stays off. That removes the "filling everything" effect the user
-    // hit with the dim-paddle approach.
 
-    // Scoreboard on the number row. Player score lights keys 1..N from the
-    // LEFT. AI score lights keys 9..(9-M+1) from the RIGHT. Unused keys stay
-    // dark.
+    // ── Scoreboard on the number row ─────────────────────────────────────
     const NUMS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
-    for (let i = 0; i < this.scorePlayer && i < 4; i++) {
+    // Player score: keys 1..N from the LEFT.
+    for (let i = 0; i < this.scorePlayer && i < this.MAX_SCORE; i++) {
       const k = K617_LAYOUT.keys.find((x) => x.name === NUMS[i]);
       if (k) out.set(k.ledIndex, RED);
     }
-    for (let i = 0; i < this.scoreAi && i < 4; i++) {
+    // AI score: keys 9..(9-M+1) from the RIGHT.
+    for (let i = 0; i < this.scoreAi && i < this.MAX_SCORE; i++) {
       const k = K617_LAYOUT.keys.find((x) => x.name === NUMS[8 - i]);
       if (k) out.set(k.ledIndex, BLUE);
     }
-    // Middle key 5 flashes white during the reset/serve countdown.
+    // Center key 5 flashes white during the serve countdown.
     if (this.resetCountdown > 0) {
       const k = K617_LAYOUT.keys.find((x) => x.name === '5');
       if (k) out.set(k.ledIndex, WHITE);
     }
 
-    // Player paddle: ONE key only at the active slot (Tab/Caps/LShift/LCtrl).
+    // ── Player paddle: exactly one key on the left edge ──────────────────
     const PLAYER_KEYS = ['Tab', 'CapsLock', 'LShift', 'LCtrl'];
     const playerName = PLAYER_KEYS[this.paddleSlot];
     if (playerName) {
@@ -1405,19 +1445,16 @@ class PongInteractiveEngine {
       if (k) out.set(k.ledIndex, RED);
     }
 
-    // AI paddle: ONE key only on the right edge.
+    // ── AI paddle: exactly one key on the right edge ─────────────────────
     const AI_KEYS = ['Backslash', 'Enter', 'RShift', 'RCtrl'];
-    const aiSlot = Math.max(0, Math.min(3, Math.round(this.aiY)));
-    const aiName = AI_KEYS[aiSlot];
+    const aiName = AI_KEYS[this.aiSlot];
     if (aiName) {
       const k = K617_LAYOUT.keys.find((x) => x.name === aiName);
       if (k) out.set(k.ledIndex, BLUE);
     }
 
-    // Ball in the play area (rows 1..3). Only the closest cell.
-    const bx = Math.max(1, Math.min(13, Math.round(this.ballX)));
-    const by = Math.max(this.PLAY_TOP, Math.min(this.PLAY_BOTTOM, Math.round(this.ballY)));
-    const ballLed = gridToLed(bx, by);
+    // ── Ball: one key in the play area ───────────────────────────────────
+    const ballLed = gridToLed(this.ballCol, this.ballRow);
     if (ballLed !== null) out.set(ballLed, WHITE);
 
     return out;
