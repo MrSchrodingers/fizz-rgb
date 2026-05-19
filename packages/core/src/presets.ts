@@ -994,6 +994,34 @@ export const BUILTIN_PRESETS: Preset[] = [
     category: 'game',
     pattern: { keys: {}, animType: 'pong-interactive', animSpeed: 0.5 },
   },
+  {
+    id: 'game-pong-multiplayer',
+    name: 'Pong (2 players)',
+    description: 'P1 vermelho: Tab/Caps/Shift/Ctrl · P2 azul: Backslash/Enter/RShift/RCtrl · placar na fileira 1-9',
+    category: 'game',
+    pattern: { keys: {}, animType: 'pong-multiplayer', animSpeed: 0.5 },
+  },
+  {
+    id: 'game-snake-interactive',
+    name: 'Snake (WASD)',
+    description: 'Cobrinha verde se move continuamente. WASD muda direção. Pega a comida vermelha pra crescer',
+    category: 'game',
+    pattern: { keys: {}, animType: 'snake-interactive', animSpeed: 0.5 },
+  },
+  {
+    id: 'game-breakout-interactive',
+    name: 'Breakout (A/D)',
+    description: 'A/D move o paddle ciano. Quebra todos os blocos vermelhos+laranja sem deixar a bolinha cair',
+    category: 'game',
+    pattern: { keys: {}, animType: 'breakout-interactive', animSpeed: 0.5 },
+  },
+  {
+    id: 'game-pacman',
+    name: 'Pacman (WASD)',
+    description: 'WASD move o Pacman amarelo. Come os pontos enquanto foge dos fantasmas vermelho e ciano',
+    category: 'game',
+    pattern: { keys: {}, animType: 'pacman', animSpeed: 0.5 },
+  },
 
   // ── Themed cycles (host-streamed, layout-aware) ──────────────────────────
   {

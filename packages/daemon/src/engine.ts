@@ -5,7 +5,27 @@ import type { Color, Pattern } from '@fizz/core';
 import type { HidController } from './hid.js';
 import { log } from './log.js';
 import { gridToLed, GRID_HEIGHT } from './game-grid.js';
-import { KeyCapture, PADDLE_KEYCODES } from './key-capture.js';
+import {
+  KeyCapture,
+  PADDLE_KEYCODES,
+  KEY_TAB, KEY_CAPSLOCK, KEY_LEFTSHIFT, KEY_LEFTCTRL,
+} from './key-capture.js';
+import {
+  PongMultiplayerEngine,
+  SnakeInteractiveEngine,
+  BreakoutInteractiveEngine,
+  PacmanEngine,
+} from './games-interactive.js';
+
+/** Common surface every interactive engine implements so EffectEngine can
+ *  dispatch physical-keyboard events uniformly. */
+interface InteractiveEngine {
+  step(): void;
+  render(): Map<number, Color>;
+  /** Called on every keydown (value === 1). Engines that want key-up should
+   *  inspect value themselves; most don't. */
+  handleKey(keycode: number, value: number): void;
+}
 
 export interface CurrentEffect {
   name: FirmwareEffectName;
@@ -1336,6 +1356,12 @@ class PongInteractiveEngine {
     }
   }
 
+  handleKey(keycode: number, value: number): void {
+    if (value !== 1) return;
+    const slot = PADDLE_KEYCODES[keycode];
+    if (slot !== undefined) this.setPaddleSlot(slot);
+  }
+
   /** Tune ball speed from the pattern.animSpeed (0..1). Slower = larger
    *  ticksPerStep. Default speed 0.5 → ticksPerStep=10 (3 steps/sec). */
   setAnimSpeed(s: number): void {
@@ -1504,8 +1530,10 @@ export class EffectEngine {
   private streamStart = 0;
   private currentPattern: Pattern | null = null;
   /** Reference to the currently-active interactive engine, if any. Allows
-   *  IPC handlers (perkey.gameInput) to forward player input. */
-  private interactiveEngine: PongInteractiveEngine | null = null;
+   *  IPC handlers (perkey.gameInput) + the evdev capture loop to forward
+   *  player input. Any of the interactive engines implements the common
+   *  InteractiveEngine surface. */
+  private interactiveEngine: InteractiveEngine | null = null;
   /** evdev capture for physical key presses — opened lazily when an
    *  interactive game starts, torn down when it stops. */
   private keyCapture: KeyCapture | null = null;
@@ -1571,10 +1599,15 @@ export class EffectEngine {
     }
   }
 
-  /** Forward a player input to the active interactive engine. No-op if no
-   *  interactive game is running. */
+  /** Forward a player input (from the GUI's virtual-key click) to the active
+   *  interactive engine. Encoded as a synthetic keycode so any engine can
+   *  interpret it the same way as a physical keypress. The legacy paddleSlot
+   *  parameter is preserved for backwards-compat with the original Pong:
+   *  the GUI sends 0..3 → we map back to Tab/Caps/LShift/LCtrl keycodes. */
   setGamePaddleSlot(slot: number): void {
-    if (this.interactiveEngine) this.interactiveEngine.setPaddleSlot(slot);
+    const KEYCODE_BY_SLOT = [KEY_TAB, KEY_CAPSLOCK, KEY_LEFTSHIFT, KEY_LEFTCTRL];
+    const keycode = KEYCODE_BY_SLOT[slot];
+    if (keycode !== undefined) this.interactiveEngine?.handleKey(keycode, 1);
   }
 
   async runEffect(name: FirmwareEffectName, params: FirmwareEffectParams): Promise<void> {
@@ -1767,22 +1800,43 @@ export class EffectEngine {
       return;
     }
 
-    if (pattern.animType === 'pong-interactive') {
-      const eng = new PongInteractiveEngine();
-      eng.setAnimSpeed(pattern.animSpeed);
+    // Interactive games share a setup pattern: instantiate the engine,
+    // hook KeyCapture if the engine implements handleKey, then schedule
+    // the 30fps render → encode → send loop.
+    const interactiveBuilders: Record<string, () => InteractiveEngine> = {
+      'pong-interactive': () => {
+        const e = new PongInteractiveEngine();
+        e.setAnimSpeed(pattern.animSpeed);
+        return e;
+      },
+      'pong-multiplayer': () => {
+        const e = new PongMultiplayerEngine();
+        e.setAnimSpeed(pattern.animSpeed);
+        return e;
+      },
+      'snake-interactive': () => {
+        const e = new SnakeInteractiveEngine();
+        e.setAnimSpeed(pattern.animSpeed);
+        return e;
+      },
+      'breakout-interactive': () => {
+        const e = new BreakoutInteractiveEngine();
+        e.setAnimSpeed(pattern.animSpeed);
+        return e;
+      },
+      'pacman': () => {
+        const e = new PacmanEngine();
+        e.setAnimSpeed(pattern.animSpeed);
+        return e;
+      },
+    };
+    const builder = interactiveBuilders[pattern.animType];
+    if (builder) {
+      const eng = builder();
       this.interactiveEngine = eng;
-      // Hook physical key capture so the player can use the real K617's
-      // Tab/Caps/LShift/LCtrl keys to move their paddle — no need to keep
-      // the GUI window focused.
       const capture = new KeyCapture();
-      capture.onKey((keycode, value) => {
-        if (value !== 1) return; // act on keydown only (1), ignore up (0)/repeat (2)
-        const slot = PADDLE_KEYCODES[keycode];
-        if (slot !== undefined) eng.setPaddleSlot(slot);
-      });
-      if (capture.start()) {
-        this.keyCapture = capture;
-      }
+      capture.onKey((keycode, value) => eng.handleKey(keycode, value));
+      if (capture.start()) this.keyCapture = capture;
       this.streamInterval = setInterval(() => {
         eng.step();
         const colors = eng.render();
@@ -1790,7 +1844,7 @@ export class EffectEngine {
         const frame = encodePerKeyFrame(colors);
         this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
       }, 1000 / 30);
-      log.info('Pong interactive stream started');
+      log.info({ animType: pattern.animType }, 'Interactive game stream started');
       return;
     }
 

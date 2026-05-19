@@ -54,6 +54,7 @@ export const ALL_ANIM_TYPES = [
   'pong', 'snake', 'tetris', 'matrix-rain', 'breakout',
   'fireworks', 'dvd', 'heart-rate', 'equalizer', 'rule30',
   'cpu-thermal', 'minecraft-day', 'aquarium', 'pong-interactive',
+  'pong-multiplayer', 'snake-interactive', 'breakout-interactive', 'pacman',
 ] as const;
 export const AnimTypeSchema = z.enum(ALL_ANIM_TYPES);
 /** Single source of truth for animation type names — derived from the Zod

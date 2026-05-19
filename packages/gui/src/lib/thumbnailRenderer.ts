@@ -462,6 +462,41 @@ function renderCpuThermal(t: number): string[] {
   return out;
 }
 
+function renderPacman(t: number): string[] {
+  const out: string[] = [];
+  // Pacman wanders left↔right on a sin curve.
+  const px = Math.floor(2 + (Math.sin(t * 0.8) * 0.5 + 0.5) * (THUMB_COLS - 4));
+  const py = 2 + Math.round(Math.sin(t * 1.3) * 1);
+  // Two ghosts on opposite sides moving toward Pacman.
+  const ghosts = [
+    { x: Math.floor((Math.sin(t * 0.6 + 1.0) * 0.5 + 0.5) * (THUMB_COLS - 1)), y: 0, color: '#ff003c' },
+    { x: Math.floor((Math.sin(t * 0.7 + 2.5) * 0.5 + 0.5) * (THUMB_COLS - 1)), y: 4, color: '#00ddff' },
+  ];
+  // Dots — pseudo-random sparse pattern using a hash.
+  function hasDot(x: number, y: number): boolean {
+    const h = Math.sin((x + 1) * 12.9898 + (y + 1) * 78.233 + Math.floor(t / 2) * 11) * 43758.5453;
+    return (h - Math.floor(h)) > 0.45;
+  }
+
+  for (let gy = 0; gy < THUMB_ROWS; gy++) {
+    for (let gx = 0; gx < THUMB_COLS; gx++) {
+      let color = BG;
+      if (hasDot(gx, gy)) color = '#3a3a22';
+      // Ghosts.
+      for (const g of ghosts) {
+        if (g.x === gx && g.y === gy) color = g.color;
+      }
+      // Pacman.
+      if (gx === px && gy === py) {
+        // chomp blink
+        color = Math.sin(t * 6) > 0 ? '#ffdc00' : '#dcb400';
+      }
+      out.push(color);
+    }
+  }
+  return out;
+}
+
 // ─── Main entry point ────────────────────────────────────────────────────────
 
 export function renderThumbnail(preset: Preset | UserPreset, t: number): string[] {
@@ -481,6 +516,11 @@ export function renderThumbnail(preset: Preset | UserPreset, t: number): string[
     case 'equalizer': return renderEqualizer(t);
     case 'rule30': return renderRule30(t);
     case 'cpu-thermal': return renderCpuThermal(t);
+    case 'pong-interactive': return renderPong(t);
+    case 'pong-multiplayer': return renderPong(t);
+    case 'snake-interactive': return renderSnake(t);
+    case 'breakout-interactive': return renderBreakout(t);
+    case 'pacman': return renderPacman(t);
   }
 
   const out: string[] = new Array(TOTAL);

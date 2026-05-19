@@ -18,6 +18,7 @@ describe('BUILTIN_PRESETS', () => {
       'pong', 'snake', 'tetris', 'matrix-rain', 'breakout',
       'fireworks', 'dvd', 'heart-rate', 'equalizer', 'rule30',
       'cpu-thermal', 'minecraft-day', 'aquarium', 'pong-interactive',
+      'pong-multiplayer', 'snake-interactive', 'breakout-interactive', 'pacman',
     ];
     for (const p of BUILTIN_PRESETS) {
       if (statefulAnimTypes.includes(p.pattern.animType)) continue;

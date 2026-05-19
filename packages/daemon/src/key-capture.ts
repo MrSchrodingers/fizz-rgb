@@ -21,13 +21,22 @@ const EVDEV_RECORD_SIZE = 24;
 // Linux input event types
 const EV_KEY = 0x01;
 
-// Linux keycodes for the four paddle keys (player slot 0..3 = row 1..4).
+// Linux keycodes used across the interactive game engines.
 // Source: include/uapi/linux/input-event-codes.h
-const KEY_TAB = 15;
-const KEY_CAPSLOCK = 58;
-const KEY_LEFTSHIFT = 42;
-const KEY_LEFTCTRL = 29;
+export const KEY_TAB = 15;
+export const KEY_CAPSLOCK = 58;
+export const KEY_LEFTSHIFT = 42;
+export const KEY_LEFTCTRL = 29;
+export const KEY_BACKSLASH = 43;
+export const KEY_ENTER = 28;
+export const KEY_RIGHTSHIFT = 54;
+export const KEY_RIGHTCTRL = 97;
+export const KEY_W = 17;
+export const KEY_A = 30;
+export const KEY_S = 31;
+export const KEY_D = 32;
 
+/** Original PongInteractive paddle map (Tab/Caps/LShift/LCtrl → slot 0..3). */
 export const PADDLE_KEYCODES: Record<number, number> = {
   [KEY_TAB]: 0,
   [KEY_CAPSLOCK]: 1,
