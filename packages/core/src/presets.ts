@@ -1025,7 +1025,7 @@ export const BUILTIN_PRESETS: Preset[] = [
   {
     id: 'game-doom',
     name: 'DOOM',
-    description: 'Raycaster FPS no teclado. WASD move/gira, Space atira. HP fileira 1-7, ammo no canto. Mata os imps vermelhos sem deixar eles te encostarem',
+    description: 'FPS raycaster. W=frente, S=trás, A/D=girar, Space=atirar. Kills (verde) fileira 1-7. Ammo (amarelo) 0/-/=/Backspace. Imps vermelhos não atacam — apenas alvos',
     category: 'game',
     pattern: { keys: {}, animType: 'doom', animSpeed: 0.5 },
   },

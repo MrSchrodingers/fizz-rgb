@@ -852,16 +852,19 @@ export class MinecraftCloudsEngine {
 
   render(): Map<number, Color> {
     const out = new Map<number, Color>();
-    const SKY_TOP: Color = { r: 0, g: 140, b: 255 };
-    const SKY_BOTTOM: Color = { r: 80, g: 200, b: 255 };
-    const DIRT: Color = { r: 160, g: 80, b: 20 };
-    const GRASS: Color = { r: 0, g: 255, b: 40 };
-    const SUN: Color = { r: 255, g: 220, b: 0 };
+    // Saturated palette — every channel pushed close to pure for maximum
+    // contrast on the K617's white keycaps.
+    const SKY_TOP: Color = { r: 0, g: 100, b: 255 };       // vivid royal blue
+    const SKY_BOTTOM: Color = { r: 40, g: 180, b: 255 };   // sky cyan-blue
+    const DIRT: Color = { r: 200, g: 90, b: 10 };          // rich brown
+    const GRASS: Color = { r: 0, g: 255, b: 0 };           // pure green
+    const SUN: Color = { r: 255, g: 110, b: 0 };           // orange (was yellow)
+    const CLOUD: Color = { r: 255, g: 255, b: 255 };       // pure white
 
     // Continuous cloud drift parameter.
     const phase = (this.tickCounter / this.CLOUD_CYCLE) % 1;
     const cloudPositions = this.clouds.map((c) => ({
-      col: ((phase * c.rate + c.offset) * 16) % 16 - 1,
+      col: ((phase * c.rate + c.offset) * 18) % 18 - 2,
       row: c.row,
     }));
 
@@ -878,20 +881,21 @@ export class MinecraftCloudsEngine {
       else if (k.row === 3) color = GRASS;
       else color = DIRT;
 
-      // Sun glow at top-center.
+      // Sun glow at top-center — 2-key wide warm orange.
       if (k.row === sunRow) {
         const d = Math.abs(cx - sunCol);
-        if (d < 1.5) color = lerpColor(color, SUN, Math.max(0, 1 - d / 1.5));
+        if (d < 2.0) color = lerpColor(color, SUN, Math.max(0, 1 - d / 2.0));
       }
 
-      // Clouds.
+      // Clouds — wider (2-key radius) and much more opaque so the motion
+      // reads clearly even from a quick glance.
       if (k.row <= 1) {
         for (const c of cloudPositions) {
           if (c.row !== k.row) continue;
           const d = Math.abs(cx - c.col);
-          if (d < 1.2) {
-            const puff = (1 - d / 1.2) * 0.45;
-            color = lerpColor(color, { r: 255, g: 255, b: 255 }, puff);
+          if (d < 2.0) {
+            const puff = (1 - d / 2.0) * 0.85;
+            color = lerpColor(color, CLOUD, puff);
           }
         }
       }
