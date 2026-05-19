@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@fizz/core": "*",
+    "dbus-next": "^0.10.2",
     "node-hid": "^3.1.2",
     "pino": "^9.6.0",
     "zod": "^3.24.0"

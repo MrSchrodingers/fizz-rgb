@@ -177,6 +177,23 @@ function KeyboardKeys() {
   const touched = useRef<Set<number>>(new Set());
   const isErasing = useRef(false);
 
+  // Per-key change-time tracking for the fade-in pulse: every time a key's
+  // color changes (paint, preset, daemon broadcast) we stamp the current
+  // animation clock so the Key component can render a 300ms highlight.
+  const prevKeyColors = useRef<Map<number, string>>(new Map());
+  const pulseStartedAt = useRef<Map<number, number>>(new Map());
+  useEffect(() => {
+    const now = performance.now() / 1000;
+    const prev = prevKeyColors.current;
+    keyColors.forEach((hex, idx) => {
+      if (prev.get(idx) !== hex) pulseStartedAt.current.set(idx, now);
+    });
+    prev.forEach((_, idx) => {
+      if (!keyColors.has(idx)) pulseStartedAt.current.set(idx, now);
+    });
+    prevKeyColors.current = new Map(keyColors);
+  }, [keyColors]);
+
   useEffect(() => {
     function onPointerUp() {
       if (isPainting.current && touched.current.size > 0) {
@@ -270,12 +287,19 @@ function KeyboardKeys() {
           animSpeed,
         });
         const isSelected = paintMode === 'paint' && paintSelected.has(k.ledIndex);
+        // Fade-in pulse: linearly decays from 1.0 → 0 over 300ms after the
+        // key's color last changed. Drives extra emissive intensity on the
+        // Key material so the change reads as motion, not a static swap.
+        const stamp = pulseStartedAt.current.get(k.ledIndex);
+        const ageSec = stamp !== undefined ? (performance.now() / 1000) - stamp : Infinity;
+        const pulse = ageSec < 0.3 ? 1 - ageSec / 0.3 : 0;
         return (
           <Key
             key={k.ledIndex}
             keyDef={k}
             colorRGB={rgb}
             isSelected={isSelected}
+            pulse={pulse}
             onPointerDown={(e) => handlePointerDown(k.ledIndex, e)}
             onPointerEnter={() => handlePointerEnter(k.ledIndex)}
           />
@@ -289,11 +313,13 @@ interface KeyProps {
   keyDef: PositionedKey;
   colorRGB: { r: number; g: number; b: number };
   isSelected: boolean;
+  /** 0..1 — extra emissive boost shown briefly when this key's color just changed. */
+  pulse: number;
   onPointerDown: (e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean; button?: number }) => void;
   onPointerEnter: () => void;
 }
 
-function Key({ keyDef, colorRGB, isSelected, onPointerDown, onPointerEnter }: KeyProps) {
+function Key({ keyDef, colorRGB, isSelected, pulse, onPointerDown, onPointerEnter }: KeyProps) {
   const [hovered, setHovered] = useState(false);
   const emissiveColor = useMemo(
     () => new THREE.Color(colorRGB.r, colorRGB.g, colorRGB.b),
@@ -337,7 +363,7 @@ function Key({ keyDef, colorRGB, isSelected, onPointerDown, onPointerEnter }: Ke
         <meshStandardMaterial
           color="#1a1a1f"
           emissive={emissiveColor}
-          emissiveIntensity={1.4}
+          emissiveIntensity={1.4 + pulse * 1.6}
           roughness={0.55}
           metalness={0.1}
           toneMapped={false}

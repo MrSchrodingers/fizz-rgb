@@ -132,7 +132,7 @@ export function PresetGallery({
   }
 
   return (
-    <aside className="flex flex-col w-72 border-l border-zinc-800 bg-zinc-950 overflow-hidden">
+    <aside className="flex flex-col w-72 h-full border-l border-zinc-800 bg-zinc-950 overflow-hidden">
       {/* Header */}
       <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
         <h2 className="font-semibold text-sm">Presets <span className="text-xs text-zinc-500 font-normal">(do PC)</span></h2>

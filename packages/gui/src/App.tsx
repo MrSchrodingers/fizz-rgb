@@ -654,11 +654,11 @@ function AppShell(props: AppShellProps) {
             </button>
           </div>
         ) : (
-          <div className="relative">
+          <div className="relative h-full">
             <button
               type="button"
               onClick={toggleRight}
-              className="absolute top-1 left-1 z-10 p-1 rounded hover:bg-zinc-800 text-zinc-500 hover:text-zinc-200 transition"
+              className="absolute top-1 left-1 z-10 p-1 rounded hover:bg-zinc-800/80 text-zinc-500 hover:text-zinc-200 transition"
               aria-label="Collapse right sidebar"
               title="Collapse"
             >

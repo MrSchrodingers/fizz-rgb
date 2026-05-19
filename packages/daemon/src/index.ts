@@ -9,6 +9,7 @@ import { EffectEngine } from './engine.js';
 import { ProfileManager } from './profiles.js';
 import { IpcServer } from './ipc-server.js';
 import { Scheduler } from './scheduler.js';
+import { NotifFlash } from './notif-flash.js';
 import type { HidController } from './hid.js';
 import { log } from './log.js';
 
@@ -35,6 +36,13 @@ async function main(): Promise<void> {
   await scheduler.load();
   scheduler.start();
 
+  // DBus notification flash — opt-in via FIZZ_NOTIF_FLASH=1 so we don't
+  // surprise users with their keyboard flashing on every Slack ping.
+  const notif = new NotifFlash(engine);
+  if (process.env['FIZZ_NOTIF_FLASH'] === '1') {
+    await notif.start();
+  }
+
   // Restore last-active profile
   const active = profiles.active();
   if (active) {
@@ -48,6 +56,7 @@ async function main(): Promise<void> {
   const shutdown = async (sig: string): Promise<void> => {
     log.info({ sig }, 'shutting down');
     scheduler.stop();
+    notif.stop();
     await server.stop();
     hid.close();
     process.exit(0);
