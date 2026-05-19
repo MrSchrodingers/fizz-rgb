@@ -13,6 +13,11 @@ RULE_PATH="/etc/udev/rules.d/99-fizz-k617.rules"
 RULE_CONTENT='# Redragon Fizz K617 (BY Tech) — grant all users r/w access to RGB control interface
 SUBSYSTEM=="hidraw", ATTRS{idVendor}=="258a", ATTRS{idProduct}=="0049", MODE="0666", TAG+="uaccess"
 SUBSYSTEM=="usb",    ATTRS{idVendor}=="258a", ATTRS{idProduct}=="0049", MODE="0666", TAG+="uaccess"
+# evdev input nodes (used by fizzd to capture physical key presses for the
+# interactive Pong preset). Read-only is enough; the OS still receives the
+# events normally — evdev permits multiple concurrent readers.
+SUBSYSTEM=="input", ATTRS{idVendor}=="258a", ATTRS{idProduct}=="0049", MODE="0660", TAG+="uaccess"
+KERNEL=="event*", ATTRS{idVendor}=="258a", ATTRS{idProduct}=="0049", MODE="0660", TAG+="uaccess"
 '
 
 if [[ -f "$RULE_PATH" ]] && [[ "$(<"$RULE_PATH")" == "${RULE_CONTENT%$'\n'}" ]]; then
@@ -24,4 +29,5 @@ echo "Installing udev rule to $RULE_PATH (requires sudo)..."
 printf '%s' "$RULE_CONTENT" | sudo tee "$RULE_PATH" > /dev/null
 sudo udevadm control --reload-rules
 sudo udevadm trigger --subsystem-match=hidraw --action=change
+sudo udevadm trigger --subsystem-match=input --action=change
 echo "Done. Unplug and replug your keyboard for permissions to apply."

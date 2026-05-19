@@ -212,6 +212,17 @@ export default function App() {
     } catch { /* ignore */ }
   }, []); // run once on mount
 
+  // Window-level pointer-down probe so we can see if clicks reach the
+  // renderer at all (independent of the 3D viewport raycast).
+  useEffect(() => {
+    const log = (e: PointerEvent) => {
+      const target = e.target as HTMLElement | null;
+      console.log('[window-click]', 'x=', e.clientX, 'y=', e.clientY, 'target=', target?.tagName, target?.className?.toString().slice(0, 40) ?? '');
+    };
+    window.addEventListener('pointerdown', log, true); // capture phase
+    return () => window.removeEventListener('pointerdown', log, true);
+  }, []);
+
   // Global keyboard shortcuts: Ctrl+Z undo, Ctrl+Shift+Z / Ctrl+Y redo,
   // Ctrl+A select all (paint mode), Esc clear selection.
   useEffect(() => {

@@ -117,7 +117,12 @@ export function Keyboard3D() {
       </Canvas>
 
       {showHelp && (
-        <div className="absolute top-3 left-3 right-3 sm:right-auto sm:max-w-sm bg-zinc-900/90 backdrop-blur border border-zinc-700 rounded-lg p-3 text-xs text-zinc-300 shadow-xl animate-fade-in">
+        // pointer-events-none on the container so the overlay never eats
+        // clicks meant for the 3D canvas beneath. Only the dismiss button
+        // re-enables pointer events — otherwise clicking through the help
+        // box silently sent events to nowhere and the user assumed the
+        // click handler was broken.
+        <div className="absolute top-3 left-3 right-3 sm:right-auto sm:max-w-sm bg-zinc-900/90 backdrop-blur border border-zinc-700 rounded-lg p-3 text-xs text-zinc-300 shadow-xl animate-fade-in pointer-events-none">
           <div className="flex items-start gap-2">
             <div className="flex-1 leading-relaxed">
               <p className="font-medium text-zinc-100 mb-1">Atalhos do viewport</p>
@@ -132,7 +137,7 @@ export function Keyboard3D() {
             <button
               type="button"
               onClick={dismissHelp}
-              className="text-zinc-500 hover:text-zinc-200 transition px-1"
+              className="text-zinc-500 hover:text-zinc-200 transition px-1 pointer-events-auto"
               aria-label="Dismiss help"
               title="Dismiss"
             >
@@ -228,6 +233,8 @@ function KeyboardKeys() {
   });
 
   const handlePointerDown = (ledIndex: number, e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean; button?: number }) => {
+    // Unconditional probe: every click on a key produces this line.
+    console.log('[click] ledIndex=', ledIndex, 'animType=', animType, 'paintMode=', paintMode, 'direct=', directPaintMode);
     // Interactive Pong: clicking the left-edge paddle keys sends the slot to
     // the daemon, regardless of paint mode. Match by ledIndex via the layout
     // so the mapping survives K617 row geometry tweaks.

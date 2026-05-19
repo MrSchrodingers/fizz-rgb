@@ -5,6 +5,7 @@ import type { Color, Pattern } from '@fizz/core';
 import type { HidController } from './hid.js';
 import { log } from './log.js';
 import { gridToLed, GRID_HEIGHT } from './game-grid.js';
+import { KeyCapture, PADDLE_KEYCODES } from './key-capture.js';
 
 export interface CurrentEffect {
   name: FirmwareEffectName;
@@ -1306,6 +1307,8 @@ class PongInteractiveEngine {
   // ── Integer ball state ──────────────────────────────────────────────────
   private ballCol = 7;
   private ballRow = 2;
+  private prevBallCol = 7; // previous position for trail rendering
+  private prevBallRow = 2;
   private ballVCol: -1 | 1 = 1;
   private ballVRow: -1 | 0 | 1 = 1;
 
@@ -1314,13 +1317,18 @@ class PongInteractiveEngine {
   private resetCountdown = 30;
   private tickCounter = 0;
   private aiTargetCooldown = 0;
+  private ticksPerStep = 10; // can be tuned via setAnimSpeed (lower = faster)
 
-  private readonly TICKS_PER_STEP = 6;   // ~5 ball steps per second at 30fps
-  private readonly AI_TARGET_LAG = 3;    // ticks between AI target updates
-  private readonly AI_MISS_RATE = 0.4;   // chance AI picks a wrong row
-  private readonly MAX_SCORE = 4;        // first to MAX_SCORE wins → reset
+  private readonly AI_TARGET_LAG = 4;    // AI re-targets every 4 ticks
+  private readonly AI_MISS_RATE = 0.5;   // 50% miss → very permissive
+  private readonly MAX_SCORE = 4;        // first to 4 wins → match resets
   private readonly PLAY_TOP = 1;         // ball lives in rows 1..4
   private readonly PLAY_BOTTOM = 4;
+  /** Player's paddle catches the ball if ballRow is within ±1 of paddleRow.
+   *  Generous on purpose: the ball jumps cell-to-cell at low fps so strict
+   *  equality felt like the AI was cheating. */
+  private readonly PLAYER_HIT_RADIUS = 1;
+  private readonly AI_HIT_RADIUS = 0;   // AI must match exactly (no help)
 
   setPaddleSlot(slot: number): void {
     if (Number.isInteger(slot) && slot >= 0 && slot <= 3) {
@@ -1328,11 +1336,23 @@ class PongInteractiveEngine {
     }
   }
 
+  /** Tune ball speed from the pattern.animSpeed (0..1). Slower = larger
+   *  ticksPerStep. Default speed 0.5 → ticksPerStep=10 (3 steps/sec). */
+  setAnimSpeed(s: number): void {
+    const clamped = Math.max(0, Math.min(1, s));
+    // animSpeed 0 → 16 ticks (1.87 steps/sec), animSpeed 1 → 6 ticks (5/sec)
+    this.ticksPerStep = Math.round(16 - clamped * 10);
+  }
+
   step(): void {
     if (this.resetCountdown > 0) { this.resetCountdown--; return; }
     this.tickCounter++;
-    if (this.tickCounter < this.TICKS_PER_STEP) return;
+    if (this.tickCounter < this.ticksPerStep) return;
     this.tickCounter = 0;
+
+    // Stash for trail rendering before mutating.
+    this.prevBallCol = this.ballCol;
+    this.prevBallRow = this.ballRow;
 
     // ── Advance ball ──────────────────────────────────────────────────────
     this.ballCol += this.ballVCol;
@@ -1373,21 +1393,27 @@ class PongInteractiveEngine {
 
     if (this.ballCol <= 1) {
       this.ballCol = 1;
-      if (this.ballRow === playerRow) {
+      const distance = Math.abs(this.ballRow - playerRow);
+      if (distance <= this.PLAYER_HIT_RADIUS) {
         this.ballVCol = 1;
         this.ballVRow = this.pickBounceRow();
+        log.info({ paddleSlot: this.paddleSlot, ballRow: this.ballRow }, 'pong: player HIT');
       } else {
         this.scoreAi += 1;
+        log.info({ paddleSlot: this.paddleSlot, ballRow: this.ballRow, score: `${this.scorePlayer}-${this.scoreAi}` }, 'pong: AI scores');
         this.resetServe(1);
       }
     }
     if (this.ballCol >= 13) {
       this.ballCol = 13;
-      if (this.ballRow === aiRow) {
+      const distance = Math.abs(this.ballRow - aiRow);
+      if (distance <= this.AI_HIT_RADIUS) {
         this.ballVCol = -1;
         this.ballVRow = this.pickBounceRow();
+        log.info({ aiSlot: this.aiSlot, ballRow: this.ballRow }, 'pong: AI HIT');
       } else {
         this.scorePlayer += 1;
+        log.info({ aiSlot: this.aiSlot, ballRow: this.ballRow, score: `${this.scorePlayer}-${this.scoreAi}` }, 'pong: player scores');
         this.resetServe(-1);
       }
     }
@@ -1407,9 +1433,11 @@ class PongInteractiveEngine {
     }
     this.ballCol = 7;
     this.ballRow = 2 + Math.floor(Math.random() * 2); // 2 or 3
+    this.prevBallCol = this.ballCol;
+    this.prevBallRow = this.ballRow;
     this.ballVCol = dir;
     this.ballVRow = Math.random() < 0.5 ? -1 : 1;
-    this.resetCountdown = 25; // ~0.83s pause between serves
+    this.resetCountdown = 15; // ~0.5s pause between serves (was 0.83s)
     this.aiTargetCooldown = 0;
   }
 
@@ -1453,7 +1481,13 @@ class PongInteractiveEngine {
       if (k) out.set(k.ledIndex, BLUE);
     }
 
-    // ── Ball: one key in the play area ───────────────────────────────────
+    // ── Ball + 1-cell trail for motion blur ──────────────────────────────
+    // Render the previous position first at low intensity so that when the
+    // current and previous overlap, the bright WHITE wins.
+    if (this.prevBallCol !== this.ballCol || this.prevBallRow !== this.ballRow) {
+      const trailLed = gridToLed(this.prevBallCol, this.prevBallRow);
+      if (trailLed !== null) out.set(trailLed, { r: 80, g: 80, b: 80 });
+    }
     const ballLed = gridToLed(this.ballCol, this.ballRow);
     if (ballLed !== null) out.set(ballLed, WHITE);
 
@@ -1472,6 +1506,9 @@ export class EffectEngine {
   /** Reference to the currently-active interactive engine, if any. Allows
    *  IPC handlers (perkey.gameInput) to forward player input. */
   private interactiveEngine: PongInteractiveEngine | null = null;
+  /** evdev capture for physical key presses — opened lazily when an
+   *  interactive game starts, torn down when it stops. */
+  private keyCapture: KeyCapture | null = null;
 
   // Persistent state for reconnect restoration — mutually exclusive
   private lastPattern: Pattern | null = null;
@@ -1525,6 +1562,10 @@ export class EffectEngine {
       this.streamInterval = null;
       this.currentPattern = null;
       this.interactiveEngine = null;
+      if (this.keyCapture) {
+        this.keyCapture.stop();
+        this.keyCapture = null;
+      }
       log.info('stream stopped');
       this.notifyPerkey({ mode: 'off' });
     }
@@ -1728,7 +1769,20 @@ export class EffectEngine {
 
     if (pattern.animType === 'pong-interactive') {
       const eng = new PongInteractiveEngine();
+      eng.setAnimSpeed(pattern.animSpeed);
       this.interactiveEngine = eng;
+      // Hook physical key capture so the player can use the real K617's
+      // Tab/Caps/LShift/LCtrl keys to move their paddle — no need to keep
+      // the GUI window focused.
+      const capture = new KeyCapture();
+      capture.onKey((keycode, value) => {
+        if (value !== 1) return; // act on keydown only (1), ignore up (0)/repeat (2)
+        const slot = PADDLE_KEYCODES[keycode];
+        if (slot !== undefined) eng.setPaddleSlot(slot);
+      });
+      if (capture.start()) {
+        this.keyCapture = capture;
+      }
       this.streamInterval = setInterval(() => {
         eng.step();
         const colors = eng.render();
