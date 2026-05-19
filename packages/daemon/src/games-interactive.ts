@@ -399,140 +399,488 @@ export class BreakoutInteractiveEngine {
 
 // ─── Pacman (WASD moves Pacman, ghosts chase with simple AI) ────────────────
 
+/**
+ * Pacman — proper maze edition. 14×5 grid with internal walls, four
+ * power pellets in the corners, three ghosts with distinct AI
+ * personalities (chase / ambush / unpredictable), fright mode when
+ * Pacman eats a pellet, three lives with a death animation, and
+ * wraparound on row 2 (the "tunnel" row).
+ *
+ * Controls: W/A/S/D queues a turn — Pacman commits at the next legal
+ * grid step, so you can preempt corners cleanly.
+ *
+ * Editable palette slots (via pattern.colorOverrides):
+ *   pacman, dot, pellet, wall, ghost-1, ghost-2, ghost-3, ghost-fright
+ */
 export class PacmanEngine {
+  // Five maze layouts (1 = wall, 0 = open floor). All keep row 2 mostly
+  // clear so wraparound through the "tunnel" row feels natural, the four
+  // pellet spawn corners stay open, and ghost+player spawn cells are
+  // walkable. Phases cycle 0..4 and then loop back to 0.
+  private readonly MAZES: ReadonlyArray<ReadonlyArray<ReadonlyArray<number>>> = [
+    // Phase 1 — gentle opener, four square pillars.
+    [
+      [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+      [0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0],
+      [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+    ],
+    // Phase 2 — vertical bars, tighter corridors.
+    [
+      [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0],
+      [0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0],
+      [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0],
+    ],
+    // Phase 3 — zigzag double-bars.
+    [
+      [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+      [0, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 0],
+      [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+    ],
+    // Phase 4 — staggered pillars.
+    [
+      [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
+      [0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0],
+      [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
+    ],
+    // Phase 5 — dense, multi-band; hardest before looping.
+    [
+      [0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+      [1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1],
+      [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
+      [1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1],
+      [0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+    ],
+  ];
+  private get MAZE(): ReadonlyArray<ReadonlyArray<number>> { return this.MAZES[this.phase]!; }
+  // Four power pellets in the corners.
+  private readonly PELLET_SPAWNS: ReadonlyArray<readonly [number, number]> = [
+    [0, 0], [13, 0], [0, 4], [13, 4],
+  ];
+  // Ghost home cells + personalities + base color.
+  private readonly GHOST_SPAWNS: ReadonlyArray<{
+    x: number; y: number; personality: 'chase' | 'ambush' | 'random'; slot: string;
+  }> = [
+    { x: 1,  y: 2, personality: 'chase',   slot: 'ghost-1' },
+    { x: 12, y: 2, personality: 'ambush',  slot: 'ghost-2' },
+    { x: 7,  y: 4, personality: 'random',  slot: 'ghost-3' },
+  ];
+
   private px = 7;
   private py = 2;
-  private dir: { x: -1 | 0 | 1; y: -1 | 0 | 1 } = { x: 1, y: 0 };
-  private queuedDir: { x: -1 | 0 | 1; y: -1 | 0 | 1 } | null = null;
-  private ghosts: Array<{ x: number; y: number; color: Color }> = [];
-  private dots: Set<string> = new Set(); // "x,y" strings
+  private dir: { x: number; y: number } = { x: 1, y: 0 };
+  private queuedDir: { x: number; y: number } | null = null;
+
+  private ghosts: Array<{
+    x: number; y: number;
+    home: { x: number; y: number };
+    dir: { x: number; y: number };
+    personality: 'chase' | 'ambush' | 'random';
+    slot: string;
+    eatenCooldown: number; // ticks remaining at home after being eaten
+  }> = [];
+
+  private dots: Set<string> = new Set();
+  private pellets: Set<string> = new Set();
   private score = 0;
-  private deaths = 0;
-  private tickCounter = 0;
-  private ticksPerStep = 8;
+  private lives = 3;
+  private phase = 0;                // 0..4, then loops back
+  private clearAnim = 0;            // ticks remaining in phase-clear flash
+  private frightTicks = 0;          // shared fright timer (~3s at 30fps)
+  private deathAnim = 0;            // ticks remaining in death flash
   private mouthPhase = 0;
 
+  private tickCounter = 0;
+  private ticksPerStep = 8;         // Pacman step cadence (base)
+  private baseTicksPerStep = 8;     // before per-phase scaling
+  private ghostTickCounter = 0;
+  private ticksPerGhostStep = 11;   // ghosts slightly slower than Pacman
+
+  private overrides: Record<string, string> = {};
+
   constructor() {
-    this.spawnGhosts();
-    this.scatterDots();
+    this.resetLevel();
+  }
+
+  setColorOverrides(o: Record<string, string>): void {
+    this.overrides = o ?? {};
+  }
+
+  private color(slot: string, fallback: Color): Color {
+    const hex = this.overrides[slot];
+    return hex ? parseHex(hex) : fallback;
   }
 
   setAnimSpeed(s: number): void {
-    const clamped = Math.max(0, Math.min(1, s));
-    this.ticksPerStep = Math.round(12 - clamped * 7);
+    const c = Math.max(0, Math.min(1, s));
+    this.baseTicksPerStep = Math.round(12 - c * 7);
+    this.applyPhaseDifficulty();
+  }
+
+  /** Recompute Pacman / ghost step rates from the current phase. Each
+   *  additional phase shaves ~1 tick off the ghost cadence so they
+   *  ramp up gradually. Phase also shrinks fright duration in
+   *  movePacman(). */
+  private applyPhaseDifficulty(): void {
+    this.ticksPerStep = this.baseTicksPerStep;
+    // Ghosts start 3 ticks slower than Pacman in phase 1 and close the
+    // gap toward parity by phase 5.
+    const ghostLag = Math.max(0, 3 - this.phase);
+    this.ticksPerGhostStep = this.ticksPerStep + ghostLag;
+  }
+
+  private resetLevel(): void {
+    this.dots.clear();
+    this.pellets.clear();
+    this.applyPhaseDifficulty();
+    for (let y = 0; y < 5; y++) {
+      for (let x = 0; x < 14; x++) {
+        if (this.MAZE[y]![x] === 0) this.dots.add(`${x},${y}`);
+      }
+    }
+    for (const [x, y] of this.PELLET_SPAWNS) {
+      this.dots.delete(`${x},${y}`);
+      this.pellets.add(`${x},${y}`);
+    }
+    this.dots.delete(`${this.px},${this.py}`);
+    this.spawnGhosts();
+    for (const g of this.ghosts) this.dots.delete(`${g.x},${g.y}`);
+    this.frightTicks = 0;
   }
 
   private spawnGhosts(): void {
-    // Blinky (red) spawns top-left, Inky (cyan) spawns bottom-right —
-    // opposite corners from Pacman so the first second isn't an instant death.
-    this.ghosts = [
-      { x: 1, y: 0, color: { r: 255, g: 0, b: 60 } },
-      { x: 13, y: 4, color: { r: 0, g: 200, b: 255 } },
-    ];
+    this.ghosts = this.GHOST_SPAWNS.map((s) => ({
+      x: s.x,
+      y: s.y,
+      home: { x: s.x, y: s.y },
+      dir: { x: -1, y: 0 },
+      personality: s.personality,
+      slot: s.slot,
+      eatenCooldown: 0,
+    }));
   }
 
-  private scatterDots(): void {
-    this.dots.clear();
-    // Place a dot on every grid cell, then remove player + ghost positions.
-    for (let y = 0; y < 5; y++) {
-      for (let x = 0; x < 14; x++) {
-        this.dots.add(`${x},${y}`);
-      }
-    }
-    this.dots.delete(`${this.px},${this.py}`);
-    for (const g of this.ghosts) this.dots.delete(`${g.x},${g.y}`);
+  private isWall(x: number, y: number): boolean {
+    if (x < 0 || x >= 14 || y < 0 || y >= 5) return true;
+    return this.MAZE[y]![x] === 1;
   }
 
   handleKey(keycode: number, value: number): void {
     if (value !== 1) return;
-    let nx: -1 | 0 | 1 = this.dir.x;
-    let ny: -1 | 0 | 1 = this.dir.y;
-    if (keycode === KEY_W)      { nx = 0;  ny = -1; }
-    else if (keycode === KEY_S) { nx = 0;  ny = 1; }
-    else if (keycode === KEY_A) { nx = -1; ny = 0; }
-    else if (keycode === KEY_D) { nx = 1;  ny = 0; }
-    else return;
-    this.queuedDir = { x: nx, y: ny };
+    if (this.deathAnim > 0) return;
+    if (keycode === KEY_W)      this.queuedDir = { x: 0,  y: -1 };
+    else if (keycode === KEY_S) this.queuedDir = { x: 0,  y: 1  };
+    else if (keycode === KEY_A) this.queuedDir = { x: -1, y: 0  };
+    else if (keycode === KEY_D) this.queuedDir = { x: 1,  y: 0  };
   }
 
   step(): void {
     this.mouthPhase += 0.25;
-    this.tickCounter++;
-    if (this.tickCounter < this.ticksPerStep) return;
-    this.tickCounter = 0;
 
-    if (this.queuedDir) {
-      this.dir = this.queuedDir;
-      this.queuedDir = null;
-    }
-
-    // Move Pacman.
-    this.px = (this.px + this.dir.x + 14) % 14;
-    this.py = (this.py + this.dir.y + 5) % 5;
-    this.dots.delete(`${this.px},${this.py}`);
-    if (this.dots.size === 0) {
-      this.score += 10;
-      this.scatterDots();
-    } else {
-      this.score++;
-    }
-
-    // Move ghosts every other tick so they're slower than Pacman.
-    if (Math.random() < 0.85) {
-      for (const g of this.ghosts) {
-        // Simple chase: move 1 step toward Pacman on the larger axis.
-        const dx = this.px - g.x;
-        const dy = this.py - g.y;
-        if (Math.abs(dx) >= Math.abs(dy)) {
-          g.x += Math.sign(dx);
+    // Death animation freezes the game; advance and respawn when done.
+    if (this.deathAnim > 0) {
+      this.deathAnim--;
+      if (this.deathAnim === 0) {
+        if (this.lives > 0) {
+          this.px = 7; this.py = 2;
+          this.dir = { x: 1, y: 0 };
+          this.queuedDir = null;
+          this.spawnGhosts();
         } else {
-          g.y += Math.sign(dy);
+          // Game over — reset everything including phase.
+          this.lives = 3;
+          this.score = 0;
+          this.phase = 0;
+          this.px = 7; this.py = 2;
+          this.dir = { x: 1, y: 0 };
+          this.queuedDir = null;
+          this.resetLevel();
         }
-        g.x = (g.x + 14) % 14;
-        g.y = (g.y + 5) % 5;
       }
+      return;
     }
 
-    // Collision with ghost — Pacman dies.
-    for (const g of this.ghosts) {
-      if (g.x === this.px && g.y === this.py) {
-        this.deaths++;
-        log.info({ score: this.score, deaths: this.deaths }, 'pacman: caught');
-        this.px = 7;
-        this.py = 2;
+    // Phase-clear animation freezes gameplay briefly so the player sees
+    // the maze swap.
+    if (this.clearAnim > 0) {
+      this.clearAnim--;
+      if (this.clearAnim === 0) {
+        this.phase = (this.phase + 1) % this.MAZES.length;
+        this.px = 7; this.py = 2;
         this.dir = { x: 1, y: 0 };
         this.queuedDir = null;
-        this.spawnGhosts();
-        if (this.deaths >= 3) {
-          this.score = 0;
-          this.deaths = 0;
-          this.scatterDots();
-        }
-        break;
+        this.resetLevel();
+      }
+      return;
+    }
+
+    if (this.frightTicks > 0) this.frightTicks--;
+
+    this.tickCounter++;
+    if (this.tickCounter >= this.ticksPerStep) {
+      this.tickCounter = 0;
+      this.movePacman();
+      if (this.checkGhostCollision()) return;
+    }
+
+    this.ghostTickCounter++;
+    if (this.ghostTickCounter >= this.ticksPerGhostStep) {
+      this.ghostTickCounter = 0;
+      this.moveGhosts();
+      this.checkGhostCollision();
+    }
+  }
+
+  private movePacman(): void {
+    // Apply the queued turn if and only if it's a legal cell — this is
+    // what makes inputs feel precise around corners.
+    if (this.queuedDir) {
+      const tx = (this.px + this.queuedDir.x + 14) % 14;
+      const ty = (this.py + this.queuedDir.y + 5) % 5;
+      if (!this.isWall(tx, ty)) {
+        this.dir = this.queuedDir;
+        this.queuedDir = null;
       }
     }
+    const nx = (this.px + this.dir.x + 14) % 14;
+    const ny = (this.py + this.dir.y + 5) % 5;
+    if (this.isWall(nx, ny)) return; // bump into wall — stay put
+    this.px = nx;
+    this.py = ny;
+
+    const key = `${this.px},${this.py}`;
+    if (this.pellets.has(key)) {
+      this.pellets.delete(key);
+      this.score += 50;
+      // Fright duration shrinks each phase: 90 → 75 → 60 → 50 → 40 ticks
+      this.frightTicks = Math.max(40, 90 - this.phase * 12);
+    } else if (this.dots.has(key)) {
+      this.dots.delete(key);
+      this.score += 1;
+    }
+
+    if (this.dots.size === 0 && this.pellets.size === 0) {
+      this.score += 100 * (this.phase + 1); // larger bonus on later phases
+      this.clearAnim = 24;                  // ~0.8s flash before next maze
+      log.info({ score: this.score, phase: this.phase + 1 }, 'pacman: phase clear');
+    }
+  }
+
+  private moveGhosts(): void {
+    for (const g of this.ghosts) {
+      // Cooling down at home after being eaten — don't move yet.
+      if (g.eatenCooldown > 0) { g.eatenCooldown--; continue; }
+
+      // Build legal-neighbour list, excluding the cell we just came from
+      // so ghosts don't oscillate.
+      const reverse = { x: -g.dir.x, y: -g.dir.y };
+      const candidates: Array<{ x: number; y: number; dir: { x: number; y: number } }> = [];
+      const moves = [
+        { x: 0, y: -1 }, { x: 0, y: 1 },
+        { x: -1, y: 0 }, { x: 1, y: 0 },
+      ];
+      for (const m of moves) {
+        if (m.x === reverse.x && m.y === reverse.y) continue;
+        const nx = (g.x + m.x + 14) % 14;
+        const ny = (g.y + m.y + 5) % 5;
+        if (this.isWall(nx, ny)) continue;
+        candidates.push({ x: nx, y: ny, dir: m });
+      }
+      // Dead end — allow reversing.
+      if (candidates.length === 0) {
+        const rx = (g.x + reverse.x + 14) % 14;
+        const ry = (g.y + reverse.y + 5) % 5;
+        if (!this.isWall(rx, ry)) {
+          candidates.push({ x: rx, y: ry, dir: reverse });
+        } else {
+          continue;
+        }
+      }
+
+      // Pick target cell. Frightened ghosts flee; otherwise personality
+      // decides what to aim at.
+      let tx: number;
+      let ty: number;
+      if (this.frightTicks > 0) {
+        let best = candidates[0]!;
+        let bestDist = -Infinity;
+        for (const c of candidates) {
+          const d = (c.x - this.px) ** 2 + (c.y - this.py) ** 2;
+          if (d > bestDist) { bestDist = d; best = c; }
+        }
+        g.x = best.x; g.y = best.y; g.dir = best.dir;
+        continue;
+      }
+      if (g.personality === 'ambush') {
+        // Aim 3 cells ahead of Pacman's current facing.
+        tx = (this.px + this.dir.x * 3 + 14 * 2) % 14;
+        ty = (this.py + this.dir.y * 3 + 5  * 2) % 5;
+      } else if (g.personality === 'random') {
+        // 35% pure random, else chase — keeps the player on edge without
+        // being predictable.
+        if (Math.random() < 0.35) {
+          const c = candidates[Math.floor(Math.random() * candidates.length)]!;
+          g.x = c.x; g.y = c.y; g.dir = c.dir;
+          continue;
+        }
+        tx = this.px; ty = this.py;
+      } else {
+        tx = this.px; ty = this.py;
+      }
+
+      // Greedy: pick the candidate closest to the target.
+      let best = candidates[0]!;
+      let bestDist = Infinity;
+      for (const c of candidates) {
+        const d = (c.x - tx) ** 2 + (c.y - ty) ** 2;
+        if (d < bestDist) { bestDist = d; best = c; }
+      }
+      g.x = best.x; g.y = best.y; g.dir = best.dir;
+    }
+  }
+
+  /** Returns true if Pacman was caught (death animation started). */
+  private checkGhostCollision(): boolean {
+    for (const g of this.ghosts) {
+      if (g.eatenCooldown > 0) continue;
+      if (g.x === this.px && g.y === this.py) {
+        if (this.frightTicks > 0) {
+          // Eaten — teleport ghost home and lock it briefly.
+          g.x = g.home.x; g.y = g.home.y;
+          g.dir = { x: -1, y: 0 };
+          g.eatenCooldown = 30;
+          this.score += 200;
+        } else {
+          this.lives--;
+          this.deathAnim = 30;
+          log.info({ score: this.score, lives: this.lives }, 'pacman: caught');
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   render(): Map<number, Color> {
     const out = new Map<number, Color>();
-    // Dots — dim white.
+
+    const WALL_C    = this.color('wall',         { r: 14,  g: 14,  b: 90  });
+    const DOT_C     = this.color('dot',          { r: 60,  g: 55,  b: 35  });
+    const PELLET_C  = this.color('pellet',       { r: 255, g: 200, b: 180 });
+    const PACMAN_C  = this.color('pacman',       YELLOW);
+    const FRIGHT_C  = this.color('ghost-fright', { r: 30,  g: 60,  b: 255 });
+
+    // Death animation — red blink over the whole field.
+    if (this.deathAnim > 0) {
+      const intensity = this.deathAnim % 8 < 4 ? 1 : 0.25;
+      for (let y = 0; y < 5; y++) {
+        for (let x = 0; x < 14; x++) {
+          const led = gridToLed(x, y);
+          if (led !== null) {
+            out.set(led, { r: Math.round(200 * intensity), g: 0, b: 0 });
+          }
+        }
+      }
+      // Lives indicator (top-left): 1 yellow led per remaining life.
+      for (let i = 0; i < this.lives; i++) {
+        const led = gridToLed(i, 0);
+        if (led !== null) out.set(led, PACMAN_C);
+      }
+      return out;
+    }
+
+    // Phase-clear flash — green wash + phase number indicator on row 0.
+    if (this.clearAnim > 0) {
+      const intensity = this.clearAnim % 6 < 3 ? 1 : 0.3;
+      for (let y = 0; y < 5; y++) {
+        for (let x = 0; x < 14; x++) {
+          const led = gridToLed(x, y);
+          if (led !== null) {
+            out.set(led, { r: 0, g: Math.round(200 * intensity), b: 30 });
+          }
+        }
+      }
+      // Show next phase number 1..5 as bright cells in row 0.
+      const next = ((this.phase + 1) % this.MAZES.length) + 1;
+      for (let i = 0; i < next; i++) {
+        const led = gridToLed(i, 0);
+        if (led !== null) out.set(led, { r: 255, g: 255, b: 0 });
+      }
+      return out;
+    }
+
+    // Walls.
+    for (let y = 0; y < 5; y++) {
+      for (let x = 0; x < 14; x++) {
+        if (this.MAZE[y]![x] === 1) {
+          const led = gridToLed(x, y);
+          if (led !== null) out.set(led, WALL_C);
+        }
+      }
+    }
+    // Dots.
     for (const key of this.dots) {
       const parts = key.split(',');
       const x = Number(parts[0]);
       const y = Number(parts[1]);
       const led = gridToLed(x, y);
-      if (led !== null) out.set(led, { r: 50, g: 50, b: 30 });
+      if (led !== null) out.set(led, DOT_C);
+    }
+    // Power pellets — pulse.
+    const pulse = 0.65 + 0.35 * Math.sin(this.mouthPhase * 0.6);
+    for (const key of this.pellets) {
+      const parts = key.split(',');
+      const x = Number(parts[0]);
+      const y = Number(parts[1]);
+      const led = gridToLed(x, y);
+      if (led !== null) {
+        out.set(led, {
+          r: Math.round(PELLET_C.r * pulse),
+          g: Math.round(PELLET_C.g * pulse),
+          b: Math.round(PELLET_C.b * pulse),
+        });
+      }
     }
     // Ghosts.
     for (const g of this.ghosts) {
       const led = gridToLed(g.x, g.y);
-      if (led !== null) out.set(led, g.color);
+      if (led === null) continue;
+      let c: Color;
+      if (g.eatenCooldown > 0) {
+        // "Eyes" returning home — dim white.
+        c = { r: 120, g: 120, b: 140 };
+      } else if (this.frightTicks > 0) {
+        // Flash white in the last ~1s of fright as a warning.
+        const flashing = this.frightTicks < 30 && this.frightTicks % 8 < 4;
+        c = flashing ? { r: 255, g: 255, b: 255 } : FRIGHT_C;
+      } else {
+        const base = this.color(g.slot,
+          g.slot === 'ghost-1' ? { r: 255, g: 0,   b: 60  } :
+          g.slot === 'ghost-2' ? { r: 255, g: 120, b: 200 } :
+                                 { r: 0,   g: 220, b: 255 });
+        c = base;
+      }
+      out.set(led, c);
     }
-    // Pacman — yellow with a small "blink" to suggest mouth chomping.
+    // Pacman with chomp animation.
     const ledP = gridToLed(this.px, this.py);
     if (ledP !== null) {
       const chomp = Math.sin(this.mouthPhase) > 0;
-      out.set(ledP, chomp ? YELLOW : { r: 220, g: 170, b: 0 });
+      out.set(ledP, chomp
+        ? PACMAN_C
+        : {
+            r: Math.round(PACMAN_C.r * 0.55),
+            g: Math.round(PACMAN_C.g * 0.55),
+            b: Math.round(PACMAN_C.b * 0.55),
+          },
+      );
     }
     return out;
   }
@@ -584,6 +932,7 @@ export class DoomEngine {
   private deathScreen = 0;
   private tickCounter = 0;
   private ticksPerStep = 3;
+  private overrides: Record<string, string> = {};
 
   // Constants
   private readonly FOV = Math.PI / 2.5;   // ~72° — slightly wider for a small viewport
@@ -596,6 +945,15 @@ export class DoomEngine {
 
   constructor() {
     this.spawnEnemies();
+  }
+
+  setColorOverrides(o: Record<string, string>): void {
+    this.overrides = o ?? {};
+  }
+
+  private color(slot: string, fallback: Color): Color {
+    const hex = this.overrides[slot];
+    return hex ? parseHex(hex) : fallback;
   }
 
   setAnimSpeed(s: number): void {
@@ -723,6 +1081,16 @@ export class DoomEngine {
   render(): Map<number, Color> {
     const out = new Map<number, Color>();
 
+    // Resolve palette slots once per frame. Walls/enemies still multiply
+    // by a distance fade, so these are the BASE colors at fade=1.
+    const wallBase   = this.color('wall',         { r: 110, g: 110, b: 160 });
+    const enemyBase  = this.color('enemy',        { r: 255, g: 0,   b: 80  });
+    const FLOOR      = this.color('floor',        { r: 60,  g: 30,  b: 5   });
+    const AMMO_COLOR = this.color('ammo',         YELLOW);
+    const KILL_COLOR = this.color('kill',         GREEN);
+    const READY      = this.color('weapon-ready', CYAN);
+    const MUZZLE     = this.color('muzzle',       WHITE);
+
     // Death screen: full red, ignore everything else.
     if (this.deathScreen > 0) {
       for (const k of K617_LAYOUT.keys) {
@@ -735,25 +1103,25 @@ export class DoomEngine {
     // Esc = weapon ready (cyan when has ammo)
     const escLed = findKeyLed('Escape');
     if (escLed !== null) {
-      out.set(escLed, this.ammo > 0 ? CYAN : { r: 80, g: 40, b: 0 });
+      out.set(escLed, this.ammo > 0 ? READY : { r: 80, g: 40, b: 0 });
     }
     // 1..7 = kill counter for the current round (was HP — enemies don't
     // damage the player anymore, so HP was always full and uninformative).
     const KILL_KEYS = ['1', '2', '3', '4', '5', '6', '7'];
     for (let i = 0; i < this.kills && i < KILL_KEYS.length; i++) {
       const led = findKeyLed(KILL_KEYS[i]!);
-      if (led !== null) out.set(led, GREEN);
+      if (led !== null) out.set(led, KILL_COLOR);
     }
     // 8 = muzzle flash
     if (this.muzzleFlash > 0) {
       const led = findKeyLed('8');
-      if (led !== null) out.set(led, WHITE);
+      if (led !== null) out.set(led, MUZZLE);
     }
     // 0,Minus,Equal,Backspace = ammo (4 slots)
     const AMMO_KEYS = ['0', 'Minus', 'Equal', 'Backspace'];
     for (let i = 0; i < this.ammo && i < AMMO_KEYS.length; i++) {
       const led = findKeyLed(AMMO_KEYS[i]!);
-      if (led !== null) out.set(led, YELLOW);
+      if (led !== null) out.set(led, AMMO_COLOR);
     }
 
     // ── 3D viewport — rays for cols 0..13, rows 1..3 ───────────────────
@@ -787,9 +1155,12 @@ export class DoomEngine {
       const isEnemy = enemyDist < Infinity;
       // Distance-based fade: closer = brighter.
       const fade = Math.max(0.2, 1 - useDist / this.MAX_DIST);
-      const slice: Color = isEnemy
-        ? { r: Math.round(255 * fade), g: 0, b: Math.round(80 * fade) }
-        : { r: Math.round(110 * fade), g: Math.round(110 * fade), b: Math.round(160 * fade) };
+      const base = isEnemy ? enemyBase : wallBase;
+      const slice: Color = {
+        r: Math.round(base.r * fade),
+        g: Math.round(base.g * fade),
+        b: Math.round(base.b * fade),
+      };
 
       // Slice height: closer = taller. 3 rows max (rows 1..3).
       const sliceHeight = useDist < 1.0 ? 3 : useDist < 2.5 ? 2 : useDist < 5.0 ? 1 : 0;
@@ -803,7 +1174,7 @@ export class DoomEngine {
 
       // Floor on row 4.
       const floorLed = gridToLed(col, 4);
-      if (floorLed !== null) out.set(floorLed, { r: 60, g: 30, b: 5 });
+      if (floorLed !== null) out.set(floorLed, FLOOR);
     }
 
     // ── Damage flash overlay (red wash) ────────────────────────────────
@@ -913,6 +1284,728 @@ export class MinecraftCloudsEngine {
       }
 
       out.set(k.ledIndex, color);
+    }
+    return out;
+  }
+}
+
+// ─── Space Invaders ─────────────────────────────────────────────────────────
+
+/**
+ * Classic Space Invaders on the 14×5 grid.
+ *   - Player ship lives on row 4. A/D moves; Space fires (one player
+ *     bullet on screen at a time, classic arcade behaviour).
+ *   - Aliens occupy the upper rows in a marching formation. They step
+ *     sideways every N ticks, drop down + reverse when they hit an
+ *     edge. If any alien reaches row 4, the player loses immediately.
+ *   - Random alien shots travel downward at a per-wave speed.
+ *   - 4 waves total: 2x6 → 2x6 fast → 3x6 → 3x7, looping.
+ *
+ * Editable palette slots: alien, ship, player-bullet, alien-bullet.
+ */
+export class SpaceInvadersEngine {
+  private aliens: Array<{ x: number; y: number; alive: boolean }> = [];
+  private formationDir: -1 | 1 = 1;
+  private playerCol = 6;
+  private playerBullet: { x: number; y: number } | null = null;
+  private alienBullets: Array<{ x: number; y: number }> = [];
+
+  private lives = 3;
+  private score = 0;
+  private wave = 0;
+  private deathAnim = 0;
+  private clearAnim = 0;
+  private gameOverAnim = 0;
+
+  private tickCounter = 0;
+  private bulletTickCounter = 0;
+  private overrides: Record<string, string> = {};
+
+  // Per-wave config. ticksPerAlienStep is "lower = faster"; bulletTickRate
+  // controls how often bullets advance (both player and alien); fireRate
+  // is per-alien, per-tick probability of firing.
+  private readonly WAVES: ReadonlyArray<{
+    rows: number;
+    cols: number;
+    ticksPerAlienStep: number;
+    bulletTickRate: number;
+    fireRate: number;
+  }> = [
+    { rows: 2, cols: 6, ticksPerAlienStep: 22, bulletTickRate: 8, fireRate: 0.004 },
+    { rows: 2, cols: 6, ticksPerAlienStep: 16, bulletTickRate: 7, fireRate: 0.006 },
+    { rows: 3, cols: 6, ticksPerAlienStep: 12, bulletTickRate: 6, fireRate: 0.009 },
+    { rows: 3, cols: 7, ticksPerAlienStep: 9,  bulletTickRate: 5, fireRate: 0.013 },
+  ];
+
+  constructor() {
+    this.spawnWave();
+  }
+
+  setColorOverrides(o: Record<string, string>): void { this.overrides = o ?? {}; }
+  private color(slot: string, fallback: Color): Color {
+    const hex = this.overrides[slot];
+    return hex ? parseHex(hex) : fallback;
+  }
+
+  /** Speed slider scales the marching cadence ±30%, so the user can
+   *  fine-tune difficulty inside a wave. */
+  setAnimSpeed(s: number): void {
+    // We don't change wave config here; render() looks it up at call-time.
+    // Keeping the hook present so the engine matches the interface.
+    void s;
+  }
+
+  private spawnWave(): void {
+    const w = this.WAVES[this.wave]!;
+    this.aliens = [];
+    // Centre the formation horizontally, two columns of spacing between
+    // adjacent aliens.
+    const startCol = Math.max(0, Math.floor((14 - w.cols * 2 + 1) / 2));
+    for (let r = 0; r < w.rows; r++) {
+      for (let c = 0; c < w.cols; c++) {
+        this.aliens.push({ x: startCol + c * 2, y: r, alive: true });
+      }
+    }
+    this.formationDir = 1;
+    this.playerBullet = null;
+    this.alienBullets = [];
+    this.tickCounter = 0;
+    this.bulletTickCounter = 0;
+  }
+
+  handleKey(keycode: number, value: number): void {
+    if (value !== 1) return;
+    if (this.deathAnim > 0 || this.clearAnim > 0 || this.gameOverAnim > 0) return;
+    if (keycode === KEY_A) {
+      this.playerCol = Math.max(0, this.playerCol - 1);
+    } else if (keycode === KEY_D) {
+      this.playerCol = Math.min(13, this.playerCol + 1);
+    } else if (keycode === KEY_SPACE) {
+      if (!this.playerBullet) {
+        // Bullet starts on row 3 (just above the ship on row 4).
+        this.playerBullet = { x: this.playerCol, y: 3 };
+      }
+    }
+  }
+
+  step(): void {
+    if (this.gameOverAnim > 0) {
+      this.gameOverAnim--;
+      if (this.gameOverAnim === 0) {
+        this.lives = 3;
+        this.score = 0;
+        this.wave = 0;
+        this.playerCol = 6;
+        this.spawnWave();
+      }
+      return;
+    }
+    if (this.deathAnim > 0) {
+      this.deathAnim--;
+      if (this.deathAnim === 0) {
+        if (this.lives > 0) {
+          this.playerBullet = null;
+          this.alienBullets = [];
+          this.playerCol = 6;
+        } else {
+          this.gameOverAnim = 48;
+        }
+      }
+      return;
+    }
+    if (this.clearAnim > 0) {
+      this.clearAnim--;
+      if (this.clearAnim === 0) {
+        this.wave = (this.wave + 1) % this.WAVES.length;
+        this.spawnWave();
+      }
+      return;
+    }
+
+    const w = this.WAVES[this.wave]!;
+
+    // ── Bullets ─────────────────────────────────────────────────────────
+    this.bulletTickCounter++;
+    if (this.bulletTickCounter >= w.bulletTickRate) {
+      this.bulletTickCounter = 0;
+
+      // Player bullet ascends.
+      if (this.playerBullet) {
+        this.playerBullet.y--;
+        if (this.playerBullet.y < 0) {
+          this.playerBullet = null;
+        } else {
+          // Hit-test against aliens.
+          for (const a of this.aliens) {
+            if (a.alive && a.x === this.playerBullet.x && a.y === this.playerBullet.y) {
+              a.alive = false;
+              this.playerBullet = null;
+              this.score += 10;
+              break;
+            }
+          }
+        }
+      }
+
+      // Alien bullets descend.
+      const surviving: Array<{ x: number; y: number }> = [];
+      for (const b of this.alienBullets) {
+        b.y++;
+        if (b.y > 4) continue; // off-screen
+        if (b.y === 4 && b.x === this.playerCol) {
+          this.lives--;
+          this.deathAnim = 24;
+          log.info({ score: this.score, lives: this.lives }, 'invaders: hit');
+          this.alienBullets = [];
+          this.playerBullet = null;
+          return;
+        }
+        surviving.push(b);
+      }
+      this.alienBullets = surviving;
+    }
+
+    // ── Formation step ──────────────────────────────────────────────────
+    this.tickCounter++;
+    if (this.tickCounter >= w.ticksPerAlienStep) {
+      this.tickCounter = 0;
+      const alive = this.aliens.filter((a) => a.alive);
+      if (alive.length === 0) {
+        this.clearAnim = 30;
+        this.score += 200 * (this.wave + 1);
+        log.info({ score: this.score, wave: this.wave + 1 }, 'invaders: wave clear');
+        return;
+      }
+      let minX = Infinity;
+      let maxX = -Infinity;
+      for (const a of alive) {
+        if (a.x < minX) minX = a.x;
+        if (a.x > maxX) maxX = a.x;
+      }
+      const goingRight = this.formationDir === 1;
+      const willOverflow = goingRight ? maxX + 1 >= 14 : minX - 1 < 0;
+      if (willOverflow) {
+        for (const a of this.aliens) if (a.alive) a.y++;
+        this.formationDir = goingRight ? -1 : 1;
+        for (const a of this.aliens) {
+          if (a.alive && a.y >= 4) {
+            this.lives = 0;
+            this.gameOverAnim = 48;
+            log.info({ score: this.score }, 'invaders: aliens landed');
+            return;
+          }
+        }
+      } else {
+        for (const a of this.aliens) if (a.alive) a.x += this.formationDir;
+      }
+    }
+
+    // ── Alien fire ──────────────────────────────────────────────────────
+    // For each alive alien, roll a die. To keep bullets from stacking,
+    // only one bullet per column at a time.
+    const colsWithBullet = new Set(this.alienBullets.map((b) => b.x));
+    for (const a of this.aliens) {
+      if (!a.alive) continue;
+      if (colsWithBullet.has(a.x)) continue;
+      if (Math.random() < w.fireRate) {
+        // Fire from the LOWEST alive alien in this column to avoid
+        // self-impact.
+        let lowest = a;
+        for (const o of this.aliens) {
+          if (o.alive && o.x === a.x && o.y > lowest.y) lowest = o;
+        }
+        this.alienBullets.push({ x: lowest.x, y: lowest.y + 1 });
+        colsWithBullet.add(a.x);
+      }
+    }
+  }
+
+  render(): Map<number, Color> {
+    const out = new Map<number, Color>();
+    const ALIEN_C   = this.color('alien',         { r: 0,   g: 255, b: 100 });
+    const SHIP_C    = this.color('ship',          { r: 100, g: 200, b: 255 });
+    const PBULLET_C = this.color('player-bullet', { r: 255, g: 255, b: 255 });
+    const ABULLET_C = this.color('alien-bullet',  { r: 255, g: 80,  b: 30  });
+
+    if (this.gameOverAnim > 0) {
+      const i = this.gameOverAnim % 8 < 4 ? 1 : 0.3;
+      for (let y = 0; y < 5; y++) {
+        for (let x = 0; x < 14; x++) {
+          const led = gridToLed(x, y);
+          if (led !== null) out.set(led, { r: Math.round(200 * i), g: 0, b: 0 });
+        }
+      }
+      return out;
+    }
+    if (this.clearAnim > 0) {
+      const i = this.clearAnim % 6 < 3 ? 1 : 0.3;
+      for (let y = 0; y < 5; y++) {
+        for (let x = 0; x < 14; x++) {
+          const led = gridToLed(x, y);
+          if (led !== null) out.set(led, { r: 0, g: Math.round(180 * i), b: Math.round(80 * i) });
+        }
+      }
+      const next = ((this.wave + 1) % this.WAVES.length) + 1;
+      for (let k = 0; k < next; k++) {
+        const led = gridToLed(k, 0);
+        if (led !== null) out.set(led, { r: 255, g: 255, b: 0 });
+      }
+      return out;
+    }
+
+    // Aliens.
+    for (const a of this.aliens) {
+      if (!a.alive) continue;
+      if (a.y < 0 || a.y >= 5 || a.x < 0 || a.x >= 14) continue;
+      const led = gridToLed(a.x, a.y);
+      if (led !== null) out.set(led, ALIEN_C);
+    }
+    // Player bullet.
+    if (this.playerBullet && this.playerBullet.y >= 0) {
+      const led = gridToLed(this.playerBullet.x, this.playerBullet.y);
+      if (led !== null) out.set(led, PBULLET_C);
+    }
+    // Alien bullets.
+    for (const b of this.alienBullets) {
+      if (b.y < 0 || b.y >= 5) continue;
+      const led = gridToLed(b.x, b.y);
+      if (led !== null) out.set(led, ABULLET_C);
+    }
+    // Ship — flash during deathAnim.
+    const shipLed = gridToLed(this.playerCol, 4);
+    if (shipLed !== null) {
+      const flashing = this.deathAnim > 0 && this.deathAnim % 4 < 2;
+      out.set(shipLed, flashing ? { r: 255, g: 80, b: 0 } : SHIP_C);
+    }
+    // Lives on the top-left corner (1 LED per remaining life).
+    for (let i = 0; i < this.lives; i++) {
+      const led = gridToLed(i, 0);
+      // Only paint if not already covered by an alien.
+      if (led !== null && !out.has(led)) out.set(led, { r: 80, g: 80, b: 80 });
+    }
+    return out;
+  }
+}
+
+// ─── Super Mario (2-level side-scroller) ────────────────────────────────────
+
+/**
+ * Tiny side-scrolling platformer on the 14×5 grid. The world for each
+ * level is wider than the viewport; the camera scrolls horizontally so
+ * Mario stays near the centre.
+ *
+ *   Row 0      : sky / very-high platforms
+ *   Row 1      : high jump apex / floating platforms
+ *   Row 2      : mid-air / floating platforms
+ *   Row 3      : Mario's walking row (1 above ground)
+ *   Row 4      : solid ground (X), pit (.), goal flag at the far right
+ *
+ * Controls: A/D to walk, Space to jump (variable height — hold for
+ * higher arc up to the apex), W to look up (no-op for now).
+ *
+ * Editable palette slots:
+ *   mario, ground, platform, coin, goomba, flag, sky
+ */
+export class MarioEngine {
+  // Each level's static layout. Solid array maps (col, row) → wall/ground.
+  private readonly LEVELS: ReadonlyArray<{
+    width: number;
+    solids: ReadonlyArray<readonly [number, number]>;
+    coins: ReadonlyArray<readonly [number, number]>;
+    goombas: ReadonlyArray<readonly [number, number]>;
+    flagX: number;
+  }> = [
+    // Level 1 — gentle introduction. All pits are 1 cell wide and no
+    // platform sits directly above a pit (so a held jump always clears).
+    {
+      width: 26,
+      solids: (() => {
+        const s: Array<[number, number]> = [];
+        const gaps = new Set([7, 16]); // 1-wide pits
+        for (let x = 0; x < 26; x++) {
+          if (gaps.has(x)) continue;
+          s.push([x, 4]);
+        }
+        // Floating platforms on row 2, over SOLID ground (safe to fall off).
+        for (const x of [11, 12]) s.push([x, 2]);
+        return s;
+      })(),
+      coins: [[2, 3], [5, 3], [11, 1], [12, 1], [19, 3], [23, 3]],
+      goombas: [[10, 3], [14, 3], [21, 3]],
+      flagX: 25,
+    },
+    // Level 2 — harder: four pits, more goombas, more platforms. Still
+    // all 1-wide pits with clear airspace above each.
+    {
+      width: 30,
+      solids: (() => {
+        const s: Array<[number, number]> = [];
+        const gaps = new Set([6, 13, 20, 26]); // four 1-wide pits
+        for (let x = 0; x < 30; x++) {
+          if (gaps.has(x)) continue;
+          s.push([x, 4]);
+        }
+        for (const x of [9, 10, 23, 24]) s.push([x, 2]); // row-2 platforms
+        for (const x of [16, 17]) s.push([x, 1]);        // row-1 platform
+        return s;
+      })(),
+      coins: [[3, 3], [9, 1], [16, 0], [23, 1], [28, 3]],
+      goombas: [[9, 3], [16, 3], [23, 3], [28, 3]],
+      flagX: 29,
+    },
+  ];
+
+  private level = 0;
+  private mx = 1;
+  private my = 3;
+  private vy = 0;                  // vertical velocity in cells/tick
+  private facing: -1 | 1 = 1;
+  private aHeld = false;
+  private dHeld = false;
+  private jumpHeld = false;
+  private jumpReleased = true;     // for variable-height jump
+  private deathAnim = 0;
+  private clearAnim = 0;
+  private gameOverAnim = 0;
+  private lives = 3;
+  private coinsCollected = 0;
+  private score = 0;
+
+  // Per-level mutable state — coins and goombas can be removed.
+  private liveCoins: Set<string> = new Set();
+  private liveGoombas: Array<{ x: number; y: number; dir: -1 | 1 }> = [];
+
+  private tickCounter = 0;
+  private ticksPerStep = 2;        // physics rate; lower = faster
+  private overrides: Record<string, string> = {};
+
+  // Physics constants. Tuned for a 5-row grid: a HELD jump rises ~1.8
+  // cells (row 3 → row 1) and stays airborne ~10 frames, which clears a
+  // 1-wide pit with margin. A tap is a small hop.
+  private readonly MOVE_SPEED = 0.34;
+  private readonly JUMP_VELOCITY = -0.9;
+  private readonly GRAVITY = 0.30;
+  private readonly MAX_FALL = 1.2;
+  private readonly JUMP_HOLD_BOOST = -0.12;   // applied while jump held
+  private readonly JUMP_HOLD_TICKS = 5;
+  private jumpHoldCounter = 0;
+  private goombaTickCounter = 0;
+  private readonly GOOMBA_STEP_TICKS = 6;
+
+  constructor() {
+    this.loadLevel();
+  }
+
+  setColorOverrides(o: Record<string, string>): void { this.overrides = o ?? {}; }
+  private color(slot: string, fallback: Color): Color {
+    const hex = this.overrides[slot];
+    return hex ? parseHex(hex) : fallback;
+  }
+
+  setAnimSpeed(s: number): void {
+    const c = Math.max(0, Math.min(1, s));
+    this.ticksPerStep = Math.max(1, Math.round(4 - c * 3));
+  }
+
+  private loadLevel(): void {
+    const lvl = this.LEVELS[this.level]!;
+    this.liveCoins = new Set(lvl.coins.map(([x, y]) => `${x},${y}`));
+    this.liveGoombas = lvl.goombas.map(([x, y]) => ({ x, y, dir: -1 as -1 }));
+    this.mx = 1;
+    this.my = 3;
+    this.vy = 0;
+    this.facing = 1;
+    this.jumpHoldCounter = 0;
+  }
+
+  private isSolidAt(cx: number, cy: number): boolean {
+    if (cy >= 5) return false; // below ground is fall
+    if (cx < 0) return true;   // left wall
+    if (cx >= this.LEVELS[this.level]!.width) return true;
+    for (const [sx, sy] of this.LEVELS[this.level]!.solids) {
+      if (sx === cx && sy === cy) return true;
+    }
+    return false;
+  }
+
+  /** True if there's a solid surface directly under (mx, my) — used to
+   *  decide whether Mario is "on ground" and can jump. */
+  private isOnGround(): boolean {
+    const fx = Math.floor(this.mx);
+    const fy = Math.floor(this.my);
+    return this.isSolidAt(fx, fy + 1);
+  }
+
+  handleKey(keycode: number, value: number): void {
+    const pressed = value === 1;
+    if (this.deathAnim > 0 || this.gameOverAnim > 0 || this.clearAnim > 0) return;
+    if (keycode === KEY_A) this.aHeld = pressed;
+    else if (keycode === KEY_D) this.dHeld = pressed;
+    else if (keycode === KEY_SPACE) {
+      this.jumpHeld = pressed;
+      if (pressed && this.jumpReleased && this.isOnGround()) {
+        this.vy = this.JUMP_VELOCITY;
+        this.jumpHoldCounter = this.JUMP_HOLD_TICKS;
+        this.jumpReleased = false;
+      }
+      if (!pressed) this.jumpReleased = true;
+    }
+  }
+
+  step(): void {
+    if (this.gameOverAnim > 0) {
+      this.gameOverAnim--;
+      if (this.gameOverAnim === 0) {
+        this.lives = 3;
+        this.score = 0;
+        this.coinsCollected = 0;
+        this.level = 0;
+        this.loadLevel();
+      }
+      return;
+    }
+    if (this.clearAnim > 0) {
+      this.clearAnim--;
+      if (this.clearAnim === 0) {
+        this.level = (this.level + 1) % this.LEVELS.length;
+        this.loadLevel();
+      }
+      return;
+    }
+    if (this.deathAnim > 0) {
+      this.deathAnim--;
+      if (this.deathAnim === 0) {
+        if (this.lives > 0) this.loadLevel();
+        else this.gameOverAnim = 48;
+      }
+      return;
+    }
+
+    this.tickCounter++;
+    if (this.tickCounter < this.ticksPerStep) {
+      return;
+    }
+    this.tickCounter = 0;
+
+    // ── Horizontal movement ─────────────────────────────────────────────
+    let dx = 0;
+    if (this.aHeld && !this.dHeld) { dx = -this.MOVE_SPEED; this.facing = -1; }
+    else if (this.dHeld && !this.aHeld) { dx = this.MOVE_SPEED; this.facing = 1; }
+    if (dx !== 0) {
+      const newX = this.mx + dx;
+      const cellX = dx > 0 ? Math.floor(newX + 0.001) : Math.floor(newX);
+      const cellY = Math.floor(this.my);
+      if (!this.isSolidAt(cellX, cellY)) this.mx = newX;
+    }
+
+    // ── Variable-height jump: extra upward thrust while space held ─────
+    if (this.jumpHeld && this.jumpHoldCounter > 0 && this.vy < 0) {
+      this.vy += this.JUMP_HOLD_BOOST;
+      this.jumpHoldCounter--;
+    } else {
+      this.jumpHoldCounter = 0;
+    }
+
+    // ── Vertical movement (gravity + collisions) ───────────────────────
+    this.vy = Math.min(this.MAX_FALL, this.vy + this.GRAVITY);
+    const newY = this.my + this.vy;
+    const cellX = Math.floor(this.mx);
+    if (this.vy > 0) {
+      // Falling — check for ground below
+      const targetCellY = Math.floor(newY);
+      // Step from current to target one cell at a time.
+      let landedRow: number | null = null;
+      for (let cy = Math.floor(this.my) + 1; cy <= targetCellY + 1; cy++) {
+        if (this.isSolidAt(cellX, cy)) {
+          landedRow = cy - 1;
+          break;
+        }
+      }
+      if (landedRow !== null) {
+        this.my = landedRow;
+        this.vy = 0;
+      } else {
+        this.my = newY;
+      }
+      if (this.my > 5) {
+        // Fell off the bottom — death by pit.
+        this.die();
+        return;
+      }
+    } else {
+      // Rising — check ceiling
+      const targetCellY = Math.floor(newY);
+      let blockedRow: number | null = null;
+      for (let cy = Math.floor(this.my) - 1; cy >= targetCellY; cy--) {
+        if (this.isSolidAt(cellX, cy)) {
+          blockedRow = cy + 1;
+          break;
+        }
+      }
+      if (blockedRow !== null) {
+        this.my = blockedRow;
+        this.vy = 0;
+      } else {
+        this.my = newY;
+      }
+    }
+
+    // ── Coin pickup ────────────────────────────────────────────────────
+    const fx = Math.floor(this.mx);
+    const fy = Math.floor(this.my);
+    const key = `${fx},${fy}`;
+    if (this.liveCoins.has(key)) {
+      this.liveCoins.delete(key);
+      this.coinsCollected++;
+      this.score += 50;
+    }
+
+    // ── Goomba movement ────────────────────────────────────────────────
+    this.goombaTickCounter++;
+    if (this.goombaTickCounter >= this.GOOMBA_STEP_TICKS) {
+      this.goombaTickCounter = 0;
+      for (const g of this.liveGoombas) {
+        const nx = g.x + g.dir;
+        // Reverse on wall or on cliff (no ground ahead).
+        const blocked = this.isSolidAt(nx, g.y);
+        const cliff = !this.isSolidAt(nx, g.y + 1);
+        if (blocked || cliff) {
+          g.dir = (g.dir === -1 ? 1 : -1);
+        } else {
+          g.x = nx;
+        }
+      }
+    }
+
+    // ── Goomba collision ───────────────────────────────────────────────
+    for (let i = 0; i < this.liveGoombas.length; i++) {
+      const g = this.liveGoombas[i]!;
+      if (Math.abs(g.x - this.mx) < 0.6 && Math.abs(g.y - this.my) < 0.6) {
+        if (this.vy > 0.4) {
+          // Stomp — kill the goomba and bounce.
+          this.liveGoombas.splice(i, 1);
+          this.vy = this.JUMP_VELOCITY * 0.6;
+          this.score += 100;
+          break;
+        } else {
+          this.die();
+          return;
+        }
+      }
+    }
+
+    // ── Reached flag? ──────────────────────────────────────────────────
+    if (this.mx >= this.LEVELS[this.level]!.flagX - 0.2) {
+      this.score += 500 + this.liveCoins.size * 0; // base bonus
+      this.clearAnim = 36;
+      log.info({ level: this.level + 1, score: this.score, coins: this.coinsCollected }, 'mario: level clear');
+    }
+  }
+
+  private die(): void {
+    this.lives--;
+    this.deathAnim = 30;
+    log.info({ lives: this.lives, score: this.score }, 'mario: died');
+  }
+
+  render(): Map<number, Color> {
+    const out = new Map<number, Color>();
+    const MARIO_C    = this.color('mario',    { r: 255, g: 30,  b: 0   });
+    const GROUND_C   = this.color('ground',   { r: 130, g: 60,  b: 10  });
+    const PLATFORM_C = this.color('platform', { r: 110, g: 80,  b: 40  });
+    const COIN_C     = this.color('coin',     { r: 255, g: 220, b: 0   });
+    const GOOMBA_C   = this.color('goomba',   { r: 160, g: 80,  b: 0   });
+    const FLAG_C     = this.color('flag',     { r: 0,   g: 255, b: 50  });
+    const SKY_C      = this.color('sky',      { r: 0,   g: 0,   b: 0   });
+
+    if (this.gameOverAnim > 0) {
+      const i = this.gameOverAnim % 8 < 4 ? 1 : 0.3;
+      for (let y = 0; y < 5; y++) for (let x = 0; x < 14; x++) {
+        const led = gridToLed(x, y);
+        if (led !== null) out.set(led, { r: Math.round(200 * i), g: 0, b: 0 });
+      }
+      return out;
+    }
+    if (this.clearAnim > 0) {
+      const i = this.clearAnim % 6 < 3 ? 1 : 0.3;
+      for (let y = 0; y < 5; y++) for (let x = 0; x < 14; x++) {
+        const led = gridToLed(x, y);
+        if (led !== null) out.set(led, { r: Math.round(120 * i), g: Math.round(220 * i), b: 0 });
+      }
+      const next = ((this.level + 1) % this.LEVELS.length) + 1;
+      for (let k = 0; k < next; k++) {
+        const led = gridToLed(k, 0);
+        if (led !== null) out.set(led, { r: 255, g: 255, b: 255 });
+      }
+      return out;
+    }
+
+    // Sky baseline (skip if sky is pure black — saves writes).
+    if (SKY_C.r > 0 || SKY_C.g > 0 || SKY_C.b > 0) {
+      for (let y = 0; y < 5; y++) for (let x = 0; x < 14; x++) {
+        const led = gridToLed(x, y);
+        if (led !== null) out.set(led, SKY_C);
+      }
+    }
+
+    // Camera: world col `wx` renders to viewport col `wx - camX`. Camera
+    // follows Mario but clamps to the level edges.
+    const lvl = this.LEVELS[this.level]!;
+    const camX = Math.max(0, Math.min(lvl.width - 14, Math.floor(this.mx - 6)));
+
+    // Solids (ground + platforms).
+    for (const [sx, sy] of lvl.solids) {
+      const vx = sx - camX;
+      if (vx < 0 || vx >= 14) continue;
+      const led = gridToLed(vx, sy);
+      if (led !== null) out.set(led, sy === 4 ? GROUND_C : PLATFORM_C);
+    }
+    // Coins (slight pulse).
+    const pulse = 0.7 + 0.3 * Math.sin(this.tickCounter * 0.4);
+    for (const key of this.liveCoins) {
+      const parts = key.split(',');
+      const sx = Number(parts[0]);
+      const sy = Number(parts[1]);
+      const vx = sx - camX;
+      if (vx < 0 || vx >= 14) continue;
+      const led = gridToLed(vx, sy);
+      if (led !== null) {
+        out.set(led, {
+          r: Math.round(COIN_C.r * pulse),
+          g: Math.round(COIN_C.g * pulse),
+          b: Math.round(COIN_C.b * pulse),
+        });
+      }
+    }
+    // Goombas.
+    for (const g of this.liveGoombas) {
+      const vx = g.x - camX;
+      if (vx < 0 || vx >= 14) continue;
+      const led = gridToLed(vx, g.y);
+      if (led !== null) out.set(led, GOOMBA_C);
+    }
+    // Flag — bright green vertical band at flagX.
+    const flagVx = lvl.flagX - camX;
+    if (flagVx >= 0 && flagVx < 14) {
+      for (let y = 0; y < 5; y++) {
+        const led = gridToLed(flagVx, y);
+        if (led !== null) out.set(led, FLAG_C);
+      }
+    }
+    // Mario.
+    const marioVx = Math.floor(this.mx) - camX;
+    const marioVy = Math.floor(this.my);
+    if (marioVx >= 0 && marioVx < 14 && marioVy >= 0 && marioVy < 5) {
+      const led = gridToLed(marioVx, marioVy);
+      if (led !== null) {
+        const flash = this.deathAnim > 0 && this.deathAnim % 4 < 2;
+        out.set(led, flash ? { r: 255, g: 255, b: 0 } : MARIO_C);
+      }
+    }
+    // Lives indicator: 1 small red led per remaining life on row 0, far right.
+    for (let i = 0; i < this.lives; i++) {
+      const led = gridToLed(13 - i, 0);
+      if (led !== null && !out.has(led)) out.set(led, { r: 80, g: 0, b: 0 });
     }
     return out;
   }

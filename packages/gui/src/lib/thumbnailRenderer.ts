@@ -567,6 +567,63 @@ function renderMinecraftClouds(t: number): string[] {
   return out;
 }
 
+function renderSpaceInvaders(t: number): string[] {
+  const out: string[] = [];
+  // Marching formation drifts left↔right; player ship tracks on row 4.
+  const drift = Math.round(Math.sin(t * 0.8) * 1);
+  const shipX = Math.floor(2 + (Math.sin(t * 1.1) * 0.5 + 0.5) * (THUMB_COLS - 4));
+  // A descending alien bullet and a rising player bullet.
+  const aBulletY = Math.floor((t * 1.5) % 5);
+  const aBulletX = 2 + drift;
+  const pBulletY = 3 - Math.floor((t * 2.0) % 4);
+  for (let gy = 0; gy < THUMB_ROWS; gy++) {
+    for (let gx = 0; gx < THUMB_COLS; gx++) {
+      let color = BG;
+      // Aliens occupy rows 0-1 on alternating columns.
+      if ((gy === 0 || gy === 1) && (gx + drift) % 2 === 0) color = '#00ff64';
+      // Alien bullet.
+      if (gx === aBulletX && gy === aBulletY && gy > 1) color = '#ff5018';
+      // Player bullet.
+      if (gx === shipX && gy === pBulletY && gy < 4) color = '#ffffff';
+      // Ship on row 4.
+      if (gy === 4 && gx === shipX) color = '#64c8ff';
+      out.push(color);
+    }
+  }
+  return out;
+}
+
+function renderMario(t: number): string[] {
+  const out: string[] = [];
+  // Side-scroll feel: ground on row 4 with a moving pit, Mario hops, a
+  // goomba shuffles, a coin pulses.
+  const scroll = Math.floor(t * 1.2);
+  const pitCol = ((scroll % (THUMB_COLS + 2)) + THUMB_COLS) % (THUMB_COLS + 2);
+  // Mario jump arc.
+  const jumpPhase = (t * 1.6) % 3;
+  const marioY = jumpPhase < 1.4 ? 1 : 3;
+  const marioX = 1;
+  const goombaX = THUMB_COLS - 1 - (scroll % THUMB_COLS);
+  const coinPulse = Math.sin(t * 5) > 0;
+  for (let gy = 0; gy < THUMB_ROWS; gy++) {
+    for (let gx = 0; gx < THUMB_COLS; gx++) {
+      let color = BG;
+      // Ground row 4 (with a pit).
+      if (gy === 4 && gx !== pitCol) color = '#823c0a';
+      // Floating platform on row 2.
+      if (gy === 2 && (gx === 3 || gx === 4)) color = '#6e5028';
+      // Coin on row 1.
+      if (gy === 1 && gx === 4 && coinPulse) color = '#ffdc00';
+      // Goomba on row 3.
+      if (gy === 3 && gx === goombaX) color = '#a05000';
+      // Mario.
+      if (gy === marioY && gx === marioX) color = '#ff1e00';
+      out.push(color);
+    }
+  }
+  return out;
+}
+
 // ─── Main entry point ────────────────────────────────────────────────────────
 
 export function renderThumbnail(preset: Preset | UserPreset, t: number): string[] {
@@ -593,6 +650,8 @@ export function renderThumbnail(preset: Preset | UserPreset, t: number): string[
     case 'pacman': return renderPacman(t);
     case 'doom': return renderDoom(t);
     case 'minecraft-clouds': return renderMinecraftClouds(t);
+    case 'space-invaders': return renderSpaceInvaders(t);
+    case 'mario': return renderMario(t);
   }
 
   const out: string[] = new Array(TOTAL);

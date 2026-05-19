@@ -17,6 +17,8 @@ import {
   PacmanEngine,
   DoomEngine,
   MinecraftCloudsEngine,
+  SpaceInvadersEngine,
+  MarioEngine,
 } from './games-interactive.js';
 
 /** Common surface every interactive engine implements so EffectEngine can
@@ -1836,6 +1838,16 @@ export class EffectEngine {
       },
       'doom': () => {
         const e = new DoomEngine();
+        e.setAnimSpeed(pattern.animSpeed);
+        return e;
+      },
+      'space-invaders': () => {
+        const e = new SpaceInvadersEngine();
+        e.setAnimSpeed(pattern.animSpeed);
+        return e;
+      },
+      'mario': () => {
+        const e = new MarioEngine();
         e.setAnimSpeed(pattern.animSpeed);
         return e;
       },

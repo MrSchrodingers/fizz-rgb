@@ -1018,7 +1018,7 @@ export const BUILTIN_PRESETS: Preset[] = [
   {
     id: 'game-pacman',
     name: 'Pacman (WASD)',
-    description: 'WASD move o Pacman amarelo. Come os pontos enquanto foge dos fantasmas vermelho e ciano',
+    description: 'WASD move o Pacman pelo labirinto. Coma os pontos, pegue os power pellets nas quinas pra deixar os 3 fantasmas azuis (comíveis!). 5 fases que ficam mais difíceis. 3 vidas',
     category: 'game',
     pattern: { keys: {}, animType: 'pacman', animSpeed: 0.5 },
   },
@@ -1028,6 +1028,20 @@ export const BUILTIN_PRESETS: Preset[] = [
     description: 'FPS raycaster. W=frente, S=trás, A/D=girar, Space=atirar. Kills (verde) fileira 1-7. Ammo (amarelo) 0/-/=/Backspace. Imps vermelhos não atacam — apenas alvos',
     category: 'game',
     pattern: { keys: {}, animType: 'doom', animSpeed: 0.5 },
+  },
+  {
+    id: 'game-space-invaders',
+    name: 'Space Invaders',
+    description: 'A/D move a nave (fileira de baixo), Space atira. Destrua a formação de alienígenas antes que desçam até você. 4 ondas progressivas, 3 vidas',
+    category: 'game',
+    pattern: { keys: {}, animType: 'space-invaders', animSpeed: 0.5 },
+  },
+  {
+    id: 'game-mario',
+    name: 'Super Mario',
+    description: 'A/D anda, Space pula (segura pra pular mais alto). Pule nos goombas pra esmagá-los, pegue moedas, evite os buracos e chegue na bandeira verde. 2 fases, 3 vidas',
+    category: 'game',
+    pattern: { keys: {}, animType: 'mario', animSpeed: 0.5 },
   },
 
   // ── Themed cycles (host-streamed, layout-aware) ──────────────────────────
