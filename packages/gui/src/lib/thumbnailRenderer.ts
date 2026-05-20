@@ -805,6 +805,21 @@ function renderKeyboardCrawl(t: number): string[] {
   return out;
 }
 
+function renderCursed(t: number): string[] {
+  const out = new Array<string>(TOTAL).fill(BG);
+  const radius = (t * 0.8) % 4.2; // infection grows then a cleanse resets it
+  const cx = 2.5, cy = 2;
+  for (let i = 0; i < TOTAL; i++) {
+    const gx = i % THUMB_COLS, gy = Math.floor(i / THUMB_COLS);
+    if (Math.hypot(gx - cx, (gy - cy) * 1.1) <= radius) {
+      const b = 0.5 + 0.5 * Math.abs(Math.sin(t * 4 + gx));
+      out[i] = rgbHex(120 + 135 * b, 20 * b, 10 * b);
+    }
+  }
+  out[Math.floor(t * 2) % TOTAL] = '#00ff28'; // a cleanse flash
+  return out;
+}
+
 // ─── Main entry point ────────────────────────────────────────────────────────
 
 export function renderThumbnail(preset: Preset | UserPreset, t: number): string[] {
@@ -844,6 +859,7 @@ export function renderThumbnail(preset: Preset | UserPreset, t: number): string[
     case 'frogger': return renderFrogger(t);
     case 'wordle': return renderWordle(t);
     case 'keyboard-crawl': return renderKeyboardCrawl(t);
+    case 'cursed': return renderCursed(t);
   }
 
   const out: string[] = new Array(TOTAL);

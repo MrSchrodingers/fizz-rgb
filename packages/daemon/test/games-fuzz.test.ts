@@ -16,7 +16,8 @@ import type { Color } from '@fizz/core';
 import {
   RippleEngine, SparkEngine, BinaryClockEngine, DoomFireEngine,
   WhacAMoleEngine, BulletHellEngine, DragRaceEngine, FroggerEngine, WordleEngine,
-  KeyboardCrawlEngine, diskCrawlStore, type CrawlStore, type CrawlMeta,
+  KeyboardCrawlEngine, diskCrawlStore, CursedKeyboardEngine,
+  type CrawlStore, type CrawlMeta,
 } from '../src/games-interactive.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -91,6 +92,32 @@ describe('arcade games — fuzz (no crash, valid frames)', () => {
   it('wordle', () => { expect(() => fuzz(() => new WordleEngine())).not.toThrow(); });
   it('keyboard-crawl', () => {
     expect(() => fuzz(() => { const e = new KeyboardCrawlEngine(memStore()); e.handleKey(KEY_1, 1); return e; })).not.toThrow();
+  });
+  it('cursed', () => {
+    expect(() => fuzz(() => { const e = new CursedKeyboardEngine(); e.handleKey(KEY_1, 1); return e; })).not.toThrow();
+  });
+});
+
+describe('Cursed keyboard', () => {
+  it('a perfect cleanser contains the curse and survives', () => {
+    const e = new CursedKeyboardEngine();
+    e.handleKey(KEY_1, 1); // difficulty 1
+    for (let f = 0; f < 800; f++) {
+      e.step();
+      for (const kc of e.inspect().infectedKeycodes) e.handleKey(kc, 1);
+    }
+    expect(e.inspect().mode).toBe('play'); // never overrun
+  });
+
+  it('left unattended on the hardest difficulty, the curse overruns the board', () => {
+    const e = new CursedKeyboardEngine();
+    e.handleKey(KEY_5, 1); // difficulty 5
+    let lost = false;
+    for (let f = 0; f < 3000; f++) {
+      e.step();
+      if (e.inspect().mode === 'lose') { lost = true; break; }
+    }
+    expect(lost).toBe(true);
   });
 });
 

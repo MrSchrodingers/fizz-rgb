@@ -1124,6 +1124,13 @@ export const BUILTIN_PRESETS: Preset[] = [
     category: 'game',
     pattern: { keys: {}, animType: 'keyboard-crawl', animSpeed: 0.5 },
   },
+  {
+    id: 'game-cursed',
+    name: 'Teclado Amaldiçoado',
+    description: 'No início escolha a dificuldade 1-5 (teclas 1 a 5). Uma maldição vermelha se espalha de tecla em tecla pelos vizinhos. Aperte uma tecla infectada pra limpá-la (pisca verde). Se a fração infectada chegar no limiar, o teclado é dominado e você perde. Contenha o máximo que puder — quanto mais difícil, mais rápido e provável o contágio',
+    category: 'game',
+    pattern: { keys: {}, animType: 'cursed', animSpeed: 0.5 },
+  },
 
   // ── Themed cycles (host-streamed, layout-aware) ──────────────────────────
   {

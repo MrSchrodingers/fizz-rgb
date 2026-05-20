@@ -3146,6 +3146,141 @@ export class KeyboardCrawlEngine {
   }
 }
 
+// ─── Cursed keyboard (contagion) ─────────────────────────────────────────────
+
+// Contagion graph over CLEANSABLE keys only (keys with a keycode; Fn has none
+// and is excluded so every infected key can always be pressed to cleanse it).
+const CURSED_KEYS: Array<{ led: number; keycode: number }> = [];
+const CURSED_LED_BY_KEYCODE = new Map<number, number>();
+const CURSED_NEIGHBORS = new Map<number, number[]>();   // led → cleansable matrix neighbours
+(() => {
+  const cleansable = new Set<number>();
+  for (const [keycode, cell] of KEYCODE_TO_CELL) {
+    CURSED_KEYS.push({ led: cell.led, keycode });
+    CURSED_LED_BY_KEYCODE.set(keycode, cell.led);
+    cleansable.add(cell.led);
+  }
+  for (const cell of KEYCODE_TO_CELL.values()) {
+    const cand = [
+      keyLed(cell.row, cell.col - 1),
+      keyLed(cell.row, cell.col + 1),
+      keyLed(cell.row - 1, vNeighbor(cell.row, cell.col, cell.row - 1)),
+      keyLed(cell.row + 1, vNeighbor(cell.row, cell.col, cell.row + 1)),
+    ];
+    const nbrs: number[] = [];
+    for (const n of cand) if (n !== null && n !== cell.led && cleansable.has(n)) nbrs.push(n);
+    CURSED_NEIGHBORS.set(cell.led, nbrs);
+  }
+})();
+
+/**
+ * A red curse spreads key-to-key across the physical matrix; press an infected
+ * key to cleanse it. It starts on one key and every spread tick jumps to
+ * neighbouring keys. If the infected fraction reaches the lose threshold the
+ * board is overrun (you lose); otherwise survive as long as you can. The board
+ * stays dark except infected keys (red, brighter as they fester) and cleanse
+ * flashes (green). Difficulty 1-5 raises the spread speed and probability.
+ */
+export class CursedKeyboardEngine {
+  private difficulty = 0;
+  private infected = new Map<number, number>();   // led → age in frames
+  private cleanseFlash = new Map<number, number>();
+  private survived = 0;
+  private cleanses = 0;
+  private spreadTick = 0;
+  private gameOverAnim = 0;
+  private pulse = 0;
+  private readonly LOSE_FRAC = 0.7;
+
+  setAnimSpeed(_s: number): void { /* pace comes from difficulty */ }
+  private get diff(): number { return this.difficulty > 0 ? this.difficulty : 1; }
+  private spreadInterval(): number { return Math.max(6, 40 - this.diff * 6); }
+  private spreadProb(): number { return Math.min(0.9, 0.22 + this.diff * 0.12); }
+  private get total(): number { return CURSED_KEYS.length; }
+
+  /** Infected keycodes + status — exposed for the headless bot. */
+  inspect(): { infectedKeycodes: number[]; mode: string; survived: number; cleanses: number } {
+    const infectedKeycodes: number[] = [];
+    for (const { led, keycode } of CURSED_KEYS) if (this.infected.has(led)) infectedKeycodes.push(keycode);
+    const mode = this.difficulty === 0 ? 'menu' : this.gameOverAnim > 0 ? 'lose' : 'play';
+    return { infectedKeycodes, mode, survived: this.survived, cleanses: this.cleanses };
+  }
+
+  private startRound(): void {
+    this.infected.clear();
+    this.cleanseFlash.clear();
+    this.survived = 0; this.cleanses = 0; this.spreadTick = 0; this.gameOverAnim = 0;
+    this.seedOne();
+  }
+
+  private seedOne(): void {
+    for (let i = 0; i < 40; i++) {
+      const k = CURSED_KEYS[Math.floor(Math.random() * CURSED_KEYS.length)]!;
+      if (!this.infected.has(k.led)) { this.infected.set(k.led, 0); return; }
+    }
+  }
+
+  handleKey(keycode: number, value: number): void {
+    if (value !== 1) return;
+    if (this.difficulty === 0) {
+      const d = difficultyFromKeycode(keycode);
+      if (d > 0) { this.difficulty = d; this.startRound(); }
+      return;
+    }
+    if (this.gameOverAnim > 0) return;
+    const led = CURSED_LED_BY_KEYCODE.get(keycode);
+    if (led === undefined) return;
+    if (this.infected.has(led)) { this.infected.delete(led); this.cleanseFlash.set(led, 8); this.cleanses++; }
+  }
+
+  step(): void {
+    this.pulse += 0.3;
+    for (const [led, f] of this.cleanseFlash) { if (f <= 1) this.cleanseFlash.delete(led); else this.cleanseFlash.set(led, f - 1); }
+    if (this.difficulty === 0) return;
+    if (this.gameOverAnim > 0) { this.gameOverAnim--; if (this.gameOverAnim === 0) this.difficulty = 0; return; }
+
+    this.survived++;
+    for (const led of this.infected.keys()) this.infected.set(led, this.infected.get(led)! + 1);
+
+    this.spreadTick++;
+    if (this.spreadTick >= this.spreadInterval()) {
+      this.spreadTick = 0;
+      if (this.infected.size === 0) {
+        this.seedOne();
+      } else {
+        const newly: number[] = [];
+        const prob = this.spreadProb();
+        for (const led of this.infected.keys()) {
+          for (const n of CURSED_NEIGHBORS.get(led) ?? []) {
+            if (!this.infected.has(n) && Math.random() < prob) newly.push(n);
+          }
+        }
+        for (const n of newly) if (!this.infected.has(n)) this.infected.set(n, 0);
+      }
+      if (this.infected.size / this.total >= this.LOSE_FRAC) {
+        this.gameOverAnim = 48;
+        log.info({ survived: this.survived, cleanses: this.cleanses }, 'cursed: overrun');
+      }
+    }
+  }
+
+  render(): Map<number, Color> {
+    if (this.difficulty === 0) return renderDifficultyMenu(this.pulse);
+    const out = new Map<number, Color>();
+    if (this.gameOverAnim > 0) {
+      const i = this.gameOverAnim % 8 < 4 ? 1 : 0.2;
+      for (const row of KEY_MATRIX) for (const cell of row) out.set(cell.led, { r: Math.round(220 * i), g: 0, b: 0 });
+      return out;
+    }
+    for (const [led, age] of this.infected) {
+      const b = 0.5 + 0.5 * Math.abs(Math.sin(this.pulse * 0.4 + age * 0.2));
+      out.set(led, { r: Math.round(120 + 135 * b), g: Math.round(20 * b), b: Math.round(10 * b) });
+    }
+    for (const [led, f] of this.cleanseFlash) out.set(led, { r: 0, g: Math.round(255 * Math.min(1, f / 8)), b: 40 });
+    return out;
+  }
+}
+
 function lerpColor(a: Color, b: Color, t: number): Color {
   const k = Math.max(0, Math.min(1, t));
   return {
