@@ -652,6 +652,86 @@ function hsvHex(h: number, s: number, v: number): string {
   return `#${to(r)}${to(g)}${to(b)}`;
 }
 
+// ─── Reactive effects (Ripple / Spark / Binary clock / Doom fire) ───────────
+
+const FIRE_HEX: ReadonlyArray<readonly [number, string]> = [
+  [0.00, '#000000'], [0.15, '#320000'], [0.35, '#be1900'],
+  [0.55, '#ff5f00'], [0.78, '#ffcd00'], [1.00, '#ffffd7'],
+];
+function fireHex(h: number): string {
+  const x = clamp01(h);
+  for (let i = 1; i < FIRE_HEX.length; i++) {
+    const [hi, chi] = FIRE_HEX[i]!;
+    if (x <= hi) {
+      const [lo, clo] = FIRE_HEX[i - 1]!;
+      return lerpHex(clo, chi, hi === lo ? 0 : (x - lo) / (hi - lo));
+    }
+  }
+  return FIRE_HEX[FIRE_HEX.length - 1]![1];
+}
+
+function renderRipple(t: number): string[] {
+  const out: string[] = [];
+  const cx = 2.5, cy = 2;
+  const radius = (t * 2.2) % 5.2;
+  for (let i = 0; i < TOTAL; i++) {
+    const gx = i % THUMB_COLS, gy = Math.floor(i / THUMB_COLS);
+    const ring = Math.abs(Math.hypot(gx - cx, (gy - cy) * 1.2) - radius);
+    if (ring < 0.95) {
+      const b = (1 - ring / 0.95) * clamp01(1 - radius / 5.2);
+      out.push(scale(hsvHex((radius / 5.2) * 280, 1, 1), Math.max(0, b)));
+    } else out.push(BG);
+  }
+  return out;
+}
+
+function renderSpark(t: number): string[] {
+  // A "typed" path of cells, each fading like an ember behind the head.
+  const order = [7, 8, 9, 16, 15, 14, 20, 21, 22, 13, 12, 11];
+  const head = Math.floor(t * 6) % order.length;
+  const heat = new Array<number>(TOTAL).fill(0);
+  for (let k = 0; k < order.length; k++) {
+    let age = head - k;
+    if (age < 0) age += order.length;
+    const cell = order[k]!;
+    heat[cell] = Math.max(heat[cell]!, Math.pow(0.6, age));
+  }
+  return heat.map((h) => (h > 0.04 ? fireHex(h) : BG));
+}
+
+function renderBinaryClock(_t: number): string[] {
+  const out = new Array<string>(TOTAL).fill(BG);
+  const d = new Date();
+  const digits = [
+    Math.floor(d.getHours() / 10), d.getHours() % 10,
+    Math.floor(d.getMinutes() / 10), d.getMinutes() % 10,
+    Math.floor(d.getSeconds() / 10), d.getSeconds() % 10,
+  ];
+  const hues = [0, 0, 120, 120, 210, 210];
+  const bitRows = [4, 3, 2, 1];
+  for (let f = 0; f < 6; f++) {
+    const onHex = hsvHex(hues[f]!, 1, 1);
+    for (let bit = 0; bit < 4; bit++) {
+      const i = bitRows[bit]! * THUMB_COLS + f;
+      const on = ((digits[f]! >> bit) & 1) === 1;
+      out[i] = on ? onHex : scale(onHex, 0.12);
+    }
+  }
+  return out;
+}
+
+function renderDoomFire(t: number): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < TOTAL; i++) {
+    const gx = i % THUMB_COLS, gy = Math.floor(i / THUMB_COLS);
+    const base = gy / (THUMB_ROWS - 1);                       // 0 top .. 1 bottom
+    const flicker = 0.5 + 0.5 * Math.sin(t * 6 + gx * 1.7 + gy * 0.9);
+    const heat = clamp01(base * (0.7 + 0.5 * flicker));
+    out.push(heat > 0.05 ? fireHex(heat) : '#000000');
+  }
+  return out;
+}
+
 // ─── Main entry point ────────────────────────────────────────────────────────
 
 export function renderThumbnail(preset: Preset | UserPreset, t: number): string[] {
@@ -681,6 +761,10 @@ export function renderThumbnail(preset: Preset | UserPreset, t: number): string[
     case 'space-invaders': return renderSpaceInvaders(t);
     case 'mario': return renderMario(t);
     case 'genius': return renderGenius(t);
+    case 'ripple': return renderRipple(t);
+    case 'spark': return renderSpark(t);
+    case 'binary-clock': return renderBinaryClock(t);
+    case 'doom-fire': return renderDoomFire(t);
   }
 
   const out: string[] = new Array(TOTAL);

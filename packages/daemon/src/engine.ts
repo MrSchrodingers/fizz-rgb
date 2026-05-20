@@ -20,6 +20,10 @@ import {
   SpaceInvadersEngine,
   MarioEngine,
   GeniusEngine,
+  RippleEngine,
+  SparkEngine,
+  BinaryClockEngine,
+  DoomFireEngine,
 } from './games-interactive.js';
 
 /** Common surface every interactive engine implements so EffectEngine can
@@ -1854,6 +1858,22 @@ export class EffectEngine {
       },
       'genius': () => {
         const e = new GeniusEngine();
+        e.setAnimSpeed(pattern.animSpeed);
+        return e;
+      },
+      'ripple': () => {
+        const e = new RippleEngine();
+        e.setAnimSpeed(pattern.animSpeed);
+        return e;
+      },
+      'spark': () => {
+        const e = new SparkEngine();
+        e.setAnimSpeed(pattern.animSpeed);
+        return e;
+      },
+      'binary-clock': () => new BinaryClockEngine(),
+      'doom-fire': () => {
+        const e = new DoomFireEngine();
         e.setAnimSpeed(pattern.animSpeed);
         return e;
       },

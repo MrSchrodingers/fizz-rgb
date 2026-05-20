@@ -12,7 +12,7 @@ import { K617_LAYOUT, parseHex } from '@fizz/core';
 import { gridToLed } from './game-grid.js';
 import {
   ROW_COUNT, rowWidth, keyLed, keyCx, vNeighbor, colNearestCx, colOfName,
-  KEY_MATRIX,
+  KEY_MATRIX, type KeyCell,
 } from './key-matrix.js';
 import { log } from './log.js';
 import {
@@ -35,6 +35,69 @@ const CYAN: Color = { r: 0, g: 255, b: 255 };
 function findKeyLed(name: string): number | null {
   const k = K617_LAYOUT.keys.find((x) => x.name === name);
   return k ? k.ledIndex : null;
+}
+
+// ─── Shared scaffolding for reactive effects ─────────────────────────────────
+// Reverse map evdev keycode → physical cell, built from KEY_MATRIX (which
+// carries the per-key led/row/col/cx) cross-referenced with KEYCODE_BY_NAME.
+// Reactive effects (Ripple/Spark) use this to turn any physical keypress into
+// a position on the board without collapsing the wide bottom row.
+const KEYCODE_TO_CELL: Map<number, KeyCell> = (() => {
+  const m = new Map<number, KeyCell>();
+  for (const row of KEY_MATRIX) {
+    for (const cell of row) {
+      const kc = KEYCODE_BY_NAME[cell.name];
+      if (kc !== undefined) m.set(kc, cell);
+    }
+  }
+  return m;
+})();
+
+/** Full-saturation HSV (h in degrees) → Color. Shared by hue-based effects. */
+function hsv(h: number): Color {
+  const hh = (((h % 360) + 360) % 360) / 60;
+  const x = 1 - Math.abs((hh % 2) - 1);
+  let r = 0, g = 0, b = 0;
+  if (hh < 1) { r = 1; g = x; }
+  else if (hh < 2) { r = x; g = 1; }
+  else if (hh < 3) { g = 1; b = x; }
+  else if (hh < 4) { g = x; b = 1; }
+  else if (hh < 5) { r = x; b = 1; }
+  else { r = 1; b = x; }
+  return { r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255) };
+}
+
+// Fire gradient (black → dark-red → orange → yellow → white-hot). Shared by
+// the Spark ember trail and the Doom PSX fire effect.
+const FIRE_STOPS: ReadonlyArray<readonly [number, Color]> = [
+  [0.00, { r: 0,   g: 0,   b: 0   }],
+  [0.15, { r: 50,  g: 0,   b: 0   }],
+  [0.35, { r: 190, g: 25,  b: 0   }],
+  [0.55, { r: 255, g: 95,  b: 0   }],
+  [0.78, { r: 255, g: 205, b: 0   }],
+  [1.00, { r: 255, g: 255, b: 215 }],
+];
+
+/** Map heat 0..1 to the fire palette. Clamps out of range. */
+function firePalette(heat: number): Color {
+  const h = Math.max(0, Math.min(1, heat));
+  for (let i = 1; i < FIRE_STOPS.length; i++) {
+    const [hi, ci] = FIRE_STOPS[i]!;
+    if (h <= hi) {
+      const [lo, clo] = FIRE_STOPS[i - 1]!;
+      const t = hi === lo ? 0 : (h - lo) / (hi - lo);
+      return lerpColor(clo, ci, t);
+    }
+  }
+  return FIRE_STOPS[FIRE_STOPS.length - 1]![1];
+}
+
+/** Squared physical distance between two cells, x in key-units, y scaled so a
+ *  row step (~2.6 units) reads like one visual step. Mirrors Pacman's metric. */
+function cellDist2(r1: number, cx1: number, r2: number, cx2: number): number {
+  const dx = cx1 - cx2;
+  const dy = (r1 - r2) * 2.6;
+  return dx * dx + dy * dy;
 }
 
 // ─── Difficulty menu (shared by Pacman / Space Invaders / Mario) ─────────────
@@ -1871,6 +1934,232 @@ export class GeniusEngine {
 
     if (activePad >= 0 && activePad < this.pads.length) {
       out.set(this.pads[activePad]!.led, this.pads[activePad]!.color);
+    }
+    return out;
+  }
+}
+
+// ─── Ripple (reactive: keypress emits an expanding ring) ─────────────────────
+
+/**
+ * Each physical keypress spawns an expanding ring of light centred on that
+ * key, coloured by the key's position hue. Rings grow at animSpeed and fade as
+ * they widen, dropping once they pass the board's far corner. No menu, no
+ * input gating — every key contributes. Rendered on the physical matrix so
+ * the ring reads correctly across the ragged rows.
+ */
+export class RippleEngine {
+  private ripples: Array<{ cx: number; row: number; age: number; color: Color }> = [];
+  private ringSpeed = 0.8;            // units the ring radius grows per frame
+  private readonly RING_WIDTH = 1.7;  // crest thickness in distance units
+  private readonly MAX_RADIUS = 22;   // ~board diagonal; rings retire past this
+
+  setAnimSpeed(s: number): void {
+    const c = Math.max(0, Math.min(1, s));
+    this.ringSpeed = 0.45 + c * 0.9;  // 0.45..1.35 units/frame
+  }
+
+  handleKey(keycode: number, value: number): void {
+    if (value !== 1) return;
+    const cell = KEYCODE_TO_CELL.get(keycode);
+    if (!cell) return;
+    this.ripples.push({ cx: cell.cx, row: cell.row, age: 0, color: hsv((cell.led / 61) * 360) });
+    if (this.ripples.length > 24) this.ripples.shift(); // bound memory under mashing
+  }
+
+  step(): void {
+    for (const r of this.ripples) r.age++;
+    this.ripples = this.ripples.filter((r) => r.age * this.ringSpeed <= this.MAX_RADIUS);
+  }
+
+  render(): Map<number, Color> {
+    const out = new Map<number, Color>();
+    if (this.ripples.length === 0) return out;
+    for (const row of KEY_MATRIX) {
+      for (const cell of row) {
+        let best: Color | null = null;
+        let bestB = 0;
+        for (const rp of this.ripples) {
+          const radius = rp.age * this.ringSpeed;
+          const d = Math.sqrt(cellDist2(cell.row, cell.cx, rp.row, rp.cx));
+          const ring = Math.abs(d - radius);
+          if (ring > this.RING_WIDTH) continue;
+          const edge = 1 - ring / this.RING_WIDTH;             // 1 at the ring crest
+          const fade = Math.max(0, 1 - radius / this.MAX_RADIUS); // dims as it widens
+          const b = edge * fade;
+          if (b > bestB) { bestB = b; best = rp.color; }
+        }
+        if (best) {
+          out.set(cell.led, {
+            r: Math.round(best.r * bestB),
+            g: Math.round(best.g * bestB),
+            b: Math.round(best.b * bestB),
+          });
+        }
+      }
+    }
+    return out;
+  }
+}
+
+// ─── Spark (reactive: pressed key glows hot then cools like an ember) ────────
+
+/**
+ * Typing trail. A pressed key flashes white-hot and then cools through the
+ * fire palette (orange → red → off) over the next frames, with a small bloom
+ * to its matrix neighbours so each stroke feels like a spark. animSpeed sets
+ * the cool-down rate (faster = shorter trails). No menu.
+ */
+export class SparkEngine {
+  private heat = new Map<number, number>();
+  private decay = 0.90;
+
+  setAnimSpeed(s: number): void {
+    const c = Math.max(0, Math.min(1, s));
+    this.decay = 0.96 - c * 0.12; // 0.96 (long trails) .. 0.84 (snappy)
+  }
+
+  handleKey(keycode: number, value: number): void {
+    if (value !== 1) return;
+    const cell = KEYCODE_TO_CELL.get(keycode);
+    if (!cell) return;
+    this.heat.set(cell.led, 1);
+    const neighbours = [
+      keyLed(cell.row, cell.col - 1),
+      keyLed(cell.row, cell.col + 1),
+      keyLed(cell.row - 1, vNeighbor(cell.row, cell.col, cell.row - 1)),
+      keyLed(cell.row + 1, vNeighbor(cell.row, cell.col, cell.row + 1)),
+    ];
+    for (const led of neighbours) {
+      if (led === null) continue;
+      this.heat.set(led, Math.max(this.heat.get(led) ?? 0, 0.45));
+    }
+  }
+
+  step(): void {
+    for (const [led, h] of this.heat) {
+      const nh = h * this.decay;
+      if (nh < 0.02) this.heat.delete(led);
+      else this.heat.set(led, nh);
+    }
+  }
+
+  render(): Map<number, Color> {
+    const out = new Map<number, Color>();
+    for (const [led, h] of this.heat) out.set(led, firePalette(h));
+    return out;
+  }
+}
+
+// ─── Binary clock (BCD) ──────────────────────────────────────────────────────
+
+/**
+ * Wall-clock time as six binary-coded-decimal columns: H-tens, H-ones,
+ * M-tens, M-ones, S-tens, S-ones. Each field is a vertical stack of up to 4
+ * bits (bit0 at the bottom row, bit3 near the top) at a fixed physical x, so
+ * the columns line up across the ragged rows. Hours are red, minutes green,
+ * seconds azure; set bits are bright, clear bits dim. No input — `now` is
+ * injectable for deterministic tests.
+ */
+export class BinaryClockEngine {
+  private readonly now: () => number;
+  private readonly FIELD_CX = [1, 3.4, 5.8, 8.2, 10.6, 13];     // spread across the board
+  private readonly FIELD_HUE = [0, 0, 120, 120, 210, 210];      // H,H · M,M · S,S
+  // bit0..bit3 → rows 3,2,1,0 (LSB low, MSB high). We deliberately skip the
+  // 8-key bottom row (row 4): it can't host 6 distinct columns, so two fields'
+  // bit0 would collide on the spacebar. Rows 0-3 all have ≥12 keys, so every
+  // field fans out to its own readable column on every bit.
+  private readonly BIT_ROWS = [3, 2, 1, 0];
+
+  constructor(nowFn: () => number = Date.now) { this.now = nowFn; }
+
+  setAnimSpeed(_s: number): void { /* runs in real time */ }
+  handleKey(_keycode: number, _value: number): void { /* no input */ }
+  step(): void { /* time is sampled live in render */ }
+
+  render(): Map<number, Color> {
+    const out = new Map<number, Color>();
+    const d = new Date(this.now());
+    const digits = [
+      Math.floor(d.getHours() / 10), d.getHours() % 10,
+      Math.floor(d.getMinutes() / 10), d.getMinutes() % 10,
+      Math.floor(d.getSeconds() / 10), d.getSeconds() % 10,
+    ];
+    for (let f = 0; f < 6; f++) {
+      const base = hsv(this.FIELD_HUE[f]!);
+      const value = digits[f]!;
+      for (let bit = 0; bit < 4; bit++) {
+        const row = this.BIT_ROWS[bit]!;
+        const col = colNearestCx(row, this.FIELD_CX[f]!);
+        const led = keyLed(row, col);
+        if (led === null) continue;
+        const on = ((value >> bit) & 1) === 1;
+        out.set(led, on
+          ? base
+          : { r: Math.round(base.r * 0.06), g: Math.round(base.g * 0.06), b: Math.round(base.b * 0.06) });
+      }
+    }
+    return out;
+  }
+}
+
+// ─── Doom PSX fire ───────────────────────────────────────────────────────────
+
+/**
+ * The classic Doom fire algorithm on the physical matrix. The bottom row is
+ * permanently seeded at max heat; every frame each cell inherits the heat of
+ * the cell physically below it minus a random decay, with a slight sideways
+ * drift, so flames flicker upward and cool to dark near the top. Heat maps to
+ * the shared fire palette (white → yellow → orange → red → dark). animSpeed
+ * controls the decay (taller, hungrier flames). No input.
+ */
+export class DoomFireEngine {
+  private heat: number[][] = [];
+  private decayMax = 0.28;
+
+  constructor() {
+    for (let r = 0; r < ROW_COUNT; r++) this.heat.push(new Array(rowWidth(r)).fill(0));
+    this.seedBottom();
+  }
+
+  setAnimSpeed(s: number): void {
+    const c = Math.max(0, Math.min(1, s));
+    this.decayMax = 0.18 + c * 0.22; // 0.18..0.40
+  }
+
+  private seedBottom(): void {
+    const bottom = ROW_COUNT - 1;
+    this.heat[bottom] = new Array(rowWidth(bottom)).fill(1);
+  }
+
+  handleKey(_keycode: number, _value: number): void { /* no input */ }
+
+  step(): void {
+    this.seedBottom();
+    for (let r = 0; r < ROW_COUNT - 1; r++) {
+      const below = r + 1;
+      const w = rowWidth(r);
+      const next = new Array<number>(w).fill(0);
+      for (let c = 0; c < w; c++) {
+        const decay = Math.random() * this.decayMax;
+        let v = (this.heat[below]![vNeighbor(r, c, below)] ?? 0) - decay;
+        if (Math.random() < 0.3) {
+          const nc = Math.max(0, Math.min(w - 1, c + (Math.random() < 0.5 ? -1 : 1)));
+          v = Math.max(v, (this.heat[below]![vNeighbor(r, nc, below)] ?? 0) - decay - 0.05);
+        }
+        next[c] = Math.max(0, v);
+      }
+      this.heat[r] = next;
+    }
+  }
+
+  render(): Map<number, Color> {
+    const out = new Map<number, Color>();
+    for (let r = 0; r < ROW_COUNT; r++) {
+      for (let c = 0; c < rowWidth(r); c++) {
+        const led = keyLed(r, c);
+        if (led !== null) out.set(led, firePalette(this.heat[r]![c] ?? 0));
+      }
     }
     return out;
   }

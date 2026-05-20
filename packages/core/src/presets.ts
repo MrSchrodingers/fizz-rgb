@@ -1051,6 +1051,36 @@ export const BUILTIN_PRESETS: Preset[] = [
     pattern: { keys: {}, animType: 'genius', animSpeed: 0.5 },
   },
 
+  // ── Reactive effects (respond to your typing, no menu) ───────────────────
+  {
+    id: 'fx-ripple',
+    name: 'Ripple (digitação)',
+    description: 'Cada tecla que você aperta solta um anel de luz que se expande pelo teclado, com a cor da posição da tecla. Os anéis somem enquanto crescem. Velocidade controla a expansão. Sem menu — é só digitar',
+    category: 'game',
+    pattern: { keys: {}, animType: 'ripple', animSpeed: 0.5 },
+  },
+  {
+    id: 'fx-spark',
+    name: 'Spark (rastro)',
+    description: 'A tecla apertada acende branca incandescente e esfria como brasa (laranja → vermelho → apagado), com um leve brilho nas vizinhas. Velocidade controla o esfriamento. Sem menu — rastro de digitação ao vivo',
+    category: 'game',
+    pattern: { keys: {}, animType: 'spark', animSpeed: 0.5 },
+  },
+  {
+    id: 'fx-binary-clock',
+    name: 'Relógio Binário',
+    description: 'A hora atual em BCD: seis colunas (HH:MM:SS), cada dígito empilhado em bits de baixo pra cima. Horas em vermelho, minutos em verde, segundos em azul. Bits ligados acesos, desligados apagados. Sem input',
+    category: 'game',
+    pattern: { keys: {}, animType: 'binary-clock', animSpeed: 0.5 },
+  },
+  {
+    id: 'fx-doom-fire',
+    name: 'Doom PSX Fire',
+    description: 'O clássico fogo do Doom subindo do teclado: a fileira de baixo queima no máximo e o calor sobe esfriando (branco → amarelo → laranja → vermelho → escuro), tremulando. Velocidade controla a intensidade das chamas. Sem input',
+    category: 'game',
+    pattern: { keys: {}, animType: 'doom-fire', animSpeed: 0.5 },
+  },
+
   // ── Themed cycles (host-streamed, layout-aware) ──────────────────────────
   {
     id: 'theme-minecraft',
