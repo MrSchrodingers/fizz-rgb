@@ -15,7 +15,7 @@ import { describe, it, expect } from 'vitest';
 import type { Color } from '@fizz/core';
 import {
   RippleEngine, SparkEngine, BinaryClockEngine, DoomFireEngine,
-  WhacAMoleEngine, BulletHellEngine, DragRaceEngine,
+  WhacAMoleEngine, BulletHellEngine, DragRaceEngine, FroggerEngine,
 } from '../src/games-interactive.js';
 import {
   KEYCODE_BY_NAME, KEY_1, KEY_W, KEY_A, KEY_S, KEY_D, KEY_SPACE, KEY_ENTER,
@@ -80,6 +80,37 @@ describe('arcade games — fuzz (no crash, valid frames)', () => {
   });
   it('drag-race', () => {
     expect(() => fuzz(() => { const e = new DragRaceEngine(); e.handleKey(KEY_1, 1); return e; })).not.toThrow();
+  });
+  it('frogger', () => {
+    expect(() => fuzz(() => { const e = new FroggerEngine(); e.handleKey(KEY_1, 1); return e; })).not.toThrow();
+  });
+});
+
+describe('Frogger', () => {
+  it('a lookahead bot crosses the traffic to the goal', () => {
+    const e = new FroggerEngine();
+    e.handleKey(KEY_1, 1); // difficulty 1
+    let crossed = false;
+    for (let f = 0; f < 1500; f++) {
+      e.step();
+      const st = e.inspect();
+      if (st.score >= 1) { crossed = true; break; }
+      const fr = st.frog;
+      const occupied = (row: number, col: number, useNext: boolean) =>
+        st.cars.some((c) => c.row === row && (useNext ? c.nextCol === col : c.col === col));
+      const safe = (row: number, col: number) => !occupied(row, col, false) && !occupied(row, col, true);
+      const cands: Array<{ key: number | null; row: number; col: number; pref: number }> = [];
+      if (fr.row > 0) cands.push({ key: KEY_W, row: fr.row - 1, col: vNeighbor(fr.row, fr.col, fr.row - 1), pref: 3 });
+      cands.push({ key: null, row: fr.row, col: fr.col, pref: 1 });
+      cands.push({ key: KEY_A, row: fr.row, col: Math.max(0, fr.col - 1), pref: 0 });
+      cands.push({ key: KEY_D, row: fr.row, col: Math.min(rowWidth(fr.row) - 1, fr.col + 1), pref: 0 });
+      const safeCands = cands.filter((c) => safe(c.row, c.col));
+      const pick = safeCands.length > 0
+        ? safeCands.reduce((a, b) => (b.pref > a.pref ? b : a))
+        : (cands.find((c) => c.key === KEY_W) ?? cands[0]!); // desperate: push up
+      if (pick.key !== null) e.handleKey(pick.key, 1);
+    }
+    expect(crossed).toBe(true);
   });
 });
 

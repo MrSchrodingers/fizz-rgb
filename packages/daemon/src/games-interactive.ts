@@ -2545,6 +2545,168 @@ export class DragRaceEngine {
   }
 }
 
+// ─── Frogger ─────────────────────────────────────────────────────────────────
+
+/**
+ * Cross the traffic to the top. Row 4 (bottom) is the safe start, row 0 (top)
+ * is the goal, rows 1-3 are lanes of cars sliding left/right at per-lane speed,
+ * wrapping around. WASD moves the frog one key at a time (up/down hop to the
+ * visually-aligned key on the next row via vNeighbor). A car on the frog's key
+ * costs a life; reaching the top scores a crossing and starts a faster, denser
+ * level. 3 lives, difficulty 1-5 scales car speed and density.
+ */
+export class FroggerEngine {
+  private difficulty = 0;
+  private frog = { row: 4, col: 0 };
+  private lanes: Array<{ row: number; dir: -1 | 1; speed: number; cars: number[]; hue: number }> = [];
+  private lives = 3;
+  private score = 0;
+  private level = 0;
+  private deathAnim = 0;
+  private winAnim = 0;
+  private gameOverAnim = 0;
+  private pulse = 0;
+  private readonly LANE_ROWS = [1, 2, 3];
+  private readonly LANE_HUES = [25, 50, 0]; // orange, amber, red
+
+  setAnimSpeed(_s: number): void { /* pace comes from difficulty */ }
+  private get diff(): number { return this.difficulty > 0 ? this.difficulty : 1; }
+
+  /** Frog + car cells (current and one-step-ahead) — exposed for the bot. */
+  inspect(): {
+    frog: { row: number; col: number };
+    cars: Array<{ row: number; col: number; nextCol: number }>;
+    lives: number; score: number;
+  } {
+    const cars: Array<{ row: number; col: number; nextCol: number }> = [];
+    for (const lane of this.lanes) {
+      for (const cx of lane.cars) {
+        cars.push({
+          row: lane.row,
+          col: colNearestCx(lane.row, cx),
+          nextCol: colNearestCx(lane.row, this.wrap(cx + lane.dir * lane.speed)),
+        });
+      }
+    }
+    return { frog: { ...this.frog }, cars, lives: this.lives, score: this.score };
+  }
+
+  private wrap(cx: number): number {
+    let x = cx % 16;
+    if (x < 0) x += 16;
+    return x;
+  }
+
+  private startGame(): void {
+    this.lives = 3; this.score = 0; this.level = 0;
+    this.buildLanes(); this.resetFrog();
+    this.deathAnim = 0; this.winAnim = 0; this.gameOverAnim = 0;
+  }
+
+  private resetFrog(): void { this.frog = { row: 4, col: Math.floor(rowWidth(4) / 2) }; }
+
+  private buildLanes(): void {
+    const baseSpeed = 0.12 + this.diff * 0.03 + this.level * 0.02;
+    const carsPer = Math.min(5, 2 + Math.floor(this.diff / 2) + Math.floor(this.level / 2));
+    this.lanes = this.LANE_ROWS.map((row, i) => {
+      const cars: number[] = [];
+      for (let c = 0; c < carsPer; c++) cars.push((c * 16) / carsPer + Math.random() * 2);
+      return {
+        row, dir: (i % 2 === 0 ? 1 : -1) as -1 | 1,
+        speed: baseSpeed * (0.85 + i * 0.18), cars, hue: this.LANE_HUES[i] ?? 25,
+      };
+    });
+  }
+
+  handleKey(keycode: number, value: number): void {
+    if (value !== 1) return;
+    if (this.difficulty === 0) {
+      const d = difficultyFromKeycode(keycode);
+      if (d > 0) { this.difficulty = d; this.startGame(); }
+      return;
+    }
+    if (this.deathAnim > 0 || this.winAnim > 0 || this.gameOverAnim > 0) return;
+    const f = this.frog;
+    if (keycode === KEY_W && f.row > 0) { const nc = vNeighbor(f.row, f.col, f.row - 1); f.row -= 1; f.col = nc; }
+    else if (keycode === KEY_S && f.row < ROW_COUNT - 1) { const nc = vNeighbor(f.row, f.col, f.row + 1); f.row += 1; f.col = nc; }
+    else if (keycode === KEY_A) f.col = Math.max(0, f.col - 1);
+    else if (keycode === KEY_D) f.col = Math.min(rowWidth(f.row) - 1, f.col + 1);
+    if (f.row === 0) {
+      this.score++;
+      this.winAnim = 24;
+      log.info({ score: this.score, level: this.level + 1 }, 'frogger: crossed');
+    } else if (this.carOnFrog()) {
+      this.die();
+    }
+  }
+
+  private carOnFrog(): boolean {
+    const lane = this.lanes.find((l) => l.row === this.frog.row);
+    if (!lane) return false;
+    return lane.cars.some((cx) => colNearestCx(lane.row, cx) === this.frog.col);
+  }
+
+  private die(): void {
+    this.lives--;
+    if (this.lives <= 0) { this.gameOverAnim = 48; log.info({ score: this.score }, 'frogger: game over'); }
+    else { this.deathAnim = 24; }
+  }
+
+  step(): void {
+    this.pulse += 0.3;
+    if (this.difficulty === 0) return;
+    if (this.gameOverAnim > 0) { this.gameOverAnim--; if (this.gameOverAnim === 0) this.startGame(); return; }
+    if (this.winAnim > 0) { this.winAnim--; if (this.winAnim === 0) { this.level++; this.buildLanes(); this.resetFrog(); } return; }
+    if (this.deathAnim > 0) { this.deathAnim--; if (this.deathAnim === 0) this.resetFrog(); return; }
+
+    for (const lane of this.lanes) {
+      for (let i = 0; i < lane.cars.length; i++) lane.cars[i] = this.wrap(lane.cars[i]! + lane.dir * lane.speed);
+    }
+    if (this.carOnFrog()) this.die();
+  }
+
+  render(): Map<number, Color> {
+    if (this.difficulty === 0) return renderDifficultyMenu(this.pulse);
+    const out = new Map<number, Color>();
+    if (this.gameOverAnim > 0) {
+      const i = this.gameOverAnim % 8 < 4 ? 1 : 0.25;
+      for (const row of KEY_MATRIX) for (const cell of row) out.set(cell.led, { r: Math.round(200 * i), g: 0, b: 0 });
+      return out;
+    }
+    if (this.winAnim > 0) {
+      const i = this.winAnim % 6 < 3 ? 1 : 0.3;
+      for (const row of KEY_MATRIX) for (const cell of row) out.set(cell.led, { r: 0, g: Math.round(220 * i), b: 40 });
+      return out;
+    }
+    // Goal row dim gold.
+    for (let c = 0; c < rowWidth(0); c++) { const led = keyLed(0, c); if (led !== null) out.set(led, { r: 40, g: 32, b: 0 }); }
+    // Cars per lane.
+    for (const lane of this.lanes) {
+      for (const cx of lane.cars) {
+        const led = keyLed(lane.row, colNearestCx(lane.row, cx));
+        if (led !== null) out.set(led, hsv(lane.hue));
+      }
+    }
+    // Lives as dim-green pips on the start row's left keys.
+    for (let i = 0; i < this.lives && i < rowWidth(4); i++) {
+      const led = keyLed(4, i);
+      if (led !== null && !(i === this.frog.col && this.frog.row === 4)) out.set(led, { r: 0, g: 45, b: 8 });
+    }
+    // Frog: bright green pulse (drawn last so it's always visible). On a hit
+    // it flashes red on the on-beat and goes dark on the off-beat.
+    const fled = keyLed(this.frog.row, this.frog.col);
+    if (fled !== null) {
+      if (this.deathAnim > 0) {
+        if (this.deathAnim % 4 < 2) out.set(fled, { r: 255, g: 0, b: 0 });
+      } else {
+        const b = 0.7 + 0.3 * Math.abs(Math.sin(this.pulse * 0.5));
+        out.set(fled, { r: Math.round(40 * b), g: Math.round(255 * b), b: Math.round(40 * b) });
+      }
+    }
+    return out;
+  }
+}
+
 function lerpColor(a: Color, b: Color, t: number): Color {
   const k = Math.max(0, Math.min(1, t));
   return {

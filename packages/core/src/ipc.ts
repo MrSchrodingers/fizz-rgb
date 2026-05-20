@@ -57,7 +57,7 @@ export const ALL_ANIM_TYPES = [
   'pong-multiplayer', 'snake-interactive', 'breakout-interactive', 'pacman',
   'doom', 'minecraft-clouds', 'space-invaders', 'mario', 'genius',
   'ripple', 'spark', 'binary-clock', 'doom-fire',
-  'whac-a-mole', 'bullet-hell', 'drag-race',
+  'whac-a-mole', 'bullet-hell', 'drag-race', 'frogger',
 ] as const;
 export const AnimTypeSchema = z.enum(ALL_ANIM_TYPES);
 /** Single source of truth for animation type names — derived from the Zod

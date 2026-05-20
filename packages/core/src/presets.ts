@@ -1103,6 +1103,13 @@ export const BUILTIN_PRESETS: Preset[] = [
     category: 'game',
     pattern: { keys: {}, animType: 'drag-race', animSpeed: 0.5 },
   },
+  {
+    id: 'game-frogger',
+    name: 'Frogger',
+    description: 'No início escolha a dificuldade 1-5 (teclas 1 a 5). Atravesse o trânsito da fileira de baixo (segura) até o topo (objetivo dourado). WASD move o sapo tecla a tecla; as fileiras do meio são pistas com carros deslizando e dando a volta. Carro em cima de você custa uma vida; chegar no topo conta uma travessia e começa um nível mais rápido e cheio. 3 vidas',
+    category: 'game',
+    pattern: { keys: {}, animType: 'frogger', animSpeed: 0.5 },
+  },
 
   // ── Themed cycles (host-streamed, layout-aware) ──────────────────────────
   {

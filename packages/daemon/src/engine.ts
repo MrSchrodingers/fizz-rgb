@@ -27,6 +27,7 @@ import {
   WhacAMoleEngine,
   BulletHellEngine,
   DragRaceEngine,
+  FroggerEngine,
 } from './games-interactive.js';
 
 /** Common surface every interactive engine implements so EffectEngine can
@@ -1883,6 +1884,7 @@ export class EffectEngine {
       'whac-a-mole': () => new WhacAMoleEngine(),
       'bullet-hell': () => new BulletHellEngine(),
       'drag-race': () => new DragRaceEngine(),
+      'frogger': () => new FroggerEngine(),
       'minecraft-clouds': () => new MinecraftCloudsEngine(),
     };
     const builder = interactiveBuilders[pattern.animType];

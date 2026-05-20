@@ -766,6 +766,21 @@ function renderDragRace(t: number): string[] {
   return out;
 }
 
+function renderFrogger(t: number): string[] {
+  const out = new Array<string>(TOTAL).fill(BG);
+  for (let c = 0; c < THUMB_COLS; c++) out[c] = '#28200a'; // goal row dim gold
+  for (let lane = 1; lane <= 3; lane++) {
+    const dir = lane % 2 === 0 ? -1 : 1;
+    for (let k = 0; k < 2; k++) {
+      const cx = ((Math.floor(t * 2) * dir + k * 3 + lane) % THUMB_COLS + THUMB_COLS) % THUMB_COLS;
+      out[lane * THUMB_COLS + cx] = lane === 3 ? '#ff0000' : '#ff8000';
+    }
+  }
+  const fy = 4 - (Math.floor(t * 0.8) % 5); // frog hops up over time
+  out[fy * THUMB_COLS + 2] = '#28ff28';
+  return out;
+}
+
 // ─── Main entry point ────────────────────────────────────────────────────────
 
 export function renderThumbnail(preset: Preset | UserPreset, t: number): string[] {
@@ -802,6 +817,7 @@ export function renderThumbnail(preset: Preset | UserPreset, t: number): string[
     case 'whac-a-mole': return renderWhacAMole(t);
     case 'bullet-hell': return renderBulletHell(t);
     case 'drag-race': return renderDragRace(t);
+    case 'frogger': return renderFrogger(t);
   }
 
   const out: string[] = new Array(TOTAL);
