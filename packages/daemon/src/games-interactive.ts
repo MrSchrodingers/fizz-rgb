@@ -15,6 +15,9 @@ import {
   KEY_MATRIX, type KeyCell,
 } from './key-matrix.js';
 import { log } from './log.js';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import {
   KEY_TAB, KEY_CAPSLOCK, KEY_LEFTSHIFT, KEY_LEFTCTRL,
   KEY_BACKSLASH, KEY_ENTER, KEY_RIGHTSHIFT, KEY_RIGHTCTRL,
@@ -2862,6 +2865,282 @@ export class WordleEngine {
       const led = findKeyLed(NUMS[i]!);
       if (led === null) continue;
       out.set(led, i < this.rows ? { r: 200, g: 90, b: 0 } : { r: 25, g: 18, b: 0 });
+    }
+    return out;
+  }
+}
+
+// ─── Keyboard Crawl (roguelite) ──────────────────────────────────────────────
+
+/** Persisted meta-progression for Keyboard Crawl. */
+export interface CrawlMeta { bestDepth: number; hpBonus: number; }
+/** Storage seam so tests can run without touching the real save file. */
+export interface CrawlStore { load(): CrawlMeta; save(m: CrawlMeta): void; }
+
+/** Default store: ~/.config/fizz-rgb/saves/keyboard-crawl.json (best-effort;
+ *  any fs error degrades to in-memory defaults so the daemon never crashes). */
+export function diskCrawlStore(): CrawlStore {
+  const base = process.env['XDG_CONFIG_HOME'] || join(homedir(), '.config');
+  const dir = join(base, 'fizz-rgb', 'saves');
+  const file = join(dir, 'keyboard-crawl.json');
+  return {
+    load(): CrawlMeta {
+      try {
+        const m = JSON.parse(readFileSync(file, 'utf8')) as Partial<CrawlMeta>;
+        return { bestDepth: Number(m.bestDepth) || 0, hpBonus: Number(m.hpBonus) || 0 };
+      } catch { return { bestDepth: 0, hpBonus: 0 }; }
+    },
+    save(m: CrawlMeta): void {
+      try { mkdirSync(dir, { recursive: true }); writeFileSync(file, JSON.stringify(m)); }
+      catch { /* read-only fs / no home — keep playing without persistence */ }
+    },
+  };
+}
+
+/**
+ * Turn-based dungeon crawler. The dungeon is larger than the board; the view
+ * is a torch-lit window that follows the @ (row 0 is the HP/weapon HUD, rows
+ * 1-4 are the viewport). WASD moves one cell per turn — into a wall does
+ * nothing, into an enemy attacks it, onto an item grabs it, onto the stairs
+ * descends to a harder floor. Enemies step toward you each turn and bump for
+ * damage. Permadeath; reaching a new best depth banks a persistent +1 starting
+ * HP (roguelite meta-progression). Difficulty 1-5 scales enemy density.
+ */
+const CRAWL_WS = 16;          // world is CRAWL_WS × CRAWL_WS
+const CRAWL_FOG = 3;          // chebyshev torch radius
+const CRAWL_D4: ReadonlyArray<readonly [number, number]> = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+export class KeyboardCrawlEngine {
+  private difficulty = 0;
+  private world: number[][] = [];   // 0 = wall, 1 = floor
+  private at = { wr: 8, wc: 8 };
+  private stairs = { wr: 8, wc: 8 };
+  private enemies: Array<{ wr: number; wc: number; hp: number }> = [];
+  private items: Array<{ wr: number; wc: number; kind: 'heal' | 'weapon' }> = [];
+  private hp = 6;
+  private maxHp = 6;
+  private atk = 1;
+  private depth = 1;
+  private mode: 'menu' | 'play' | 'dead' = 'menu';
+  private animTimer = 0;
+  private pulse = 0;
+  private meta: CrawlMeta;
+  private readonly store: CrawlStore;
+
+  constructor(store: CrawlStore = diskCrawlStore()) {
+    this.store = store;
+    this.meta = this.store.load();
+  }
+
+  setAnimSpeed(_s: number): void { /* turn-based — no continuous speed */ }
+  private get diff(): number { return this.difficulty > 0 ? this.difficulty : 1; }
+
+  /** Map + entities + stats — exposed for the headless crawler bot. */
+  inspect(): {
+    world: number[][]; at: { wr: number; wc: number }; stairs: { wr: number; wc: number };
+    enemies: Array<{ wr: number; wc: number }>; hp: number; depth: number; mode: string;
+  } {
+    return {
+      world: this.world.map((row) => row.slice()),
+      at: { ...this.at }, stairs: { ...this.stairs },
+      enemies: this.enemies.map((e) => ({ wr: e.wr, wc: e.wc })),
+      hp: this.hp, depth: this.depth, mode: this.mode,
+    };
+  }
+
+  private startRun(): void {
+    this.depth = 1;
+    this.maxHp = 6 + this.meta.hpBonus;
+    this.hp = this.maxHp;
+    this.atk = 1;
+    this.mode = 'play';
+    this.genFloor();
+  }
+
+  private genFloor(): void {
+    // Drunkard's walk from the centre carves a guaranteed-connected region.
+    this.world = Array.from({ length: CRAWL_WS }, () => new Array<number>(CRAWL_WS).fill(0));
+    let wr = CRAWL_WS >> 1, wc = CRAWL_WS >> 1;
+    this.world[wr]![wc] = 1;
+    let carved = 1;
+    const target = 90;
+    for (let steps = 0; carved < target && steps < 6000; steps++) {
+      const d = CRAWL_D4[Math.floor(Math.random() * 4)]!;
+      wr = Math.max(1, Math.min(CRAWL_WS - 2, wr + d[0]));
+      wc = Math.max(1, Math.min(CRAWL_WS - 2, wc + d[1]));
+      if (this.world[wr]![wc] === 0) { this.world[wr]![wc] = 1; carved++; }
+    }
+    this.at = { wr: CRAWL_WS >> 1, wc: CRAWL_WS >> 1 };
+    this.stairs = this.farthestFloor(this.at.wr, this.at.wc); // BFS-farthest ⇒ reachable
+
+    // Place enemies and items on distinct floor cells away from @ and stairs.
+    const floors: Array<[number, number]> = [];
+    for (let r = 0; r < CRAWL_WS; r++) for (let c = 0; c < CRAWL_WS; c++) {
+      if (this.world[r]![c] !== 1) continue;
+      if (r === this.at.wr && c === this.at.wc) continue;
+      if (r === this.stairs.wr && c === this.stairs.wc) continue;
+      // Don't spawn enemies right on top of the player's start.
+      if (Math.abs(r - this.at.wr) + Math.abs(c - this.at.wc) <= 2) continue;
+      floors.push([r, c]);
+    }
+    for (let i = floors.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [floors[i], floors[j]] = [floors[j]!, floors[i]!]; }
+
+    const enemyCount = Math.min(8, this.diff + this.depth - 1);
+    const enemyHp = 1 + Math.floor((this.depth - 1) / 3);
+    this.enemies = [];
+    for (let i = 0; i < enemyCount && i < floors.length; i++) {
+      const [r, c] = floors[i]!; this.enemies.push({ wr: r, wc: c, hp: enemyHp });
+    }
+    this.items = [];
+    const used = Math.min(enemyCount, floors.length); // slot after the enemies actually placed
+    if (floors[used]) this.items.push({ wr: floors[used]![0], wc: floors[used]![1], kind: 'heal' });
+    if (this.depth % 2 === 1 && floors[used + 1]) this.items.push({ wr: floors[used + 1]![0], wc: floors[used + 1]![1], kind: 'weapon' });
+  }
+
+  private farthestFloor(sr: number, sc: number): { wr: number; wc: number } {
+    const dist = Array.from({ length: CRAWL_WS }, () => new Array<number>(CRAWL_WS).fill(-1));
+    dist[sr]![sc] = 0;
+    const q: Array<[number, number]> = [[sr, sc]];
+    let far: [number, number] = [sr, sc], farD = 0;
+    while (q.length) {
+      const [r, c] = q.shift()!;
+      for (const [dr, dc] of CRAWL_D4) {
+        const nr = r + dr, nc = c + dc;
+        if (nr < 0 || nr >= CRAWL_WS || nc < 0 || nc >= CRAWL_WS) continue;
+        if (this.world[nr]![nc] !== 1 || dist[nr]![nc] !== -1) continue;
+        dist[nr]![nc] = dist[r]![c]! + 1;
+        if (dist[nr]![nc]! > farD) { farD = dist[nr]![nc]!; far = [nr, nc]; }
+        q.push([nr, nc]);
+      }
+    }
+    return { wr: far[0], wc: far[1] };
+  }
+
+  handleKey(keycode: number, value: number): void {
+    if (value !== 1) return;
+    if (this.difficulty === 0) {
+      const d = difficultyFromKeycode(keycode);
+      if (d > 0) { this.difficulty = d; this.startRun(); }
+      return;
+    }
+    if (this.mode !== 'play') return;
+    if (keycode === KEY_W) this.tryMove(-1, 0);
+    else if (keycode === KEY_S) this.tryMove(1, 0);
+    else if (keycode === KEY_A) this.tryMove(0, -1);
+    else if (keycode === KEY_D) this.tryMove(0, 1);
+  }
+
+  private tryMove(dr: number, dc: number): void {
+    const nr = this.at.wr + dr, nc = this.at.wc + dc;
+    if (nr < 0 || nr >= CRAWL_WS || nc < 0 || nc >= CRAWL_WS) return;
+    if (this.world[nr]![nc] !== 1) return; // wall: no move, no turn
+    const enemy = this.enemies.find((e) => e.wr === nr && e.wc === nc);
+    if (enemy) {
+      enemy.hp -= this.atk;
+      if (enemy.hp <= 0) this.enemies = this.enemies.filter((e) => e !== enemy);
+    } else {
+      this.at = { wr: nr, wc: nc };
+      const itemIdx = this.items.findIndex((it) => it.wr === nr && it.wc === nc);
+      if (itemIdx >= 0) {
+        const it = this.items[itemIdx]!;
+        if (it.kind === 'heal') this.hp = Math.min(this.maxHp, this.hp + 3);
+        else this.atk += 1;
+        this.items.splice(itemIdx, 1);
+      }
+      if (nr === this.stairs.wr && nc === this.stairs.wc) { this.descend(); return; }
+    }
+    this.enemyTurn();
+  }
+
+  private descend(): void {
+    this.depth++;
+    this.genFloor();
+  }
+
+  private enemyTurn(): void {
+    for (const e of this.enemies) {
+      const adj = Math.abs(e.wr - this.at.wr) + Math.abs(e.wc - this.at.wc) === 1;
+      if (adj) { this.hp -= 1; if (this.hp <= 0) { this.die(); return; } continue; }
+      // Step toward @ along the floor neighbour that minimises distance and
+      // isn't occupied by another enemy or the player.
+      let best: [number, number] | null = null;
+      let bestD = Infinity;
+      for (const [dr, dc] of CRAWL_D4) {
+        const nr = e.wr + dr, nc = e.wc + dc;
+        if (nr < 0 || nr >= CRAWL_WS || nc < 0 || nc >= CRAWL_WS) continue;
+        if (this.world[nr]![nc] !== 1) continue;
+        if (nr === this.at.wr && nc === this.at.wc) continue;
+        if (this.enemies.some((o) => o !== e && o.wr === nr && o.wc === nc)) continue;
+        const d = Math.abs(nr - this.at.wr) + Math.abs(nc - this.at.wc);
+        if (d < bestD) { bestD = d; best = [nr, nc]; }
+      }
+      if (best) { e.wr = best[0]; e.wc = best[1]; }
+    }
+  }
+
+  private die(): void {
+    this.mode = 'dead';
+    this.animTimer = 48;
+    if (this.depth > this.meta.bestDepth) {
+      this.meta.bestDepth = this.depth;
+      this.meta.hpBonus = Math.min(6, this.meta.hpBonus + 1);
+    }
+    this.store.save(this.meta);
+    log.info({ depth: this.depth, bestDepth: this.meta.bestDepth, hpBonus: this.meta.hpBonus }, 'crawl: died');
+  }
+
+  step(): void {
+    this.pulse += 0.3;
+    if (this.mode === 'dead') {
+      if (--this.animTimer <= 0) { this.difficulty = 0; this.mode = 'menu'; }
+    }
+  }
+
+  private tileColor(wr: number, wc: number): Color | null {
+    if (wr < 0 || wr >= CRAWL_WS || wc < 0 || wc >= CRAWL_WS) return null;
+    if (wr === this.at.wr && wc === this.at.wc) {
+      const b = 0.7 + 0.3 * Math.abs(Math.sin(this.pulse * 0.5));
+      return { r: Math.round(220 * b), g: Math.round(255 * b), b: Math.round(220 * b) };
+    }
+    if (this.enemies.some((e) => e.wr === wr && e.wc === wc)) return { r: 255, g: 30, b: 30 };
+    if (wr === this.stairs.wr && wc === this.stairs.wc) return { r: 0, g: 220, b: 255 };
+    const item = this.items.find((it) => it.wr === wr && it.wc === wc);
+    if (item) return item.kind === 'heal' ? { r: 255, g: 215, b: 0 } : { r: 255, g: 110, b: 0 };
+    if (this.world[wr]![wc] === 1) return { r: 4, g: 4, b: 7 };  // dim floor
+    return { r: 8, g: 8, b: 36 };                                 // dim wall (blue)
+  }
+
+  render(): Map<number, Color> {
+    if (this.difficulty === 0) return renderDifficultyMenu(this.pulse);
+    const out = new Map<number, Color>();
+    if (this.mode === 'dead') {
+      const i = this.animTimer % 8 < 4 ? 1 : 0.25;
+      for (const row of KEY_MATRIX) for (const cell of row) out.set(cell.led, { r: Math.round(160 * i), g: 0, b: 0 });
+      return out;
+    }
+    // Camera: rows 1-4 are the viewport, @ centred at board (row 2, col 6).
+    const camRow = this.at.wr - 1; // board row 1 → world camRow
+    const camCol = this.at.wc - 6; // board col 0 → world camCol
+    for (let r = 1; r < ROW_COUNT; r++) {
+      for (let c = 0; c < rowWidth(r); c++) {
+        const wr = camRow + (r - 1);
+        const wc = camCol + c;
+        // Torch fog: only cells within chebyshev radius of @ are lit.
+        if (Math.max(Math.abs(wr - this.at.wr), Math.abs(wc - this.at.wc)) > CRAWL_FOG) continue;
+        const col = this.tileColor(wr, wc);
+        const led = keyLed(r, c);
+        if (col && led !== null) out.set(led, col);
+      }
+    }
+    // HUD row 0: HP (red) from the left, weapon level (orange) from the right.
+    for (let i = 0; i < this.hp && i < rowWidth(0); i++) {
+      const led = keyLed(0, i);
+      if (led !== null) out.set(led, { r: 220, g: 0, b: 30 });
+    }
+    const w0 = rowWidth(0);
+    for (let i = 0; i < this.atk - 1 && i < 4; i++) {
+      const led = keyLed(0, w0 - 1 - i);
+      if (led !== null) out.set(led, { r: 255, g: 110, b: 0 });
     }
     return out;
   }

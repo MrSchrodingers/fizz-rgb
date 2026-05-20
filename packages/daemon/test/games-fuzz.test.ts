@@ -16,9 +16,13 @@ import type { Color } from '@fizz/core';
 import {
   RippleEngine, SparkEngine, BinaryClockEngine, DoomFireEngine,
   WhacAMoleEngine, BulletHellEngine, DragRaceEngine, FroggerEngine, WordleEngine,
+  KeyboardCrawlEngine, diskCrawlStore, type CrawlStore, type CrawlMeta,
 } from '../src/games-interactive.js';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
-  KEYCODE_BY_NAME, KEY_1, KEY_W, KEY_A, KEY_S, KEY_D, KEY_SPACE, KEY_ENTER, KEY_BACKSPACE,
+  KEYCODE_BY_NAME, KEY_1, KEY_5, KEY_W, KEY_A, KEY_S, KEY_D, KEY_SPACE, KEY_ENTER, KEY_BACKSPACE,
 } from '../src/key-capture.js';
 import { KEY_MATRIX, keyLed, keyCx, colNearestCx, vNeighbor, rowWidth } from '../src/key-matrix.js';
 
@@ -85,6 +89,98 @@ describe('arcade games — fuzz (no crash, valid frames)', () => {
     expect(() => fuzz(() => { const e = new FroggerEngine(); e.handleKey(KEY_1, 1); return e; })).not.toThrow();
   });
   it('wordle', () => { expect(() => fuzz(() => new WordleEngine())).not.toThrow(); });
+  it('keyboard-crawl', () => {
+    expect(() => fuzz(() => { const e = new KeyboardCrawlEngine(memStore()); e.handleKey(KEY_1, 1); return e; })).not.toThrow();
+  });
+});
+
+// In-memory CrawlStore so tests never touch the real save file.
+function memStore(initial: CrawlMeta = { bestDepth: 0, hpBonus: 0 }): CrawlStore & { last: CrawlMeta | null } {
+  let cur: CrawlMeta = { ...initial };
+  const s = {
+    last: null as CrawlMeta | null,
+    load: () => ({ ...cur }),
+    save: (m: CrawlMeta) => { cur = { ...m }; s.last = { ...m }; },
+  };
+  return s;
+}
+
+function bfsPath(
+  world: number[][], start: { wr: number; wc: number }, goal: { wr: number; wc: number },
+): Array<{ wr: number; wc: number }> | null {
+  const WS = world.length;
+  const prev: Array<Array<[number, number] | null>> = Array.from({ length: WS }, () => new Array(WS).fill(null));
+  const seen = Array.from({ length: WS }, () => new Array<boolean>(WS).fill(false));
+  seen[start.wr]![start.wc] = true;
+  const q: Array<[number, number]> = [[start.wr, start.wc]];
+  const D = [[-1, 0], [1, 0], [0, -1], [0, 1]] as const;
+  while (q.length) {
+    const [r, c] = q.shift()!;
+    if (r === goal.wr && c === goal.wc) {
+      const path: Array<{ wr: number; wc: number }> = [];
+      let cur: [number, number] | null = [r, c];
+      while (cur) { path.unshift({ wr: cur[0], wc: cur[1] }); cur = prev[cur[0]]![cur[1]]; }
+      return path;
+    }
+    for (const [dr, dc] of D) {
+      const nr = r + dr, nc = c + dc;
+      if (nr < 0 || nr >= WS || nc < 0 || nc >= WS) continue;
+      if (world[nr]![nc] !== 1 || seen[nr]![nc]) continue;
+      seen[nr]![nc] = true; prev[nr]![nc] = [r, c]; q.push([nr, nc]);
+    }
+  }
+  return null;
+}
+
+describe('Keyboard Crawl', () => {
+  it('every generated floor keeps the stairs reachable from the start (BFS, 200 maps)', () => {
+    for (let trial = 0; trial < 200; trial++) {
+      const e = new KeyboardCrawlEngine(memStore());
+      e.handleKey(KEY_1, 1); // difficulty 1 → run starts, floor generated
+      const st = e.inspect();
+      expect(bfsPath(st.world, st.at, st.stairs)).not.toBeNull();
+    }
+  });
+
+  it('a BFS bot descends to the next floor', () => {
+    const e = new KeyboardCrawlEngine(memStore());
+    e.handleKey(KEY_1, 1);
+    const startDepth = e.inspect().depth;
+    let descended = false;
+    for (let turn = 0; turn < 2000; turn++) {
+      const st = e.inspect();
+      if (st.mode !== 'play') break;
+      if (st.depth > startDepth) { descended = true; break; }
+      const path = bfsPath(st.world, st.at, st.stairs);
+      if (!path || path.length < 2) break;
+      const next = path[1]!;
+      const dr = Math.sign(next.wr - st.at.wr);
+      const dc = Math.sign(next.wc - st.at.wc);
+      const key = dr === -1 ? KEY_W : dr === 1 ? KEY_S : dc === -1 ? KEY_A : KEY_D;
+      e.handleKey(key, 1); // moving into an enemy attacks it; we re-BFS next turn
+    }
+    expect(descended).toBe(true);
+  });
+
+  it('applies the persisted HP bonus to the starting HP (meta-progression)', () => {
+    const e = new KeyboardCrawlEngine({ load: () => ({ bestDepth: 2, hpBonus: 4 }), save: () => {} });
+    e.handleKey(KEY_1, 1);
+    expect(e.inspect().hp).toBe(6 + 4); // base 6 + persisted bonus 4
+  });
+
+  it('persists meta-progression to disk and reads it back (round-trip)', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'fizz-crawl-'));
+    const prev = process.env['XDG_CONFIG_HOME'];
+    process.env['XDG_CONFIG_HOME'] = tmp;
+    try {
+      diskCrawlStore().save({ bestDepth: 3, hpBonus: 2 });
+      expect(diskCrawlStore().load()).toEqual({ bestDepth: 3, hpBonus: 2 });
+    } finally {
+      if (prev === undefined) delete process.env['XDG_CONFIG_HOME'];
+      else process.env['XDG_CONFIG_HOME'] = prev;
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('Wordle', () => {

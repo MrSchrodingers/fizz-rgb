@@ -29,6 +29,7 @@ import {
   DragRaceEngine,
   FroggerEngine,
   WordleEngine,
+  KeyboardCrawlEngine,
 } from './games-interactive.js';
 
 /** Common surface every interactive engine implements so EffectEngine can
@@ -1887,6 +1888,7 @@ export class EffectEngine {
       'drag-race': () => new DragRaceEngine(),
       'frogger': () => new FroggerEngine(),
       'wordle': () => new WordleEngine(),
+      'keyboard-crawl': () => new KeyboardCrawlEngine(),
       'minecraft-clouds': () => new MinecraftCloudsEngine(),
     };
     const builder = interactiveBuilders[pattern.animType];

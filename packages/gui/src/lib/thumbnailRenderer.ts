@@ -794,6 +794,17 @@ function renderWordle(t: number): string[] {
   return out;
 }
 
+function renderKeyboardCrawl(t: number): string[] {
+  const out = new Array<string>(TOTAL).fill('#000000');
+  for (let i = THUMB_COLS; i < TOTAL; i++) out[i] = '#08081e'; // dim dungeon (rows 1-4)
+  out[3 * THUMB_COLS + 4] = '#00dcff';                          // stairs
+  const ex = 2 + (Math.floor(t) % 3);                           // wandering enemy
+  out[1 * THUMB_COLS + ex] = '#ff1e1e';
+  out[2 * THUMB_COLS + 2] = scale('#dcffdc', 0.7 + 0.3 * Math.abs(Math.sin(t * 3))); // @
+  for (let c = 0; c < 4; c++) out[c] = '#dc001e';               // HP HUD on row 0
+  return out;
+}
+
 // ─── Main entry point ────────────────────────────────────────────────────────
 
 export function renderThumbnail(preset: Preset | UserPreset, t: number): string[] {
@@ -832,6 +843,7 @@ export function renderThumbnail(preset: Preset | UserPreset, t: number): string[
     case 'drag-race': return renderDragRace(t);
     case 'frogger': return renderFrogger(t);
     case 'wordle': return renderWordle(t);
+    case 'keyboard-crawl': return renderKeyboardCrawl(t);
   }
 
   const out: string[] = new Array(TOTAL);

@@ -1117,6 +1117,13 @@ export const BUILTIN_PRESETS: Preset[] = [
     category: 'word',
     pattern: { keys: {}, animType: 'wordle', animSpeed: 0.5 },
   },
+  {
+    id: 'game-keyboard-crawl',
+    name: 'Keyboard Crawl',
+    description: 'No início escolha a dificuldade 1-5 (teclas 1 a 5). Roguelite por turnos: o calabouço é maior que o teclado e a luz da tocha (rows 1-4) segue o @. WASD anda uma célula por turno — parede não anda, inimigo (vermelho) ataca, item pega (ouro=cura, laranja=arma), escada (ciano) desce pra um andar mais difícil. Inimigos andam até você e batem. A vida fica na fileira de cima. Permadeath — bater um novo recorde de profundidade dá +1 de vida inicial permanente',
+    category: 'game',
+    pattern: { keys: {}, animType: 'keyboard-crawl', animSpeed: 0.5 },
+  },
 
   // ── Themed cycles (host-streamed, layout-aware) ──────────────────────────
   {
