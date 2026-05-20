@@ -17,6 +17,7 @@ import {
   RippleEngine, SparkEngine, BinaryClockEngine, DoomFireEngine,
   WhacAMoleEngine, BulletHellEngine, DragRaceEngine, FroggerEngine, WordleEngine,
   KeyboardCrawlEngine, diskCrawlStore, CursedKeyboardEngine,
+  IdleGardenEngine, diskGardenStore,
   type CrawlStore, type CrawlMeta,
 } from '../src/games-interactive.js';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -95,6 +96,51 @@ describe('arcade games — fuzz (no crash, valid frames)', () => {
   });
   it('cursed', () => {
     expect(() => fuzz(() => { const e = new CursedKeyboardEngine(); e.handleKey(KEY_1, 1); return e; })).not.toThrow();
+  });
+  it('garden', () => {
+    expect(() => fuzz(() => new IdleGardenEngine({ load: () => ({ currency: 0, plots: 0, growth: 0 }), save: () => {} }))).not.toThrow();
+  });
+});
+
+describe('Idle garden', () => {
+  const noStore = () => ({ load: () => ({ currency: 0, plots: 0, growth: 0 }), save: () => {} });
+
+  it('a tapping gardener expands the garden', () => {
+    const e = new IdleGardenEngine(noStore());
+    const start = e.inspect().plotCount;
+    for (let f = 0; f < 800; f++) {
+      e.step();
+      for (const kc of e.inspect().matureKeycodes) e.handleKey(kc, 1);
+    }
+    expect(e.inspect().plotCount).toBeGreaterThan(start);
+  });
+
+  it('idles forward on its own (auto-harvest income buys upgrades)', () => {
+    const e = new IdleGardenEngine(noStore());
+    const before = e.inspect();
+    for (let f = 0; f < 3000; f++) e.step();
+    const after = e.inspect();
+    expect(after.plotCount + after.growth).toBeGreaterThan(before.plotCount + before.growth);
+  });
+
+  it('starts from persisted progress', () => {
+    const e = new IdleGardenEngine({ load: () => ({ currency: 0, plots: 12, growth: 3 }), save: () => {} });
+    expect(e.inspect().plotCount).toBe(12);
+    expect(e.inspect().growth).toBe(3);
+  });
+
+  it('persists progress to disk and reads it back (round-trip)', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'fizz-garden-'));
+    const prev = process.env['XDG_CONFIG_HOME'];
+    process.env['XDG_CONFIG_HOME'] = tmp;
+    try {
+      diskGardenStore().save({ currency: 7, plots: 9, growth: 2 });
+      expect(diskGardenStore().load()).toEqual({ currency: 7, plots: 9, growth: 2 });
+    } finally {
+      if (prev === undefined) delete process.env['XDG_CONFIG_HOME'];
+      else process.env['XDG_CONFIG_HOME'] = prev;
+      rmSync(tmp, { recursive: true, force: true });
+    }
   });
 });
 

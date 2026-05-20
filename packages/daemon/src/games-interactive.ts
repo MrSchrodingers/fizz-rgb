@@ -3281,6 +3281,117 @@ export class CursedKeyboardEngine {
   }
 }
 
+// ─── Idle garden ─────────────────────────────────────────────────────────────
+
+/** Persisted idle-garden progress. */
+export interface GardenSave { currency: number; plots: number; growth: number; }
+export interface GardenStore { load(): GardenSave; save(s: GardenSave): void; }
+
+/** Default store: ~/.config/fizz-rgb/saves/garden.json (best-effort). */
+export function diskGardenStore(): GardenStore {
+  const base = process.env['XDG_CONFIG_HOME'] || join(homedir(), '.config');
+  const dir = join(base, 'fizz-rgb', 'saves');
+  const file = join(dir, 'garden.json');
+  return {
+    load(): GardenSave {
+      try {
+        const s = JSON.parse(readFileSync(file, 'utf8')) as Partial<GardenSave>;
+        return { currency: Number(s.currency) || 0, plots: Number(s.plots) || 0, growth: Number(s.growth) || 0 };
+      } catch { return { currency: 0, plots: 0, growth: 0 }; }
+    },
+    save(s: GardenSave): void {
+      try { mkdirSync(dir, { recursive: true }); writeFileSync(file, JSON.stringify(s)); }
+      catch { /* read-only fs — keep playing without persistence */ }
+    },
+  };
+}
+
+/**
+ * A passive garden across the keys. Each plot grows seed → sprout → mature
+ * over real time; tap a mature key to harvest it for a bonus, or leave it and
+ * it auto-harvests for a smaller idle yield. Currency auto-buys more plots and
+ * faster growth, so the garden expands while you work. Progress persists to
+ * disk between sessions. No menu — it just grows.
+ */
+const GARDEN_AUTO_HARVEST = 90; // ticks a mature plot waits before auto-yield
+
+export class IdleGardenEngine {
+  private plots: Array<{ led: number; keycode: number; stage: 0 | 1 | 2; timer: number }> = [];
+  private currency = 0;
+  private growth = 0;
+  private pulse = 0;
+  private readonly store: GardenStore;
+
+  constructor(store: GardenStore = diskGardenStore()) {
+    this.store = store;
+    const s = this.store.load();
+    this.currency = s.currency;
+    this.growth = s.growth;
+    const count = Math.max(4, Math.min(CURSED_KEYS.length, s.plots || 0));
+    for (let i = 0; i < count; i++) this.addPlot();
+  }
+
+  setAnimSpeed(_s: number): void { /* real-time idle pace */ }
+
+  /** Plot count + economy + mature keys — exposed for the headless bot. */
+  inspect(): { plotCount: number; growth: number; currency: number; matureKeycodes: number[] } {
+    const matureKeycodes: number[] = [];
+    for (const p of this.plots) if (p.stage === 2) matureKeycodes.push(p.keycode);
+    return { plotCount: this.plots.length, growth: this.growth, currency: this.currency, matureKeycodes };
+  }
+
+  private growTicks(): number { return Math.max(12, 50 - this.growth * 4); }
+  private plotCost(): number { return 3 * Math.max(1, this.plots.length); }
+  private growthCost(): number { return 5 * (this.growth + 1); }
+
+  private addPlot(): void {
+    const slot = CURSED_KEYS[this.plots.length];
+    if (!slot) return;
+    this.plots.push({ led: slot.led, keycode: slot.keycode, stage: 0, timer: 0 });
+  }
+
+  private persist(): void { this.store.save({ currency: this.currency, plots: this.plots.length, growth: this.growth }); }
+
+  handleKey(keycode: number, value: number): void {
+    if (value !== 1) return;
+    const plot = this.plots.find((p) => p.keycode === keycode && p.stage === 2);
+    if (plot) { this.currency += 3; plot.stage = 0; plot.timer = 0; this.persist(); } // tapped harvest = bonus yield
+  }
+
+  step(): void {
+    this.pulse += 0.3;
+    const grow = this.growTicks();
+    for (const p of this.plots) {
+      p.timer++;
+      if (p.stage < 2 && p.timer >= grow) { p.stage++; p.timer = 0; }
+      else if (p.stage === 2 && p.timer >= GARDEN_AUTO_HARVEST) { this.currency += 1; p.stage = 0; p.timer = 0; } // idle yield
+    }
+    // Auto-buy the cheapest affordable upgrade (idle progression).
+    let bought = false;
+    for (let guard = 0; guard < 64; guard++) {
+      const canPlot = this.plots.length < CURSED_KEYS.length && this.currency >= this.plotCost();
+      const canGrow = this.growth < 9 && this.currency >= this.growthCost();
+      if (canPlot && (!canGrow || this.plotCost() <= this.growthCost())) { this.currency -= this.plotCost(); this.addPlot(); bought = true; }
+      else if (canGrow) { this.currency -= this.growthCost(); this.growth++; bought = true; }
+      else break;
+    }
+    if (bought) this.persist();
+  }
+
+  render(): Map<number, Color> {
+    const out = new Map<number, Color>();
+    const pp = 0.55 + 0.45 * Math.abs(Math.sin(this.pulse * 0.5));
+    for (const p of this.plots) {
+      let c: Color;
+      if (p.stage === 0) c = { r: 30, g: 18, b: 6 };       // seed (dim soil)
+      else if (p.stage === 1) c = { r: 0, g: 160, b: 30 };  // sprout (green)
+      else c = { r: Math.round(255 * pp), g: Math.round(200 * pp), b: 0 }; // mature (gold pulse)
+      out.set(p.led, c);
+    }
+    return out;
+  }
+}
+
 function lerpColor(a: Color, b: Color, t: number): Color {
   const k = Math.max(0, Math.min(1, t));
   return {

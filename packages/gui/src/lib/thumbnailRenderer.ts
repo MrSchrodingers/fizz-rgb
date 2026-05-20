@@ -820,6 +820,16 @@ function renderCursed(t: number): string[] {
   return out;
 }
 
+function renderGarden(t: number): string[] {
+  const out = new Array<string>(TOTAL).fill(BG);
+  const pp = 0.55 + 0.45 * Math.abs(Math.sin(t * 2));
+  for (let i = 0; i < TOTAL; i++) {
+    const stage = (i + Math.floor(t * 0.6)) % 3; // plots cycle seed → sprout → mature
+    out[i] = stage === 0 ? '#1e1206' : stage === 1 ? '#00a01e' : rgbHex(255 * pp, 200 * pp, 0);
+  }
+  return out;
+}
+
 // ─── Main entry point ────────────────────────────────────────────────────────
 
 export function renderThumbnail(preset: Preset | UserPreset, t: number): string[] {
@@ -860,6 +870,7 @@ export function renderThumbnail(preset: Preset | UserPreset, t: number): string[
     case 'wordle': return renderWordle(t);
     case 'keyboard-crawl': return renderKeyboardCrawl(t);
     case 'cursed': return renderCursed(t);
+    case 'garden': return renderGarden(t);
   }
 
   const out: string[] = new Array(TOTAL);

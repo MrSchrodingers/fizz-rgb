@@ -1131,6 +1131,13 @@ export const BUILTIN_PRESETS: Preset[] = [
     category: 'game',
     pattern: { keys: {}, animType: 'cursed', animSpeed: 0.5 },
   },
+  {
+    id: 'game-garden',
+    name: 'Jardim Idle',
+    description: 'Um jardim passivo nas teclas. Cada canteiro cresce em tempo real: semente (terra escura) → broto (verde) → maduro (dourado pulsante). Aperte uma tecla madura pra colher com bônus, ou deixe que ela auto-colhe sozinha com rendimento menor. A moeda compra mais canteiros e crescimento mais rápido automaticamente — o jardim cresce enquanto você trabalha. O progresso é salvo entre sessões. Sem menu',
+    category: 'game',
+    pattern: { keys: {}, animType: 'garden', animSpeed: 0.5 },
+  },
 
   // ── Themed cycles (host-streamed, layout-aware) ──────────────────────────
   {

@@ -31,6 +31,7 @@ import {
   WordleEngine,
   KeyboardCrawlEngine,
   CursedKeyboardEngine,
+  IdleGardenEngine,
 } from './games-interactive.js';
 
 /** Common surface every interactive engine implements so EffectEngine can
@@ -1891,6 +1892,7 @@ export class EffectEngine {
       'wordle': () => new WordleEngine(),
       'keyboard-crawl': () => new KeyboardCrawlEngine(),
       'cursed': () => new CursedKeyboardEngine(),
+      'garden': () => new IdleGardenEngine(),
       'minecraft-clouds': () => new MinecraftCloudsEngine(),
     };
     const builder = interactiveBuilders[pattern.animType];
