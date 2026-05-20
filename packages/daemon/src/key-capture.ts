@@ -38,6 +38,7 @@ export const KEY_D = 32;
 export const KEY_Q = 16;
 export const KEY_E = 18;
 export const KEY_SPACE = 57;
+export const KEY_BACKSPACE = 14; // used by the physical Wordle (erase a letter)
 // Digit row 1..5 (evdev codes 2..6) — used by the game difficulty menus.
 export const KEY_1 = 2;
 export const KEY_2 = 3;

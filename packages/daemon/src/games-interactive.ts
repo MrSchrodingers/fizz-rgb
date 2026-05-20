@@ -18,7 +18,7 @@ import { log } from './log.js';
 import {
   KEY_TAB, KEY_CAPSLOCK, KEY_LEFTSHIFT, KEY_LEFTCTRL,
   KEY_BACKSLASH, KEY_ENTER, KEY_RIGHTSHIFT, KEY_RIGHTCTRL,
-  KEY_W, KEY_A, KEY_S, KEY_D, KEY_SPACE,
+  KEY_W, KEY_A, KEY_S, KEY_D, KEY_SPACE, KEY_BACKSPACE,
   KEY_1, KEY_2, KEY_3, KEY_4, KEY_5,
   KEYCODE_BY_NAME,
 } from './key-capture.js';
@@ -2702,6 +2702,166 @@ export class FroggerEngine {
         const b = 0.7 + 0.3 * Math.abs(Math.sin(this.pulse * 0.5));
         out.set(fled, { r: Math.round(40 * b), g: Math.round(255 * b), b: Math.round(40 * b) });
       }
+    }
+    return out;
+  }
+}
+
+// ─── Physical Wordle ─────────────────────────────────────────────────────────
+
+// Letter ↔ keycode ↔ LED maps for the Wordle board, derived from the layout.
+const WORDLE_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const LETTER_BY_KEYCODE = new Map<number, string>();
+const LED_BY_LETTER = new Map<string, number>();
+for (const ch of WORDLE_LETTERS) {
+  const kc = KEYCODE_BY_NAME[ch];
+  const led = findKeyLed(ch);
+  if (kc !== undefined) LETTER_BY_KEYCODE.set(kc, ch);
+  if (led !== null) LED_BY_LETTER.set(ch, led);
+}
+
+// Answer pool (also the only thing that needs to be a "real" word — guesses
+// are accepted freely so a screenless player isn't silently rejected).
+const WORDLE_WORDS = [
+  'APPLE', 'BRAVE', 'CRANE', 'DRIVE', 'EAGLE', 'FLAME', 'GRAPE', 'HOUSE',
+  'IVORY', 'JOLLY', 'KNIFE', 'LEMON', 'MONEY', 'NOBLE', 'OCEAN', 'PIANO',
+  'QUERY', 'RIVER', 'STONE', 'TIGER', 'ULTRA', 'VIVID', 'WHALE', 'YACHT',
+  'ZEBRA', 'BREAD', 'CHAIR', 'DANCE', 'EARTH', 'FAITH', 'GHOST', 'HEART',
+  'INPUT', 'JUICE', 'LIGHT', 'MAGIC', 'NIGHT', 'OPERA', 'PEARL', 'QUEEN',
+  'ROBOT', 'SUGAR', 'TRAIN', 'UNITY', 'VENOM', 'WATER', 'YOUTH', 'BRICK',
+  'CLOUD', 'DREAM', 'FROST', 'GLORY', 'HONEY', 'MUSIC', 'PLANT', 'SMILE',
+  'STORM', 'SWORD', 'TOWER', 'WORLD',
+];
+
+type LetterStatus = 'green' | 'yellow' | 'gray';
+const STATUS_RANK: Record<LetterStatus, number> = { gray: 0, yellow: 1, green: 2 };
+
+/**
+ * Wordle on the physical keys. Type a 5-letter word and press Enter; each
+ * letter KEY then lights green (right spot), yellow (in the word, wrong spot)
+ * or dark (absent), keeping the best-known status per letter — the classic
+ * keyboard hint, but on the real keyboard. Backspace erases. Six guesses; all
+ * green wins, otherwise the answer's letters flash on a loss. The number row
+ * shows guesses used. No difficulty menu. Guesses are not dictionary-checked.
+ */
+export class WordleEngine {
+  private answer = '';
+  private guess = '';
+  private rows = 0;            // completed guesses 0..6
+  private readonly MAX_ROWS = 6;
+  private status = new Map<string, LetterStatus>();
+  private mode: 'play' | 'win' | 'lose' = 'play';
+  private animTimer = 0;
+  private pulse = 0;
+
+  constructor() { this.newGame(); }
+
+  setAnimSpeed(_s: number): void { /* untimed — paced by the player */ }
+
+  /** Answer + mode + progress — exposed for the headless solver bot. */
+  inspect(): { answer: string; guess: string; rows: number; mode: string } {
+    return { answer: this.answer, guess: this.guess, rows: this.rows, mode: this.mode };
+  }
+
+  private newGame(): void {
+    this.answer = WORDLE_WORDS[Math.floor(Math.random() * WORDLE_WORDS.length)]!;
+    this.guess = '';
+    this.rows = 0;
+    this.status.clear();
+    this.mode = 'play';
+    this.animTimer = 0;
+  }
+
+  handleKey(keycode: number, value: number): void {
+    if (value !== 1) return;
+    if (this.mode !== 'play') return; // animation owns the board until it ends
+    if (keycode === KEY_BACKSPACE) { this.guess = this.guess.slice(0, -1); return; }
+    if (keycode === KEY_ENTER) { if (this.guess.length === 5) this.submit(); return; }
+    const ch = LETTER_BY_KEYCODE.get(keycode);
+    if (ch && this.guess.length < 5) this.guess += ch;
+  }
+
+  /** Standard Wordle scoring with duplicate handling. */
+  private score(guess: string): LetterStatus[] {
+    const res: LetterStatus[] = ['gray', 'gray', 'gray', 'gray', 'gray'];
+    const ans = this.answer.split('');
+    const used = [false, false, false, false, false];
+    for (let i = 0; i < 5; i++) {
+      if (guess[i] === ans[i]) { res[i] = 'green'; used[i] = true; }
+    }
+    for (let i = 0; i < 5; i++) {
+      if (res[i] === 'green') continue;
+      for (let j = 0; j < 5; j++) {
+        if (!used[j] && guess[i] === ans[j]) { res[i] = 'yellow'; used[j] = true; break; }
+      }
+    }
+    return res;
+  }
+
+  private submit(): void {
+    const result = this.score(this.guess);
+    for (let i = 0; i < 5; i++) {
+      const ch = this.guess[i]!;
+      const prev = this.status.get(ch);
+      if (!prev || STATUS_RANK[result[i]!] > STATUS_RANK[prev]) this.status.set(ch, result[i]!);
+    }
+    this.rows++;
+    if (this.guess === this.answer) {
+      this.mode = 'win'; this.animTimer = 48;
+      log.info({ answer: this.answer, rows: this.rows }, 'wordle: win');
+    } else if (this.rows >= this.MAX_ROWS) {
+      this.mode = 'lose'; this.animTimer = 60;
+      log.info({ answer: this.answer }, 'wordle: lose');
+    }
+    this.guess = '';
+  }
+
+  step(): void {
+    this.pulse += 0.3;
+    if (this.mode === 'win' || this.mode === 'lose') {
+      if (--this.animTimer <= 0) this.newGame();
+    }
+  }
+
+  render(): Map<number, Color> {
+    const out = new Map<number, Color>();
+    const GREEN_S: Color = { r: 0, g: 200, b: 40 };
+    const YELLOW_S: Color = { r: 220, g: 180, b: 0 };
+    const GRAY_S: Color = { r: 6, g: 6, b: 6 };
+    const UNKNOWN: Color = { r: 30, g: 30, b: 36 };
+
+    if (this.mode === 'win') {
+      const i = this.animTimer % 6 < 3 ? 1 : 0.3;
+      for (const row of KEY_MATRIX) for (const cell of row) out.set(cell.led, { r: 0, g: Math.round(220 * i), b: Math.round(40 * i) });
+      return out;
+    }
+    if (this.mode === 'lose') {
+      // Reveal: the answer's letter keys flash red, everything else dark.
+      const on = this.animTimer % 8 < 4;
+      for (const ch of new Set(this.answer.split(''))) {
+        const led = LED_BY_LETTER.get(ch);
+        if (led !== undefined) out.set(led, on ? { r: 230, g: 0, b: 0 } : { r: 40, g: 0, b: 0 });
+      }
+      return out;
+    }
+
+    // Letter keys coloured by best-known status (unknown = dim white).
+    for (const [ch, led] of LED_BY_LETTER) {
+      const st = this.status.get(ch);
+      out.set(led, st === 'green' ? GREEN_S : st === 'yellow' ? YELLOW_S : st === 'gray' ? GRAY_S : UNKNOWN);
+    }
+    // The letters currently being typed pulse white over their status.
+    const p = 0.55 + 0.45 * Math.abs(Math.sin(this.pulse * 0.6));
+    for (const ch of this.guess) {
+      const led = LED_BY_LETTER.get(ch);
+      if (led !== undefined) out.set(led, { r: Math.round(220 * p), g: Math.round(220 * p), b: Math.round(235 * p) });
+    }
+    // Guesses used on the number row (1..6 = orange).
+    const NUMS = ['1', '2', '3', '4', '5', '6'];
+    for (let i = 0; i < this.MAX_ROWS; i++) {
+      const led = findKeyLed(NUMS[i]!);
+      if (led === null) continue;
+      out.set(led, i < this.rows ? { r: 200, g: 90, b: 0 } : { r: 25, g: 18, b: 0 });
     }
     return out;
   }

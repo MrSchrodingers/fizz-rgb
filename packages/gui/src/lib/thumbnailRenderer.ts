@@ -781,6 +781,19 @@ function renderFrogger(t: number): string[] {
   return out;
 }
 
+function renderWordle(t: number): string[] {
+  const out = new Array<string>(TOTAL).fill(BG);
+  for (let i = THUMB_COLS; i < TOTAL; i++) out[i] = '#1e1e24'; // dim "letter" keys
+  const k = Math.floor(t);
+  const span = TOTAL - THUMB_COLS;
+  out[((k * 3 + 7) % span) + THUMB_COLS] = '#00c828';   // green hint
+  out[((k * 5 + 13) % span) + THUMB_COLS] = '#dcb400';  // yellow hint
+  out[((k * 7 + 2) % span) + THUMB_COLS] = '#00c828';
+  const used = (Math.floor(t * 0.5) % 6) + 1;            // guesses-used counter
+  for (let c = 0; c < used && c < THUMB_COLS; c++) out[c] = '#c85a00';
+  return out;
+}
+
 // ─── Main entry point ────────────────────────────────────────────────────────
 
 export function renderThumbnail(preset: Preset | UserPreset, t: number): string[] {
@@ -818,6 +831,7 @@ export function renderThumbnail(preset: Preset | UserPreset, t: number): string[
     case 'bullet-hell': return renderBulletHell(t);
     case 'drag-race': return renderDragRace(t);
     case 'frogger': return renderFrogger(t);
+    case 'wordle': return renderWordle(t);
   }
 
   const out: string[] = new Array(TOTAL);

@@ -15,10 +15,10 @@ import { describe, it, expect } from 'vitest';
 import type { Color } from '@fizz/core';
 import {
   RippleEngine, SparkEngine, BinaryClockEngine, DoomFireEngine,
-  WhacAMoleEngine, BulletHellEngine, DragRaceEngine, FroggerEngine,
+  WhacAMoleEngine, BulletHellEngine, DragRaceEngine, FroggerEngine, WordleEngine,
 } from '../src/games-interactive.js';
 import {
-  KEYCODE_BY_NAME, KEY_1, KEY_W, KEY_A, KEY_S, KEY_D, KEY_SPACE, KEY_ENTER,
+  KEYCODE_BY_NAME, KEY_1, KEY_W, KEY_A, KEY_S, KEY_D, KEY_SPACE, KEY_ENTER, KEY_BACKSPACE,
 } from '../src/key-capture.js';
 import { KEY_MATRIX, keyLed, keyCx, colNearestCx, vNeighbor, rowWidth } from '../src/key-matrix.js';
 
@@ -83,6 +83,43 @@ describe('arcade games — fuzz (no crash, valid frames)', () => {
   });
   it('frogger', () => {
     expect(() => fuzz(() => { const e = new FroggerEngine(); e.handleKey(KEY_1, 1); return e; })).not.toThrow();
+  });
+  it('wordle', () => { expect(() => fuzz(() => new WordleEngine())).not.toThrow(); });
+});
+
+describe('Wordle', () => {
+  const typeWord = (e: WordleEngine, word: string) => {
+    for (const ch of word) e.handleKey(KEYCODE_BY_NAME[ch]!, 1);
+    e.handleKey(KEY_ENTER, 1);
+  };
+
+  it('typing the answer wins in one guess', () => {
+    const e = new WordleEngine();
+    const answer = e.inspect().answer;
+    expect(answer).toHaveLength(5);
+    typeWord(e, answer);
+    const st = e.inspect();
+    expect(st.mode).toBe('win');
+    expect(st.rows).toBe(1);
+  });
+
+  it('six wrong guesses lose the game', () => {
+    const e = new WordleEngine();
+    const answer = e.inspect().answer;
+    // A guess that differs at every position (shift each letter by one).
+    const wrong = answer.split('').map((c) =>
+      String.fromCharCode(((c.charCodeAt(0) - 65 + 1) % 26) + 65)).join('');
+    expect(wrong).not.toBe(answer);
+    for (let i = 0; i < 6; i++) typeWord(e, wrong);
+    expect(e.inspect().mode).toBe('lose');
+  });
+
+  it('backspace erases the in-progress guess', () => {
+    const e = new WordleEngine();
+    e.handleKey(KEYCODE_BY_NAME['A']!, 1);
+    e.handleKey(KEYCODE_BY_NAME['B']!, 1);
+    e.handleKey(KEY_BACKSPACE, 1);
+    expect(e.inspect().guess).toBe('A');
   });
 });
 

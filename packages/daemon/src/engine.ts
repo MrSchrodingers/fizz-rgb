@@ -28,6 +28,7 @@ import {
   BulletHellEngine,
   DragRaceEngine,
   FroggerEngine,
+  WordleEngine,
 } from './games-interactive.js';
 
 /** Common surface every interactive engine implements so EffectEngine can
@@ -1885,6 +1886,7 @@ export class EffectEngine {
       'bullet-hell': () => new BulletHellEngine(),
       'drag-race': () => new DragRaceEngine(),
       'frogger': () => new FroggerEngine(),
+      'wordle': () => new WordleEngine(),
       'minecraft-clouds': () => new MinecraftCloudsEngine(),
     };
     const builder = interactiveBuilders[pattern.animType];

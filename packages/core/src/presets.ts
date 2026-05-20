@@ -1110,6 +1110,13 @@ export const BUILTIN_PRESETS: Preset[] = [
     category: 'game',
     pattern: { keys: {}, animType: 'frogger', animSpeed: 0.5 },
   },
+  {
+    id: 'game-wordle',
+    name: 'Wordle Físico',
+    description: 'Wordle nas teclas de verdade. Digite uma palavra de 5 letras e aperte Enter — cada tecla de letra acende verde (lugar certo), amarelo (na palavra, lugar errado) ou apaga (não tem), guardando a melhor pista por letra. Backspace apaga. 6 tentativas: tudo verde vence, senão as letras da resposta piscam. A fileira de números mostra as tentativas usadas. Sem menu',
+    category: 'word',
+    pattern: { keys: {}, animType: 'wordle', animSpeed: 0.5 },
+  },
 
   // ── Themed cycles (host-streamed, layout-aware) ──────────────────────────
   {
