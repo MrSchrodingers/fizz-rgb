@@ -33,6 +33,7 @@ import {
   CursedKeyboardEngine,
   IdleGardenEngine,
   DeckBuilderEngine,
+  FlappyEngine,
 } from './games-interactive.js';
 
 /** Common surface every interactive engine implements so EffectEngine can
@@ -1895,6 +1896,7 @@ export class EffectEngine {
       'cursed': () => new CursedKeyboardEngine(),
       'garden': () => new IdleGardenEngine(),
       'deckbuilder': () => new DeckBuilderEngine(),
+      'flappy': () => new FlappyEngine(),
       'minecraft-clouds': () => new MinecraftCloudsEngine(),
     };
     const builder = interactiveBuilders[pattern.animType];

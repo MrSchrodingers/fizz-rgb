@@ -1145,6 +1145,13 @@ export const BUILTIN_PRESETS: Preset[] = [
     category: 'game',
     pattern: { keys: {}, animType: 'deckbuilder', animSpeed: 0.5 },
   },
+  {
+    id: 'game-flappy',
+    name: 'Flappy Bird',
+    description: 'Flappy Bird nas teclas, controlado só pelo Space. O passarinho (amarelo) fica numa coluna fixa; a gravidade puxa pra baixo e cada Space dá uma batida de asa pra cima. Os canos (verde) rolam da direita pra esquerda com uma brecha pra passar — encostar num cano ou no chão acaba a partida. Aperte Space pra começar (e pra bater asa). Sem menu. Pontuação = canos passados',
+    category: 'game',
+    pattern: { keys: {}, animType: 'flappy', animSpeed: 0.5 },
+  },
 
   // ── Themed cycles (host-streamed, layout-aware) ──────────────────────────
   {

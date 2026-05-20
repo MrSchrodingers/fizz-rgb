@@ -17,7 +17,7 @@ import {
   RippleEngine, SparkEngine, BinaryClockEngine, DoomFireEngine,
   WhacAMoleEngine, BulletHellEngine, DragRaceEngine, FroggerEngine, WordleEngine,
   KeyboardCrawlEngine, diskCrawlStore, CursedKeyboardEngine,
-  IdleGardenEngine, diskGardenStore, DeckBuilderEngine, diskDeckStore,
+  IdleGardenEngine, diskGardenStore, DeckBuilderEngine, diskDeckStore, FlappyEngine,
   type CrawlStore, type CrawlMeta,
 } from '../src/games-interactive.js';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -102,6 +102,51 @@ describe('arcade games — fuzz (no crash, valid frames)', () => {
   });
   it('deckbuilder', () => {
     expect(() => fuzz(() => { const e = new DeckBuilderEngine({ load: () => ({ bestFloor: 0, bonusHp: 0 }), save: () => {} }); e.handleKey(KEY_1, 1); return e; })).not.toThrow();
+  });
+  it('flappy', () => { expect(() => fuzz(() => new FlappyEngine())).not.toThrow(); });
+});
+
+describe('Flappy Bird', () => {
+  it('a flap controller clears several pipes', () => {
+    const e = new FlappyEngine();
+    e.handleKey(KEY_SPACE, 1); // start
+    for (let f = 0; f < 4000; f++) {
+      e.step();
+      const st = e.inspect();
+      if (st.mode === 'dead') break;
+      if (st.score >= 4) break;
+      // Aim at the gap centre of the nearest pipe ahead (else mid-board).
+      const ahead = st.pipes
+        .filter((p) => p.cx >= st.birdCx - 0.6)
+        .sort((a, b) => a.cx - b.cx)[0];
+      const target = ahead ? ahead.gapTop + (st.gap - 1) / 2 : 2;
+      // Flap whenever below the gap centre; with the gentle physics the swing
+      // stays inside the gap.
+      if (st.y > target) e.handleKey(KEY_SPACE, 1);
+    }
+    expect(e.inspect().score).toBeGreaterThanOrEqual(4);
+  });
+
+  it('starting then never flapping again falls and crashes', () => {
+    const e = new FlappyEngine();
+    e.handleKey(KEY_SPACE, 1); // start (and one flap)
+    let dead = false;
+    for (let f = 0; f < 300; f++) { e.step(); if (e.inspect().mode === 'dead') { dead = true; break; } }
+    expect(dead).toBe(true);
+  });
+
+  it('never starves of pipes during a long run (no soft-lock)', () => {
+    const e = new FlappyEngine();
+    e.handleKey(KEY_SPACE, 1);
+    let minPipes = Infinity;
+    for (let f = 0; f < 3000; f++) {
+      e.step();
+      const st = e.inspect();
+      if (st.mode === 'dead') { e.handleKey(KEY_SPACE, 1); continue; } // restart, keep stressing
+      if (st.mode === 'play') minPipes = Math.min(minPipes, st.pipes.length);
+      if (st.y > 2) e.handleKey(KEY_SPACE, 1); // keep it roughly alive
+    }
+    expect(minPipes).toBeGreaterThanOrEqual(1);
   });
 });
 

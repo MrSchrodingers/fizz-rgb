@@ -842,6 +842,22 @@ function renderDeckBuilder(t: number): string[] {
   return out;
 }
 
+function renderFlappy(t: number): string[] {
+  const out = new Array<string>(TOTAL).fill(BG);
+  for (let k = 0; k < 2; k++) {
+    const col = (THUMB_COLS - 1) - (Math.floor(t * 2 + k * 3) % (THUMB_COLS + 2)); // scroll right→left
+    const gapTop = (k * 2 + Math.floor(t * 0.5)) % 3; // 0..2
+    if (col < 0 || col >= THUMB_COLS) continue;
+    for (let r = 0; r < THUMB_ROWS; r++) {
+      if (r >= gapTop && r < gapTop + 3) continue; // gap
+      out[r * THUMB_COLS + col] = '#00c828';
+    }
+  }
+  const by = Math.max(0, Math.min(THUMB_ROWS - 1, Math.round(2 + Math.sin(t * 4)))); // bobbing bird
+  out[by * THUMB_COLS + 1] = '#ffdc00';
+  return out;
+}
+
 // ─── Main entry point ────────────────────────────────────────────────────────
 
 export function renderThumbnail(preset: Preset | UserPreset, t: number): string[] {
@@ -884,6 +900,7 @@ export function renderThumbnail(preset: Preset | UserPreset, t: number): string[
     case 'cursed': return renderCursed(t);
     case 'garden': return renderGarden(t);
     case 'deckbuilder': return renderDeckBuilder(t);
+    case 'flappy': return renderFlappy(t);
   }
 
   const out: string[] = new Array(TOTAL);

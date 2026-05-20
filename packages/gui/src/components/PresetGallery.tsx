@@ -158,7 +158,7 @@ export function PresetGallery({
   // animType is a stateful game even if keyColors is empty.
   const STATEFUL_GAME_TYPES = [
     'pong', 'snake', 'tetris', 'matrix-rain', 'breakout',
-    'fireworks', 'dvd', 'heart-rate', 'equalizer', 'rule30',
+    'fireworks', 'dvd', 'heart-rate', 'equalizer', 'rule30', 'flappy',
   ];
 
   function saveCurrent() {

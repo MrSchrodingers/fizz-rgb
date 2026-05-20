@@ -3671,6 +3671,132 @@ export class DeckBuilderEngine {
   }
 }
 
+// ─── Flappy Bird (Space to flap) ─────────────────────────────────────────────
+
+/**
+ * Flappy Bird on the keys. The bird holds a fixed physical column; gravity
+ * pulls it down and Space gives it an upward flap. Pipes scroll right→left with
+ * a gap you must fly through; touching a pipe wall or the floor ends the run.
+ * Tap Space to start (and to flap) — no menu. Score is pipes cleared. Rendered
+ * by physical centre-x so the bird and pipes stay vertically aligned across the
+ * ragged rows.
+ */
+const FLAPPY_BIRD_CX = 3.5;   // fixed physical x of the bird
+const FLAPPY_GAP = 3;         // open rows in each pipe (board is 5 rows tall)
+const FLAPPY_PIPE_HALF = 0.6; // pipe x half-width for collision
+
+export class FlappyEngine {
+  private mode: 'ready' | 'play' | 'dead' = 'ready';
+  private y = 2;          // continuous row (0=top .. 4=floor)
+  private vy = 0;
+  private pipes: Array<{ cx: number; gapTop: number; passed: boolean }> = [];
+  private score = 0;
+  private deathAnim = 0;
+  private pulse = 0;
+  // Gentle physics so the bird is controllable on a 5-row board: a flap lifts
+  // ~0.8 rows, keeping the hover swing well inside the 3-row gap.
+  private readonly GRAVITY = 0.05;
+  private readonly FLAP = -0.28;
+  private readonly PIPE_SPEED = 0.07;
+  private readonly PIPE_SPACING = 7;
+
+  constructor() { this.reset(); }
+
+  setAnimSpeed(_s: number): void { /* fixed, fair tuning */ }
+
+  /** Bird + pipe state — exposed for the headless flap bot. */
+  inspect(): {
+    mode: string; y: number; vy: number; score: number;
+    pipes: Array<{ cx: number; gapTop: number }>; gap: number; birdCx: number;
+  } {
+    return {
+      mode: this.mode, y: this.y, vy: this.vy, score: this.score,
+      pipes: this.pipes.map((p) => ({ cx: p.cx, gapTop: p.gapTop })),
+      gap: FLAPPY_GAP, birdCx: FLAPPY_BIRD_CX,
+    };
+  }
+
+  private reset(): void {
+    this.mode = 'ready';
+    this.y = 2; this.vy = 0; this.score = 0; this.deathAnim = 0;
+    this.pipes = [
+      { cx: 14, gapTop: this.randGapTop(), passed: false },
+      { cx: 14 + this.PIPE_SPACING, gapTop: this.randGapTop(), passed: false },
+    ];
+  }
+
+  private randGapTop(): number { return Math.floor(Math.random() * (ROW_COUNT - FLAPPY_GAP + 1)); } // 0..2
+
+  handleKey(keycode: number, value: number): void {
+    if (value !== 1 || keycode !== KEY_SPACE) return;
+    if (this.mode === 'dead') return;          // wait out the death flash
+    if (this.mode === 'ready') this.mode = 'play';
+    this.vy = this.FLAP;                        // flap
+  }
+
+  step(): void {
+    this.pulse += 0.3;
+    if (this.mode === 'dead') { if (--this.deathAnim <= 0) this.reset(); return; }
+    if (this.mode !== 'play') return;           // hovering in 'ready'
+
+    this.vy = Math.max(-0.5, Math.min(0.6, this.vy + this.GRAVITY));
+    this.y += this.vy;
+    if (this.y <= 0) { this.y = 0; this.vy = 0; }       // bonk ceiling (no death)
+    if (this.y >= ROW_COUNT - 1 + 0.4) { this.die(); return; } // hit the floor
+
+    for (const p of this.pipes) {
+      p.cx -= this.PIPE_SPEED;
+      if (!p.passed && p.cx < FLAPPY_BIRD_CX) { p.passed = true; this.score++; }
+    }
+    this.pipes = this.pipes.filter((p) => p.cx > -1.5);
+    // Keep pipes coming. Guard the empty case explicitly so we never seed from
+    // -Infinity (which would spawn an unreachable cx=-Infinity pipe → no pipes
+    // ever again).
+    if (this.pipes.length === 0) {
+      this.pipes.push({ cx: 16, gapTop: this.randGapTop(), passed: false });
+    } else {
+      const rightmost = this.pipes.reduce((m, p) => Math.max(m, p.cx), 0);
+      if (rightmost < 16 - this.PIPE_SPACING) {
+        this.pipes.push({ cx: rightmost + this.PIPE_SPACING, gapTop: this.randGapTop(), passed: false });
+      }
+    }
+
+    const birdRow = Math.round(this.y);
+    for (const p of this.pipes) {
+      if (Math.abs(p.cx - FLAPPY_BIRD_CX) >= FLAPPY_PIPE_HALF) continue; // pipe not over the bird
+      const inGap = birdRow >= p.gapTop && birdRow < p.gapTop + FLAPPY_GAP;
+      if (!inGap) { this.die(); return; }
+    }
+  }
+
+  private die(): void { this.mode = 'dead'; this.deathAnim = 30; log.info({ score: this.score }, 'flappy: crashed'); }
+
+  render(): Map<number, Color> {
+    const out = new Map<number, Color>();
+    if (this.mode === 'dead') {
+      const i = this.deathAnim % 6 < 3 ? 1 : 0.25;
+      for (const row of KEY_MATRIX) for (const cell of row) out.set(cell.led, { r: Math.round(220 * i), g: 0, b: 0 });
+      return out;
+    }
+    // Pipes: green walls on every row outside the gap.
+    for (const p of this.pipes) {
+      for (let r = 0; r < ROW_COUNT; r++) {
+        if (r >= p.gapTop && r < p.gapTop + FLAPPY_GAP) continue; // gap
+        const led = keyLed(r, colNearestCx(r, p.cx));
+        if (led !== null) out.set(led, { r: 0, g: 200, b: 40 });
+      }
+    }
+    // Bird: bright yellow, pulsing (dimmer while waiting to start).
+    const birdRow = Math.round(this.y);
+    const led = keyLed(birdRow, colNearestCx(birdRow, FLAPPY_BIRD_CX));
+    if (led !== null) {
+      const b = this.mode === 'ready' ? 0.5 + 0.5 * Math.abs(Math.sin(this.pulse * 0.5)) : 1;
+      out.set(led, { r: Math.round(255 * b), g: Math.round(220 * b), b: 0 });
+    }
+    return out;
+  }
+}
+
 function lerpColor(a: Color, b: Color, t: number): Color {
   const k = Math.max(0, Math.min(1, t));
   return {

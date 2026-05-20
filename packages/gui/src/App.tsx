@@ -364,7 +364,7 @@ export default function App() {
     // Stateful game animations (Pong/Snake/Tetris/etc.) generate colors at
     // runtime in the daemon — their pattern intentionally has empty keys.
     // Allow saving them as profile even when colors map is empty.
-    const STATEFUL_GAME_TYPES = ['pong', 'snake', 'tetris', 'matrix-rain', 'breakout', 'fireworks', 'dvd', 'heart-rate', 'equalizer', 'rule30'];
+    const STATEFUL_GAME_TYPES = ['pong', 'snake', 'tetris', 'matrix-rain', 'breakout', 'fireworks', 'dvd', 'heart-rate', 'equalizer', 'rule30', 'flappy'];
     const isStatefulGame = STATEFUL_GAME_TYPES.includes(paintAnimType);
     if (colors.size === 0 && !isStatefulGame) {
       alert('No keys painted yet. Click keys in the 3D view to select, then "Paint selected", ou aplica um preset primeiro.');
