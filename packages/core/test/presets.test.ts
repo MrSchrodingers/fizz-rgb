@@ -21,6 +21,7 @@ describe('BUILTIN_PRESETS', () => {
       'pong-multiplayer', 'snake-interactive', 'breakout-interactive', 'pacman',
       'doom', 'minecraft-clouds', 'space-invaders', 'mario', 'genius',
       'ripple', 'spark', 'binary-clock', 'doom-fire',
+      'whac-a-mole', 'bullet-hell', 'drag-race',
     ];
     for (const p of BUILTIN_PRESETS) {
       if (statefulAnimTypes.includes(p.pattern.animType)) continue;

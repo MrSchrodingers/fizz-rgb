@@ -1081,6 +1081,29 @@ export const BUILTIN_PRESETS: Preset[] = [
     pattern: { keys: {}, animType: 'doom-fire', animSpeed: 0.5 },
   },
 
+  // ── Arcade / reflexo (com menu de dificuldade) ───────────────────────────
+  {
+    id: 'game-whac-a-mole',
+    name: 'Whac-A-Mole',
+    description: 'No início escolha a dificuldade 1-5 (teclas 1 a 5). Teclas acendem como "toupeiras" — aperte a tecla certa antes dela sumir pra pontuar. Toupeira que expira é um erro; 3 erros e acaba. Mais difícil = mais toupeiras e menos tempo. Acerto pisca verde, erro pisca vermelho',
+    category: 'game',
+    pattern: { keys: {}, animType: 'whac-a-mole', animSpeed: 0.5 },
+  },
+  {
+    id: 'game-bullet-hell',
+    name: 'Bullet Hell (esquiva)',
+    description: 'No início escolha a dificuldade 1-5 (teclas 1 a 5). Você é a tecla azul pulsante; projéteis laranjas entram pelas bordas. WASD desvia (cima/baixo pula pra tecla alinhada da fileira seguinte). Encostar num projétil é morte. Pontuação = tempo sobrevivido. A partir do nível 3, alguns tiros miram em você',
+    category: 'game',
+    pattern: { keys: {}, animType: 'bullet-hell', animSpeed: 0.5 },
+  },
+  {
+    id: 'game-drag-race',
+    name: 'Drag Race (Shift-it)',
+    description: 'No início escolha a dificuldade 1-5 (teclas 1 a 5). Segure Space pra acelerar — o conta-giros enche a fileira de cima (verde → amarelo → vermelho). Aperte Enter na zona certa (giro alto, antes do limite) pra trocar de marcha. Bater no limite sem trocar estoura o motor (perde). Complete as 6 marchas pra terminar. Mais difícil = giro mais rápido e janela menor',
+    category: 'game',
+    pattern: { keys: {}, animType: 'drag-race', animSpeed: 0.5 },
+  },
+
   // ── Themed cycles (host-streamed, layout-aware) ──────────────────────────
   {
     id: 'theme-minecraft',

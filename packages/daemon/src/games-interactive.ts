@@ -2165,6 +2165,386 @@ export class DoomFireEngine {
   }
 }
 
+// ─── Whac-A-Mole (reflex) ────────────────────────────────────────────────────
+
+/**
+ * Random keys light up as "moles"; press the exact key before it vanishes to
+ * score. A mole that times out is a miss; three misses ends the round. The
+ * difficulty 1-5 (chosen at start) raises the spawn rate and shortens how long
+ * each mole stays up. Hits flash green, misses flash red, on an otherwise dark
+ * board; lives remaining show on the top-left keys.
+ */
+export class WhacAMoleEngine {
+  private difficulty = 0;
+  private moles: Array<{ led: number; keycode: number; ttl: number; hue: number }> = [];
+  private readonly spawnable: Array<{ led: number; keycode: number }> = [];
+  private score = 0;
+  private misses = 0;
+  private readonly MAX_MISSES = 3;
+  private spawnTick = 0;
+  private hitFlash = new Map<number, number>();
+  private missFlash = new Map<number, number>();
+  private gameOverAnim = 0;
+  private pulse = 0;
+
+  constructor() {
+    for (const [keycode, cell] of KEYCODE_TO_CELL) this.spawnable.push({ led: cell.led, keycode });
+  }
+
+  setAnimSpeed(_s: number): void { /* pace comes from difficulty */ }
+  private get diff(): number { return this.difficulty > 0 ? this.difficulty : 1; }
+  private spawnInterval(): number { return Math.max(7, 38 - this.diff * 6); }
+  private moleTtl(): number { return Math.max(18, 70 - this.diff * 9); }
+  private maxMoles(): number { return Math.min(5, 1 + Math.floor(this.diff / 2)); }
+
+  /** Active mole keycodes + score — exposed for the headless reflex bot. */
+  inspect(): { moleKeycodes: number[]; score: number; misses: number } {
+    return { moleKeycodes: this.moles.map((m) => m.keycode), score: this.score, misses: this.misses };
+  }
+
+  private startRound(): void {
+    this.moles = []; this.score = 0; this.misses = 0; this.spawnTick = 0;
+    this.hitFlash.clear(); this.missFlash.clear(); this.gameOverAnim = 0;
+  }
+
+  handleKey(keycode: number, value: number): void {
+    if (value !== 1) return;
+    if (this.difficulty === 0) {
+      const d = difficultyFromKeycode(keycode);
+      if (d > 0) { this.difficulty = d; this.startRound(); }
+      return;
+    }
+    if (this.gameOverAnim > 0) return;
+    const idx = this.moles.findIndex((m) => m.keycode === keycode);
+    if (idx >= 0) {
+      const m = this.moles[idx]!;
+      this.score++;
+      this.hitFlash.set(m.led, 8);
+      this.moles.splice(idx, 1);
+    }
+  }
+
+  private decayFlash(map: Map<number, number>): void {
+    for (const [led, f] of map) { if (f <= 1) map.delete(led); else map.set(led, f - 1); }
+  }
+
+  step(): void {
+    this.pulse += 0.3;
+    this.decayFlash(this.hitFlash);
+    this.decayFlash(this.missFlash);
+    if (this.difficulty === 0) return;
+    if (this.gameOverAnim > 0) { this.gameOverAnim--; if (this.gameOverAnim === 0) this.startRound(); return; }
+
+    const survivors: typeof this.moles = [];
+    for (const m of this.moles) {
+      m.ttl--;
+      if (m.ttl > 0) survivors.push(m);
+      else { this.missFlash.set(m.led, 10); this.misses++; }
+    }
+    this.moles = survivors;
+    if (this.misses >= this.MAX_MISSES) {
+      this.gameOverAnim = 48;
+      log.info({ score: this.score }, 'whac-a-mole: game over');
+      return;
+    }
+    this.spawnTick++;
+    if (this.spawnTick >= this.spawnInterval() && this.moles.length < this.maxMoles()) {
+      this.spawnTick = 0;
+      this.spawnMole();
+    }
+  }
+
+  private spawnMole(): void {
+    for (let i = 0; i < 40; i++) {
+      const c = this.spawnable[Math.floor(Math.random() * this.spawnable.length)]!;
+      if (this.moles.some((m) => m.led === c.led)) continue;
+      if (this.hitFlash.has(c.led) || this.missFlash.has(c.led)) continue;
+      this.moles.push({ led: c.led, keycode: c.keycode, ttl: this.moleTtl(), hue: Math.random() * 360 });
+      return;
+    }
+  }
+
+  render(): Map<number, Color> {
+    if (this.difficulty === 0) return renderDifficultyMenu(this.pulse);
+    const out = new Map<number, Color>();
+    if (this.gameOverAnim > 0) {
+      const i = this.gameOverAnim % 8 < 4 ? 1 : 0.25;
+      for (const row of KEY_MATRIX) for (const cell of row) out.set(cell.led, { r: Math.round(200 * i), g: 0, b: 0 });
+      return out;
+    }
+    for (const m of this.moles) {
+      const blink = m.ttl < 12 && m.ttl % 4 < 2; // about to vanish
+      out.set(m.led, blink ? { r: 60, g: 50, b: 0 } : hsv(m.hue));
+    }
+    for (const [led, f] of this.hitFlash) out.set(led, { r: 0, g: Math.round(255 * Math.min(1, f / 8)), b: 40 });
+    for (const [led, f] of this.missFlash) out.set(led, { r: Math.round(255 * Math.min(1, f / 10)), g: 0, b: 0 });
+    const lives = this.MAX_MISSES - this.misses;
+    for (let i = 0; i < lives; i++) {
+      const led = keyLed(0, i);
+      if (led !== null && !out.has(led)) out.set(led, { r: 40, g: 40, b: 40 });
+    }
+    return out;
+  }
+}
+
+// ─── Bullet-hell (dodge) ─────────────────────────────────────────────────────
+
+/**
+ * You are one bright pulsing key; projectiles stream in from the edges and you
+ * dodge with WASD (up/down hop to the visually-aligned key on the next row).
+ * Touching a bullet's cell is death (brief flash, then respawn). Score is how
+ * long you survive. Difficulty 1-5 scales bullet speed, spawn rate and how
+ * many fly at once; from level 3 some shots are aimed at you.
+ */
+export class BulletHellEngine {
+  private difficulty = 0;
+  private player = { row: 2, col: 0 };
+  private bullets: Array<{ cx: number; rowF: number; vx: number; vy: number }> = [];
+  private survival = 0;
+  private spawnTick = 0;
+  private deathAnim = 0;
+  private pulse = 0;
+
+  setAnimSpeed(_s: number): void { /* pace comes from difficulty */ }
+  private get diff(): number { return this.difficulty > 0 ? this.difficulty : 1; }
+  private bulletSpeed(): number { return 0.16 + this.diff * 0.06; }
+  private spawnInterval(): number { return Math.max(5, 30 - this.diff * 4); }
+  private maxBullets(): number { return 2 + this.diff * 2; }
+
+  /** Player + bullet cells (current and one-step-ahead) + alive flag —
+   *  exposed for the headless dodge bot. The next-cell mirrors how step()
+   *  advances + checkHit() rounds, so a bot can dodge with 1-frame lookahead. */
+  inspect(): {
+    player: { row: number; col: number };
+    bullets: Array<{ row: number; col: number; nextRow: number; nextCol: number }>;
+    alive: boolean;
+  } {
+    const bullets: Array<{ row: number; col: number; nextRow: number; nextCol: number }> = [];
+    for (const b of this.bullets) {
+      const row = Math.round(b.rowF);
+      const nextRow = Math.round(b.rowF + b.vy);
+      const onBoard = row >= 0 && row < ROW_COUNT;
+      const nextOnBoard = nextRow >= 0 && nextRow < ROW_COUNT;
+      if (!onBoard && !nextOnBoard) continue;
+      bullets.push({
+        row: onBoard ? row : nextRow,
+        col: onBoard ? colNearestCx(row, b.cx) : colNearestCx(nextRow, b.cx + b.vx),
+        nextRow: nextOnBoard ? nextRow : row,
+        nextCol: nextOnBoard ? colNearestCx(nextRow, b.cx + b.vx) : colNearestCx(row, b.cx),
+      });
+    }
+    return { player: { ...this.player }, bullets, alive: this.deathAnim === 0 };
+  }
+
+  private respawn(): void {
+    this.player = { row: 2, col: Math.floor(rowWidth(2) / 2) };
+    this.bullets = [];
+    this.survival = 0;
+    this.spawnTick = 0;
+  }
+
+  handleKey(keycode: number, value: number): void {
+    if (value !== 1) return;
+    if (this.difficulty === 0) {
+      const d = difficultyFromKeycode(keycode);
+      if (d > 0) { this.difficulty = d; this.respawn(); }
+      return;
+    }
+    if (this.deathAnim > 0) return;
+    const p = this.player;
+    if (keycode === KEY_A) p.col = Math.max(0, p.col - 1);
+    else if (keycode === KEY_D) p.col = Math.min(rowWidth(p.row) - 1, p.col + 1);
+    else if (keycode === KEY_W && p.row > 0) { const nc = vNeighbor(p.row, p.col, p.row - 1); p.row -= 1; p.col = nc; }
+    else if (keycode === KEY_S && p.row < ROW_COUNT - 1) { const nc = vNeighbor(p.row, p.col, p.row + 1); p.row += 1; p.col = nc; }
+  }
+
+  private spawnBullet(): void {
+    const sp = this.bulletSpeed();
+    const edge = Math.floor(Math.random() * 4);
+    const aimed = this.diff >= 3 && Math.random() < 0.4;
+    const pcx = keyCx(this.player.row, this.player.col);
+    const prow = this.player.row;
+    let cx = 0, rowF = 0, vx = 0, vy = 0;
+    if (edge === 0)      { cx = -1; rowF = Math.random() * 4; vx = sp;  vy = aimed ? Math.sign(prow - rowF) * sp * 0.5 : 0; }
+    else if (edge === 1) { cx = 15; rowF = Math.random() * 4; vx = -sp; vy = aimed ? Math.sign(prow - rowF) * sp * 0.5 : 0; }
+    else if (edge === 2) { cx = Math.random() * 14; rowF = -1; vy = sp;  vx = aimed ? Math.sign(pcx - cx) * sp * 0.5 : 0; }
+    else                 { cx = Math.random() * 14; rowF = 5;  vy = -sp; vx = aimed ? Math.sign(pcx - cx) * sp * 0.5 : 0; }
+    this.bullets.push({ cx, rowF, vx, vy });
+  }
+
+  step(): void {
+    this.pulse += 0.3;
+    if (this.difficulty === 0) return;
+    if (this.deathAnim > 0) { this.deathAnim--; if (this.deathAnim === 0) this.respawn(); return; }
+
+    this.survival++;
+    for (const b of this.bullets) { b.cx += b.vx; b.rowF += b.vy; }
+    this.bullets = this.bullets.filter((b) => b.cx > -2 && b.cx < 17 && b.rowF > -2 && b.rowF < 6.5);
+
+    if (this.checkHit()) { this.deathAnim = 30; log.info({ survived: this.survival }, 'bullet-hell: hit'); return; }
+
+    this.spawnTick++;
+    if (this.spawnTick >= this.spawnInterval() && this.bullets.length < this.maxBullets()) {
+      this.spawnTick = 0;
+      this.spawnBullet();
+    }
+  }
+
+  private checkHit(): boolean {
+    for (const b of this.bullets) {
+      const row = Math.round(b.rowF);
+      if (row < 0 || row >= ROW_COUNT) continue;
+      if (row === this.player.row && colNearestCx(row, b.cx) === this.player.col) return true;
+    }
+    return false;
+  }
+
+  render(): Map<number, Color> {
+    if (this.difficulty === 0) return renderDifficultyMenu(this.pulse);
+    const out = new Map<number, Color>();
+    if (this.deathAnim > 0) {
+      const i = this.deathAnim % 6 < 3 ? 1 : 0.2;
+      for (const row of KEY_MATRIX) for (const cell of row) out.set(cell.led, { r: Math.round(220 * i), g: 0, b: 0 });
+      return out;
+    }
+    for (const b of this.bullets) {
+      const row = Math.round(b.rowF);
+      if (row < 0 || row >= ROW_COUNT) continue;
+      const led = keyLed(row, colNearestCx(row, b.cx));
+      if (led !== null) out.set(led, ORANGE);
+    }
+    const pled = keyLed(this.player.row, this.player.col);
+    if (pled !== null) {
+      const b = 0.6 + 0.4 * Math.abs(Math.sin(this.pulse * 0.6));
+      out.set(pled, { r: 0, g: Math.round(220 * b), b: Math.round(255 * b) });
+    }
+    return out;
+  }
+}
+
+// ─── Drag Race ("Shift-it") ──────────────────────────────────────────────────
+
+/**
+ * Tachometer drag racing. Hold Space to rev: the RPM bar fills across the top
+ * row (green → yellow → red). Press Enter to upshift when you're in the sweet
+ * zone (high revs, just before redline) — that banks a gear and drops the
+ * revs. Let the needle hit redline without shifting and you blow the engine
+ * (lose). Bank all the gears to finish (win). Difficulty 1-5 makes the revs
+ * climb faster and narrows the shift window. A start-light countdown launches
+ * each run.
+ */
+export class DragRaceEngine {
+  private difficulty = 0;
+  private mode: 'menu' | 'countdown' | 'race' | 'blown' | 'finish' = 'menu';
+  private rpm = 0;
+  private gear = 1;
+  private readonly MAX_GEAR = 6;
+  private spaceHeld = false;
+  private countdown = 0;
+  private animTimer = 0;
+  private pulse = 0;
+
+  setAnimSpeed(_s: number): void { /* pace comes from difficulty */ }
+  private get diff(): number { return this.difficulty > 0 ? this.difficulty : 1; }
+  private revRate(): number { return 0.012 + this.diff * 0.006; }
+  private readonly DECAY = 0.02;
+  private shiftLo(): number { return 0.62 + this.diff * 0.04; }
+
+  /** Race mode/rpm/gear — exposed for the headless racing bot. */
+  inspect(): { mode: string; rpm: number; gear: number } {
+    return { mode: this.mode, rpm: this.rpm, gear: this.gear };
+  }
+
+  private startRun(): void {
+    this.mode = 'countdown';
+    this.countdown = 90; // ~3s of start lights
+    this.rpm = 0;
+    this.gear = 1;
+    this.spaceHeld = false;
+  }
+
+  handleKey(keycode: number, value: number): void {
+    if (this.difficulty === 0) {
+      if (value !== 1) return;
+      const d = difficultyFromKeycode(keycode);
+      if (d > 0) { this.difficulty = d; this.startRun(); }
+      return;
+    }
+    if (keycode === KEY_SPACE) { this.spaceHeld = value === 1; return; }
+    if (keycode === KEY_ENTER && value === 1 && this.mode === 'race') this.shift();
+  }
+
+  private shift(): void {
+    if (this.rpm >= this.shiftLo() && this.rpm < 1) {
+      this.gear++;
+      this.rpm = 0.32;
+      if (this.gear > this.MAX_GEAR) { this.mode = 'finish'; this.animTimer = 60; log.info('drag-race: finished'); }
+    } else {
+      this.rpm = Math.max(0.1, this.rpm * 0.4); // bog down on a mistimed shift
+    }
+  }
+
+  step(): void {
+    this.pulse += 0.3;
+    if (this.difficulty === 0) return;
+    if (this.mode === 'countdown') { if (--this.countdown <= 0) this.mode = 'race'; return; }
+    if (this.mode === 'blown' || this.mode === 'finish') { if (--this.animTimer <= 0) this.startRun(); return; }
+    // race
+    if (this.spaceHeld) this.rpm += this.revRate();
+    else this.rpm = Math.max(0, this.rpm - this.DECAY);
+    if (this.rpm >= 1) { this.mode = 'blown'; this.animTimer = 60; this.rpm = 1; log.info({ gear: this.gear }, 'drag-race: blown engine'); }
+  }
+
+  render(): Map<number, Color> {
+    if (this.difficulty === 0) return renderDifficultyMenu(this.pulse);
+    const out = new Map<number, Color>();
+    if (this.mode === 'blown') {
+      const i = this.animTimer % 8 < 4 ? 1 : 0.25;
+      for (const row of KEY_MATRIX) for (const cell of row) out.set(cell.led, { r: Math.round(220 * i), g: 0, b: 0 });
+      return out;
+    }
+    if (this.mode === 'finish') {
+      const i = this.animTimer % 6 < 3 ? 1 : 0.3;
+      for (const row of KEY_MATRIX) for (const cell of row) out.set(cell.led, { r: 0, g: Math.round(220 * i), b: 40 });
+      return out;
+    }
+    if (this.mode === 'countdown') {
+      const go = this.countdown <= 15;
+      const seq = Math.floor((90 - this.countdown) / 25); // 0..3 reds light up
+      const mid = Math.floor(rowWidth(2) / 2) - 1;
+      for (let i = 0; i < 3; i++) {
+        const led = keyLed(2, mid + i);
+        if (led === null) continue;
+        out.set(led, go ? GREEN : i <= seq ? RED : { r: 40, g: 0, b: 0 });
+      }
+      return out;
+    }
+    // race — tachometer across row 0
+    const w0 = rowWidth(0);
+    const sweet = this.shiftLo();
+    for (let c = 0; c < w0; c++) {
+      const p = w0 === 1 ? 0 : c / (w0 - 1);
+      const led = keyLed(0, c);
+      if (led === null) continue;
+      if (p <= this.rpm) out.set(led, p < 0.6 ? GREEN : p < 0.85 ? YELLOW : RED);
+      else if (Math.abs(p - sweet) < 0.5 / w0) out.set(led, { r: 0, g: 55, b: 0 }); // sweet-zone hint
+    }
+    // gear-progress bar on row 4 (cyan)
+    const w4 = rowWidth(4);
+    const filled = Math.round((this.gear - 1) / this.MAX_GEAR * w4);
+    for (let c = 0; c < filled && c < w4; c++) {
+      const led = keyLed(4, c);
+      if (led !== null) out.set(led, CYAN);
+    }
+    // current gear as N lit keys on row 2
+    for (let i = 0; i < this.gear && i < rowWidth(2); i++) {
+      const led = keyLed(2, i);
+      if (led !== null && !out.has(led)) out.set(led, { r: 80, g: 80, b: 120 });
+    }
+    return out;
+  }
+}
+
 function lerpColor(a: Color, b: Color, t: number): Color {
   const k = Math.max(0, Math.min(1, t));
   return {

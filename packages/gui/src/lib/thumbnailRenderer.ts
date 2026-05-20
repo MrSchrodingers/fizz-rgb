@@ -732,6 +732,40 @@ function renderDoomFire(t: number): string[] {
   return out;
 }
 
+// ─── Arcade games (Whac-A-Mole / Bullet-hell / Drag race) ───────────────────
+
+function renderWhacAMole(t: number): string[] {
+  const out = new Array<string>(TOTAL).fill(BG);
+  const phase = Math.floor(t * 2);
+  const moles = [(phase * 7) % TOTAL, (phase * 13 + 5) % TOTAL, (phase * 5 + 11) % TOTAL];
+  for (const m of moles) out[m] = hsvHex((m * 47) % 360, 1, 1);
+  return out;
+}
+
+function renderBulletHell(t: number): string[] {
+  const out = new Array<string>(TOTAL).fill(BG);
+  for (let k = 0; k < 4; k++) {
+    const bx = Math.floor(t * (1.5 + k * 0.3) + k * 2) % THUMB_COLS;
+    const by = (k + Math.floor(t * 0.7)) % THUMB_ROWS;
+    out[by * THUMB_COLS + bx] = '#ff7800';
+  }
+  const pi = 2 * THUMB_COLS + 2; // player, centre-ish
+  out[pi] = scale('#00dcff', 0.6 + 0.4 * Math.abs(Math.sin(t * 3)));
+  return out;
+}
+
+function renderDragRace(t: number): string[] {
+  const out = new Array<string>(TOTAL).fill(BG);
+  const rpm = Math.sin(t * 1.5) * 0.5 + 0.5; // 0..1 oscillating tach
+  for (let c = 0; c < THUMB_COLS; c++) {
+    const p = c / (THUMB_COLS - 1);
+    if (p <= rpm) out[c] = p < 0.6 ? '#00ff1e' : p < 0.85 ? '#ffdc00' : '#ff0000';
+  }
+  const filled = Math.floor((t * 0.8) % (THUMB_COLS + 1));
+  for (let c = 0; c < filled; c++) out[4 * THUMB_COLS + c] = '#00ffff';
+  return out;
+}
+
 // ─── Main entry point ────────────────────────────────────────────────────────
 
 export function renderThumbnail(preset: Preset | UserPreset, t: number): string[] {
@@ -765,6 +799,9 @@ export function renderThumbnail(preset: Preset | UserPreset, t: number): string[
     case 'spark': return renderSpark(t);
     case 'binary-clock': return renderBinaryClock(t);
     case 'doom-fire': return renderDoomFire(t);
+    case 'whac-a-mole': return renderWhacAMole(t);
+    case 'bullet-hell': return renderBulletHell(t);
+    case 'drag-race': return renderDragRace(t);
   }
 
   const out: string[] = new Array(TOTAL);

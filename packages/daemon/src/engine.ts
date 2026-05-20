@@ -24,6 +24,9 @@ import {
   SparkEngine,
   BinaryClockEngine,
   DoomFireEngine,
+  WhacAMoleEngine,
+  BulletHellEngine,
+  DragRaceEngine,
 } from './games-interactive.js';
 
 /** Common surface every interactive engine implements so EffectEngine can
@@ -1877,6 +1880,9 @@ export class EffectEngine {
         e.setAnimSpeed(pattern.animSpeed);
         return e;
       },
+      'whac-a-mole': () => new WhacAMoleEngine(),
+      'bullet-hell': () => new BulletHellEngine(),
+      'drag-race': () => new DragRaceEngine(),
       'minecraft-clouds': () => new MinecraftCloudsEngine(),
     };
     const builder = interactiveBuilders[pattern.animType];

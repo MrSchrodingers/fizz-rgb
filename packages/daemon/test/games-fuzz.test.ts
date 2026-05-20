@@ -15,9 +15,12 @@ import { describe, it, expect } from 'vitest';
 import type { Color } from '@fizz/core';
 import {
   RippleEngine, SparkEngine, BinaryClockEngine, DoomFireEngine,
+  WhacAMoleEngine, BulletHellEngine, DragRaceEngine,
 } from '../src/games-interactive.js';
-import { KEYCODE_BY_NAME } from '../src/key-capture.js';
-import { KEY_MATRIX, keyLed, colNearestCx } from '../src/key-matrix.js';
+import {
+  KEYCODE_BY_NAME, KEY_1, KEY_W, KEY_A, KEY_S, KEY_D, KEY_SPACE, KEY_ENTER,
+} from '../src/key-capture.js';
+import { KEY_MATRIX, keyLed, keyCx, colNearestCx, vNeighbor, rowWidth } from '../src/key-matrix.js';
 
 interface Engine {
   step(): void;
@@ -65,6 +68,109 @@ describe('reactive effects — fuzz (no crash, valid frames)', () => {
   it('spark', () => { expect(() => fuzz(() => new SparkEngine())).not.toThrow(); });
   it('binary-clock', () => { expect(() => fuzz(() => new BinaryClockEngine())).not.toThrow(); });
   it('doom-fire', () => { expect(() => fuzz(() => new DoomFireEngine())).not.toThrow(); });
+});
+
+describe('arcade games — fuzz (no crash, valid frames)', () => {
+  // Pick a difficulty up front so the games leave the menu and run for real.
+  it('whac-a-mole', () => {
+    expect(() => fuzz(() => { const e = new WhacAMoleEngine(); e.handleKey(KEY_1, 1); return e; })).not.toThrow();
+  });
+  it('bullet-hell', () => {
+    expect(() => fuzz(() => { const e = new BulletHellEngine(); e.handleKey(KEY_1, 1); return e; })).not.toThrow();
+  });
+  it('drag-race', () => {
+    expect(() => fuzz(() => { const e = new DragRaceEngine(); e.handleKey(KEY_1, 1); return e; })).not.toThrow();
+  });
+});
+
+describe('Whac-A-Mole', () => {
+  it('a perfect whacker scores and never misses', () => {
+    const e = new WhacAMoleEngine();
+    e.handleKey(KEY_1, 1); // difficulty 1
+    for (let f = 0; f < 400; f++) {
+      e.step();
+      for (const kc of e.inspect().moleKeycodes) e.handleKey(kc, 1);
+    }
+    const st = e.inspect();
+    expect(st.score).toBeGreaterThan(5);
+    expect(st.misses).toBe(0);
+  });
+});
+
+describe('Bullet-hell', () => {
+  it('a greedy dodger survives on the easiest difficulty', () => {
+    const e = new BulletHellEngine();
+    e.handleKey(KEY_1, 1); // difficulty 1
+    const ROWS = KEY_MATRIX.length;
+    let aliveFrames = 0;
+    for (let f = 0; f < 300; f++) {
+      e.step();
+      const st = e.inspect();
+      if (!st.alive) break;
+      aliveFrames++;
+      // 1-frame-lookahead dodge: never move into a cell a bullet will occupy
+      // next step; among safe cells, maximise distance to the nearest bullet.
+      const p = st.player;
+      const cands: Array<{ key: number | null; row: number; col: number }> = [
+        { key: null, row: p.row, col: p.col },
+        { key: KEY_A, row: p.row, col: Math.max(0, p.col - 1) },
+        { key: KEY_D, row: p.row, col: Math.min(rowWidth(p.row) - 1, p.col + 1) },
+      ];
+      if (p.row > 0) cands.push({ key: KEY_W, row: p.row - 1, col: vNeighbor(p.row, p.col, p.row - 1) });
+      if (p.row < ROWS - 1) cands.push({ key: KEY_S, row: p.row + 1, col: vNeighbor(p.row, p.col, p.row + 1) });
+      const unsafe = (row: number, col: number) =>
+        st.bullets.some((b) => b.nextRow === row && b.nextCol === col);
+      const minDist = (row: number, col: number) => {
+        let minD = Infinity;
+        for (const b of st.bullets) {
+          const dx = keyCx(row, col) - keyCx(b.row, b.col);
+          const dy = (row - b.row) * 2.6;
+          const d = dx * dx + dy * dy;
+          if (d < minD) minD = d;
+        }
+        return minD;
+      };
+      const safe = cands.filter((c) => !unsafe(c.row, c.col));
+      const pool = safe.length > 0 ? safe : cands;
+      let best = pool[0]!;
+      let bestScore = -Infinity;
+      for (const cand of pool) {
+        const score = minDist(cand.row, cand.col) + (cand.key === null ? 0.01 : 0);
+        if (score > bestScore) { bestScore = score; best = cand; }
+      }
+      if (best.key !== null) e.handleKey(best.key, 1);
+    }
+    expect(aliveFrames).toBeGreaterThanOrEqual(290);
+  });
+});
+
+describe('Drag Race', () => {
+  it('revving and shifting in the sweet zone finishes the race', () => {
+    const e = new DragRaceEngine();
+    e.handleKey(KEY_1, 1);     // difficulty 1 → countdown
+    e.handleKey(KEY_SPACE, 1); // hold the throttle
+    const shiftLo = 0.62 + 1 * 0.04; // diff 1 sweet-zone start
+    let finished = false;
+    for (let f = 0; f < 3000; f++) {
+      e.step();
+      const st = e.inspect();
+      if (st.mode === 'finish') { finished = true; break; }
+      if (st.mode === 'race' && st.rpm >= shiftLo + 0.03 && st.rpm < 0.97) e.handleKey(KEY_ENTER, 1);
+    }
+    expect(finished).toBe(true);
+  });
+
+  it('redlining without shifting blows the engine', () => {
+    const e = new DragRaceEngine();
+    e.handleKey(KEY_1, 1);
+    e.handleKey(KEY_SPACE, 1);
+    let blown = false;
+    for (let f = 0; f < 3000; f++) {
+      e.step();
+      if (e.inspect().mode === 'blown') { blown = true; break; }
+    }
+    expect(blown).toBe(true);
+  });
 });
 
 describe('Ripple', () => {
