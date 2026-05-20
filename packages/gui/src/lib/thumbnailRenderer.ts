@@ -830,6 +830,18 @@ function renderGarden(t: number): string[] {
   return out;
 }
 
+function renderDeckBuilder(t: number): string[] {
+  const out = new Array<string>(TOTAL).fill(BG);
+  const eh = 1 - ((t * 0.3) % 1); // enemy HP bar drains, then a new room refills it
+  for (let c = 0; c < THUMB_COLS; c++) out[c] = c < Math.round(eh * THUMB_COLS) ? '#ff1e1e' : '#280606';
+  for (let c = 0; c < 3; c++) out[THUMB_COLS + c] = '#ff7800';            // intent
+  const cards = ['#ff281e', '#4059ff', '#00dc3c', '#ff6e00', '#4059ff', '#ff281e'];
+  for (let c = 0; c < THUMB_COLS; c++) out[2 * THUMB_COLS + c] = cards[c % cards.length]!; // hand
+  for (let c = 0; c < THUMB_COLS; c++) out[3 * THUMB_COLS + c] = c < 4 ? '#00dc3c' : '#06280f'; // player HP
+  for (let c = 0; c < 3; c++) out[4 * THUMB_COLS + c] = '#ffd200';        // energy
+  return out;
+}
+
 // ─── Main entry point ────────────────────────────────────────────────────────
 
 export function renderThumbnail(preset: Preset | UserPreset, t: number): string[] {
@@ -871,6 +883,7 @@ export function renderThumbnail(preset: Preset | UserPreset, t: number): string[
     case 'keyboard-crawl': return renderKeyboardCrawl(t);
     case 'cursed': return renderCursed(t);
     case 'garden': return renderGarden(t);
+    case 'deckbuilder': return renderDeckBuilder(t);
   }
 
   const out: string[] = new Array(TOTAL);

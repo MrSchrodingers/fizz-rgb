@@ -17,7 +17,7 @@ import {
   RippleEngine, SparkEngine, BinaryClockEngine, DoomFireEngine,
   WhacAMoleEngine, BulletHellEngine, DragRaceEngine, FroggerEngine, WordleEngine,
   KeyboardCrawlEngine, diskCrawlStore, CursedKeyboardEngine,
-  IdleGardenEngine, diskGardenStore,
+  IdleGardenEngine, diskGardenStore, DeckBuilderEngine, diskDeckStore,
   type CrawlStore, type CrawlMeta,
 } from '../src/games-interactive.js';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -99,6 +99,66 @@ describe('arcade games — fuzz (no crash, valid frames)', () => {
   });
   it('garden', () => {
     expect(() => fuzz(() => new IdleGardenEngine({ load: () => ({ currency: 0, plots: 0, growth: 0 }), save: () => {} }))).not.toThrow();
+  });
+  it('deckbuilder', () => {
+    expect(() => fuzz(() => { const e = new DeckBuilderEngine({ load: () => ({ bestFloor: 0, bonusHp: 0 }), save: () => {} }); e.handleKey(KEY_1, 1); return e; })).not.toThrow();
+  });
+});
+
+describe('Deck-builder', () => {
+  const noStore = () => ({ load: () => ({ bestFloor: 0, bonusHp: 0 }), save: () => {} });
+  type HandCard = { type: string; cost: number; keycode: number };
+
+  it('a sensible player clears rooms and progresses', () => {
+    const e = new DeckBuilderEngine(noStore());
+    e.handleKey(KEY_1, 1); // difficulty 1
+    let safety = 0;
+    while (e.inspect().cleared < 2 && e.inspect().mode !== 'dead' && safety++ < 6000) {
+      const st = e.inspect();
+      if (st.mode === 'reward') { e.handleKey(st.rewardKeycodes[0]!, 1); continue; }
+      if (st.mode !== 'play') { e.step(); continue; }
+      const playable = st.hand.filter((s): s is HandCard => s !== null && s.cost <= st.energy);
+      if (playable.length > 0) {
+        const atk = playable.find((s) => s.type === 'strike' || s.type === 'bash');
+        e.handleKey((atk ?? playable[0]!).keycode, 1);
+      } else {
+        e.handleKey(st.endTurnKeycode, 1);
+      }
+    }
+    expect(e.inspect().cleared).toBeGreaterThanOrEqual(2);
+  });
+
+  it('doing nothing but ending turns gets you killed', () => {
+    const e = new DeckBuilderEngine(noStore());
+    e.handleKey(KEY_5, 1); // hardest
+    let dead = false;
+    for (let i = 0; i < 300; i++) {
+      const st = e.inspect();
+      if (st.mode === 'dead') { dead = true; break; }
+      e.handleKey(st.endTurnKeycode, 1);
+      e.step();
+    }
+    expect(dead).toBe(true);
+  });
+
+  it('applies the persisted HP bonus to max HP', () => {
+    const e = new DeckBuilderEngine({ load: () => ({ bestFloor: 2, bonusHp: 5 }), save: () => {} });
+    e.handleKey(KEY_1, 1);
+    expect(e.inspect().playerHp).toBe(40 + 5 * 6); // 70
+  });
+
+  it('persists meta to disk and reads it back (round-trip)', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'fizz-deck-'));
+    const prev = process.env['XDG_CONFIG_HOME'];
+    process.env['XDG_CONFIG_HOME'] = tmp;
+    try {
+      diskDeckStore().save({ bestFloor: 4, bonusHp: 3 });
+      expect(diskDeckStore().load()).toEqual({ bestFloor: 4, bonusHp: 3 });
+    } finally {
+      if (prev === undefined) delete process.env['XDG_CONFIG_HOME'];
+      else process.env['XDG_CONFIG_HOME'] = prev;
+      rmSync(tmp, { recursive: true, force: true });
+    }
   });
 });
 

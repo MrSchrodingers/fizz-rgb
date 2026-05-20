@@ -3392,6 +3392,285 @@ export class IdleGardenEngine {
   }
 }
 
+// ─── Roguelite deck-builder ──────────────────────────────────────────────────
+
+/** Persisted deck-builder meta-progression. */
+export interface DeckSave { bestFloor: number; bonusHp: number; }
+export interface DeckStore { load(): DeckSave; save(s: DeckSave): void; }
+
+/** Default store: ~/.config/fizz-rgb/saves/deckbuilder.json (best-effort). */
+export function diskDeckStore(): DeckStore {
+  const base = process.env['XDG_CONFIG_HOME'] || join(homedir(), '.config');
+  const dir = join(base, 'fizz-rgb', 'saves');
+  const file = join(dir, 'deckbuilder.json');
+  return {
+    load(): DeckSave {
+      try {
+        const s = JSON.parse(readFileSync(file, 'utf8')) as Partial<DeckSave>;
+        return { bestFloor: Number(s.bestFloor) || 0, bonusHp: Number(s.bonusHp) || 0 };
+      } catch { return { bestFloor: 0, bonusHp: 0 }; }
+    },
+    save(s: DeckSave): void {
+      try { mkdirSync(dir, { recursive: true }); writeFileSync(file, JSON.stringify(s)); }
+      catch { /* read-only fs — keep playing without persistence */ }
+    },
+  };
+}
+
+type DeckCardType = 'strike' | 'bash' | 'defend' | 'skill';
+const DECK_CARD: Record<DeckCardType, { cost: number; color: Color }> = {
+  strike: { cost: 1, color: { r: 255, g: 40, b: 30 } },
+  bash:   { cost: 2, color: { r: 255, g: 110, b: 0 } },
+  defend: { cost: 1, color: { r: 40, g: 90, b: 255 } },
+  skill:  { cost: 1, color: { r: 0, g: 220, b: 60 } },
+};
+const DECK_TYPES: DeckCardType[] = ['strike', 'bash', 'defend', 'skill'];
+
+// Hand keys = home row A S D F G (one key per card).
+const DECK_HAND_NAMES = ['A', 'S', 'D', 'F', 'G'];
+const DECK_HAND_KEYCODES: number[] = [];
+const DECK_HAND_LEDS: number[] = [];
+for (const n of DECK_HAND_NAMES) {
+  const kc = KEYCODE_BY_NAME[n];
+  const led = findKeyLed(n);
+  if (kc !== undefined && led !== null) { DECK_HAND_KEYCODES.push(kc); DECK_HAND_LEDS.push(led); }
+}
+const DECK_HAND_SIZE = DECK_HAND_KEYCODES.length; // 5
+const DECK_ROOMS_PER_FLOOR = 3;
+
+/**
+ * Slay-the-Spire-lite on the keys. Your hand sits on the home row (A S D F G),
+ * each key a card coloured by type: strike/bash = red/orange (damage), defend =
+ * blue (block), skill = green (draw). Press a hand key to play it (costs
+ * energy); Space ends your turn, the enemy strikes for its telegraphed intent
+ * (minus your block), then you redraw. Clear a room to pick one of three reward
+ * cards into your deck; every third room is a boss. Row 0 is the enemy HP bar,
+ * row 1 its intent, row 3 your HP, row 4 your energy/block + the Space button.
+ * Permadeath; a new best floor banks +HP. Difficulty 1-5 scales enemy power.
+ */
+export class DeckBuilderEngine {
+  private difficulty = 0;
+  private mode: 'menu' | 'play' | 'reward' | 'dead' = 'menu';
+  private deck: DeckCardType[] = [];
+  private drawPile: DeckCardType[] = [];
+  private discard: DeckCardType[] = [];
+  private hand: Array<DeckCardType | null> = [];
+  private reward: DeckCardType[] = [];
+  private energy = 3;
+  private readonly MAX_ENERGY = 3;
+  private block = 0;
+  private playerHp = 40;
+  private playerMaxHp = 40;
+  private enemy = { hp: 20, maxHp: 20, intent: 5 };
+  private floor = 1;
+  private room = 1;
+  private cleared = 0;
+  private animTimer = 0;
+  private pulse = 0;
+  private meta: DeckSave;
+  private readonly store: DeckStore;
+
+  constructor(store: DeckStore = diskDeckStore()) {
+    this.store = store;
+    this.meta = this.store.load();
+  }
+
+  setAnimSpeed(_s: number): void { /* turn-based */ }
+  private get diff(): number { return this.difficulty > 0 ? this.difficulty : 1; }
+
+  /** Combat snapshot — exposed for the headless bot. */
+  inspect(): {
+    mode: string; floor: number; cleared: number; playerHp: number; enemyHp: number; energy: number;
+    hand: Array<{ type: string; cost: number; keycode: number } | null>;
+    rewardKeycodes: number[]; endTurnKeycode: number;
+  } {
+    const hand = this.hand.map((c, i) => c ? { type: c, cost: DECK_CARD[c].cost, keycode: DECK_HAND_KEYCODES[i]! } : null);
+    return {
+      mode: this.mode, floor: this.floor, cleared: this.cleared, playerHp: this.playerHp,
+      enemyHp: this.enemy.hp, energy: this.energy, hand,
+      rewardKeycodes: DECK_HAND_KEYCODES.slice(0, 3),
+      endTurnKeycode: KEY_SPACE,
+    };
+  }
+
+  private shuffle<T>(a: T[]): T[] {
+    const r = a.slice();
+    for (let i = r.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [r[i], r[j]] = [r[j]!, r[i]!]; }
+    return r;
+  }
+
+  private startRun(): void {
+    this.deck = ['strike', 'strike', 'strike', 'strike', 'defend', 'defend', 'defend', 'defend', 'bash', 'skill'];
+    this.playerMaxHp = 40 + this.meta.bonusHp * 6;
+    this.playerHp = this.playerMaxHp;
+    this.floor = 1; this.room = 1; this.cleared = 0;
+    this.mode = 'play';
+    this.startRoom();
+  }
+
+  private startRoom(): void {
+    const boss = this.room === DECK_ROOMS_PER_FLOOR;
+    const hp = (14 + this.floor * 4 + this.room * 2) * (boss ? 2 : 1);
+    this.enemy = { hp, maxHp: hp, intent: 0 };
+    this.drawPile = this.shuffle(this.deck);
+    this.discard = [];
+    this.hand = new Array(DECK_HAND_SIZE).fill(null);
+    this.startTurn();
+  }
+
+  private enemyIntent(): number {
+    const boss = this.room === DECK_ROOMS_PER_FLOOR;
+    return 3 + this.diff + this.floor + (boss ? 4 : 0);
+  }
+
+  private draw(n: number): void {
+    for (let k = 0; k < n; k++) {
+      const slot = this.hand.indexOf(null);
+      if (slot < 0) break;
+      if (this.drawPile.length === 0) {
+        this.drawPile = this.shuffle(this.discard); this.discard = [];
+        if (this.drawPile.length === 0) break;
+      }
+      this.hand[slot] = this.drawPile.pop()!;
+    }
+  }
+
+  private startTurn(): void {
+    this.block = 0;
+    this.energy = this.MAX_ENERGY;
+    for (let i = 0; i < this.hand.length; i++) { if (this.hand[i]) { this.discard.push(this.hand[i]!); this.hand[i] = null; } }
+    this.draw(DECK_HAND_SIZE);
+    this.enemy.intent = this.enemyIntent();
+  }
+
+  handleKey(keycode: number, value: number): void {
+    if (value !== 1) return;
+    if (this.difficulty === 0) {
+      const d = difficultyFromKeycode(keycode);
+      if (d > 0) { this.difficulty = d; this.startRun(); }
+      return;
+    }
+    if (this.mode === 'dead') return;
+    if (this.mode === 'reward') {
+      const idx = DECK_HAND_KEYCODES.indexOf(keycode);
+      if (idx >= 0 && idx < this.reward.length) this.pickReward(idx);
+      return;
+    }
+    // play mode
+    if (keycode === KEY_SPACE) { this.endTurn(); return; }
+    const hi = DECK_HAND_KEYCODES.indexOf(keycode);
+    if (hi >= 0) this.playCard(hi);
+  }
+
+  private playCard(i: number): void {
+    const c = this.hand[i];
+    if (!c) return;
+    const cost = DECK_CARD[c].cost;
+    if (this.energy < cost) return;
+    this.energy -= cost;
+    if (c === 'strike') this.enemy.hp -= 6;
+    else if (c === 'bash') this.enemy.hp -= 10;
+    else if (c === 'defend') this.block += 5;
+    else if (c === 'skill') this.draw(2);
+    this.discard.push(c);
+    this.hand[i] = null;
+    if (this.enemy.hp <= 0) this.winRoom();
+  }
+
+  private winRoom(): void {
+    this.mode = 'reward';
+    this.reward = [this.randCard(), this.randCard(), this.randCard()];
+  }
+
+  private randCard(): DeckCardType { return DECK_TYPES[Math.floor(Math.random() * DECK_TYPES.length)]!; }
+
+  private pickReward(idx: number): void {
+    this.deck.push(this.reward[idx]!);
+    this.cleared++;
+    this.room++;
+    if (this.room > DECK_ROOMS_PER_FLOOR) { this.floor++; this.room = 1; }
+    this.mode = 'play';
+    this.startRoom();
+  }
+
+  private endTurn(): void {
+    const dmg = Math.max(0, this.enemy.intent - this.block);
+    this.playerHp -= dmg;
+    if (this.playerHp <= 0) { this.die(); return; }
+    this.startTurn();
+  }
+
+  private die(): void {
+    this.mode = 'dead';
+    this.animTimer = 48;
+    if (this.floor > this.meta.bestFloor) {
+      this.meta.bestFloor = this.floor;
+      this.meta.bonusHp = Math.min(8, this.meta.bonusHp + 1);
+    }
+    this.store.save(this.meta);
+    log.info({ floor: this.floor, cleared: this.cleared, bestFloor: this.meta.bestFloor }, 'deckbuilder: died');
+  }
+
+  step(): void {
+    this.pulse += 0.3;
+    if (this.mode === 'dead') { if (--this.animTimer <= 0) { this.difficulty = 0; this.mode = 'menu'; } }
+  }
+
+  private bar(row: number, frac: number, color: Color, out: Map<number, Color>): void {
+    const w = rowWidth(row);
+    const filled = Math.round(Math.max(0, Math.min(1, frac)) * w);
+    for (let c = 0; c < w; c++) {
+      const led = keyLed(row, c);
+      if (led === null) continue;
+      out.set(led, c < filled ? color : { r: Math.round(color.r * 0.08), g: Math.round(color.g * 0.08), b: Math.round(color.b * 0.08) });
+    }
+  }
+
+  render(): Map<number, Color> {
+    if (this.difficulty === 0) return renderDifficultyMenu(this.pulse);
+    const out = new Map<number, Color>();
+    if (this.mode === 'dead') {
+      const i = this.animTimer % 8 < 4 ? 1 : 0.25;
+      for (const row of KEY_MATRIX) for (const cell of row) out.set(cell.led, { r: Math.round(200 * i), g: 0, b: 0 });
+      return out;
+    }
+    // Row 0: enemy HP bar (red). Row 3: player HP bar (green).
+    this.bar(0, this.enemy.hp / this.enemy.maxHp, { r: 255, g: 30, b: 30 }, out);
+    this.bar(3, this.playerHp / this.playerMaxHp, { r: 0, g: 220, b: 60 }, out);
+    // Row 1: enemy intent (orange pips = incoming damage).
+    for (let c = 0; c < this.enemy.intent && c < rowWidth(1); c++) {
+      const led = keyLed(1, c);
+      if (led !== null) out.set(led, { r: 255, g: 120, b: 0 });
+    }
+    // Row 2: hand cards (or reward choices), one key each.
+    for (let i = 0; i < DECK_HAND_SIZE; i++) {
+      const led = DECK_HAND_LEDS[i]!;
+      if (this.mode === 'reward') {
+        out.set(led, i < this.reward.length ? DECK_CARD[this.reward[i]!].color : { r: 3, g: 3, b: 3 });
+      } else {
+        const c = this.hand[i];
+        out.set(led, c ? DECK_CARD[c].color : { r: 3, g: 3, b: 3 });
+      }
+    }
+    // Row 4: energy (yellow pips), block (blue pips), Space = end-turn button.
+    for (let c = 0; c < this.energy && c < rowWidth(4); c++) {
+      const led = keyLed(4, c);
+      if (led !== null) out.set(led, { r: 255, g: 210, b: 0 });
+    }
+    const w4 = rowWidth(4);
+    for (let i = 0; i < Math.ceil(this.block / 5) && i < 3; i++) {
+      const led = keyLed(4, w4 - 1 - i);
+      if (led !== null) out.set(led, { r: 40, g: 90, b: 255 });
+    }
+    const spaceLed = findKeyLed('Space');
+    if (spaceLed !== null) {
+      const b = this.mode === 'reward' ? 0.3 : 0.6 + 0.4 * Math.abs(Math.sin(this.pulse * 0.5));
+      out.set(spaceLed, { r: Math.round(220 * b), g: Math.round(220 * b), b: Math.round(220 * b) });
+    }
+    return out;
+  }
+}
+
 function lerpColor(a: Color, b: Color, t: number): Color {
   const k = Math.max(0, Math.min(1, t));
   return {

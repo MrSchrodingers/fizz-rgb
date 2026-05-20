@@ -1138,6 +1138,13 @@ export const BUILTIN_PRESETS: Preset[] = [
     category: 'game',
     pattern: { keys: {}, animType: 'garden', animSpeed: 0.5 },
   },
+  {
+    id: 'game-deckbuilder',
+    name: 'Deck-builder',
+    description: 'No início escolha a dificuldade 1-5 (teclas 1 a 5). Um Slay-the-Spire-lite nas teclas. Sua mão fica na home row (A S D F G), cada tecla uma carta: vermelho/laranja = dano (Strike/Bash), azul = defesa, verde = comprar cartas. Aperte a tecla pra jogar a carta (custa energia); Space encerra o turno e o inimigo bate pela intenção telegrafada (menos sua defesa). Limpe a sala pra escolher 1 de 3 cartas de recompensa; a cada 3ª sala vem um boss. Fileira 0 = vida do inimigo, 1 = intenção, 3 = sua vida, 4 = energia/defesa + Space. Permadeath; novo recorde de andar dá +vida',
+    category: 'game',
+    pattern: { keys: {}, animType: 'deckbuilder', animSpeed: 0.5 },
+  },
 
   // ── Themed cycles (host-streamed, layout-aware) ──────────────────────────
   {
