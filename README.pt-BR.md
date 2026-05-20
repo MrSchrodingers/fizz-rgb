@@ -11,7 +11,7 @@
 [![Licença: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node 22+](https://img.shields.io/badge/node-%3E%3D22-339933?logo=node.js&logoColor=white)](package.json)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.base.json)
-[![Testes: 140](https://img.shields.io/badge/tests-140%20passing-success)](packages)
+[![Testes: 183](https://img.shields.io/badge/tests-183%20passing-success)](packages)
 [![Hardware: K617](https://img.shields.io/badge/hardware-Redragon%20Fizz%20K617-c4302b)](https://www.redragonzone.com/products/redragon-fizz-pro)
 
 Controlador RGB no Linux para o **Redragon Fizz K617** (teclado mecânico 60% com fio, USB `258a:0049`, MCU Sinowealth SH68F90A). Cobre o buraco deixado pelo software oficial da Redragon que só roda no Windows.
@@ -25,8 +25,8 @@ Controlador RGB no Linux para o **Redragon Fizz K617** (teclado mecânico 60% co
 - **Daemon + CLI + GUI Electron** com modelo 3D do teclado.
 - **8 efeitos firmware-native** com engenharia reversa via capturas USB (rainbow, snake, waterfall, sine wave, star twinkle, rainbow blossom, wheel, static).
 - **Controle per-key direto** via protocolo Sinodragon (HID feature report de 382 bytes).
-- **17 animações host-streamed** a 30 fps — Pong, Snake, Tetris (lateral), Matrix Rain, Breakout, Fireworks, DVD Bouncer, Heart Rate ECG, Equalizer, Rule 30, heatmap CPU thermal, Minecraft day/night (sol arcando + nuvens + lua/estrelas), Aquário com bolhas e peixinho — mais os padrões `blink`, `chase`, `wave`, `typewriter`, `marquee`, `flag-wave`.
-- **Pong interativo (`pong-interactive`)** jogável pelo **teclado físico** — Tab/Caps/LShift/LCtrl movem a barra, fizzd lê `/dev/input/event*` em paralelo com o OS via a udev rule.
+- **30+ animações & efeitos host-streamed** a 30 fps — Matrix Rain, Fireworks, DVD Bouncer, Heart Rate ECG, Equalizer, Rule 30, heatmap CPU thermal, Minecraft day/night e nuvens-eternas, Aquário — mais efeitos reativos que respondem à sua digitação (**Ripple**, **Spark**), um **relógio binário (BCD)** e o clássico **fogo do Doom PSX** — junto dos padrões `blink`, `chase`, `wave`, `typewriter`, `marquee`, `flag-wave`.
+- **20+ jogos jogáveis no teclado físico** — o fizzd lê `/dev/input/event*` em paralelo com o OS via udev rule, então as teclas controlam o jogo e a digitação normal continua funcionando. Arcade: **Pong** (1P/2P), **Snake**, **Breakout**, **Pacman**, **Space Invaders**, **Super Mario**, **Whac-A-Mole**, **Bullet-hell**, **Drag Race**, **Frogger**, **Flappy Bird** (Space pra bater asa), **Genius/Simon**. Mais a fundo: um **Wordle físico** (teclas de letra acendem verde/amarelo/cinza), um **FPS raycaster do Doom**, o roguelite por turnos **Keyboard Crawl**, a sobrevivência de contágio **Teclado Amaldiçoado**, um **Jardim Idle** e um **deck-builder estilo Slay-the-Spire** — vários com menu de dificuldade (1-5) e meta-progressão salva em disco.
 - **60+ presets built-in** entre `theme`, `brasil`, `productivity`, `pattern`, `gradient`, `shape`, `word`, `game`, mais presets salvos pelo usuário.
 - **Seletor de tonalidade global** — chips Original / Vivid / Neon / Pastel / Mono + slider de vibrância 0.4×–2.0× que afeta animações stateful também (daemon respeita `pattern.vibrancy`).
 - **Miniaturas animadas** que imitam o que cada preset faz de verdade, em tempo real.

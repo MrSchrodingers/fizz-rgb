@@ -11,7 +11,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node 22+](https://img.shields.io/badge/node-%3E%3D22-339933?logo=node.js&logoColor=white)](package.json)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](tsconfig.base.json)
-[![Tests: 140](https://img.shields.io/badge/tests-140%20passing-success)](packages)
+[![Tests: 183](https://img.shields.io/badge/tests-183%20passing-success)](packages)
 [![Hardware: K617](https://img.shields.io/badge/hardware-Redragon%20Fizz%20K617-c4302b)](https://www.redragonzone.com/products/redragon-fizz-pro)
 
 Linux RGB controller for the **Redragon Fizz K617** (60% wired mechanical keyboard, USB `258a:0049`, Sinowealth SH68F90A MCU). Fills the gap left by the Windows-only Redragon software.
@@ -25,8 +25,8 @@ Linux RGB controller for the **Redragon Fizz K617** (60% wired mechanical keyboa
 - **Daemon + CLI + Electron GUI** with a 3D model of the keyboard.
 - **8 firmware-native effects** reverse-engineered from USB captures (rainbow, snake, waterfall, sine wave, star twinkle, rainbow blossom, wheel, static).
 - **Per-key direct control** via the Sinodragon protocol (382-byte HID feature report).
-- **17 host-streamed animations** at 30 fps — Pong, Snake, Tetris (sideways), Matrix Rain, Breakout, Fireworks, DVD Bouncer, Heart Rate ECG, Equalizer, Rule 30, CPU thermal heatmap, Minecraft day/night cycle (sun arc + clouds + moon and stars), Aquarium with rising bubbles and a roaming fish — plus the standard `blink`, `chase`, `wave`, `typewriter`, `marquee`, `flag-wave` patterns.
-- **Interactive Pong (`pong-interactive`)** playable from the **physical keyboard** — Tab/Caps/LShift/LCtrl move the paddle, fizzd reads `/dev/input/event*` in parallel with the OS via the udev rule.
+- **30+ host-streamed animations & effects** at 30 fps — Matrix Rain, Fireworks, DVD Bouncer, Heart Rate ECG, Equalizer, Rule 30, CPU thermal heatmap, Minecraft day/night & eternal-clouds cycles, Aquarium — plus reactive effects that respond to your typing (**Ripple**, **Spark**), a **binary BCD clock**, and the classic **Doom PSX fire** — alongside the standard `blink`, `chase`, `wave`, `typewriter`, `marquee`, `flag-wave` patterns.
+- **20+ games you play on the physical keyboard** — fizzd reads `/dev/input/event*` in parallel with the OS via a udev rule, so keypresses drive the game while normal typing still works. Arcade: **Pong** (1P/2P), **Snake**, **Breakout**, **Pacman**, **Space Invaders**, **Super Mario**, **Whac-A-Mole**, **Bullet-hell**, **Drag Race**, **Frogger**, **Flappy Bird** (Space to flap), **Genius/Simon**. Deeper: a **physical Wordle** (letter keys light green/yellow/gray), a **Doom raycaster FPS**, the **Keyboard Crawl** turn-based roguelite, a **Cursed-keyboard** contagion survival, an **Idle Garden**, and a **Slay-the-Spire-lite deck-builder** — several with difficulty menus (1-5) and disk-persisted meta-progression.
 - **60+ built-in presets** across `theme`, `brasil`, `productivity`, `pattern`, `gradient`, `shape`, `word`, `game`, plus user-saved presets.
 - **Global tonality selector** — Original / Vivid / Neon / Pastel / Mono style chips + 0.4×–2.0× vibrancy slider that affects stateful animations too (daemon honours `pattern.vibrancy`).
 - **Animated thumbnails** that mimic each preset's actual frames in real time.

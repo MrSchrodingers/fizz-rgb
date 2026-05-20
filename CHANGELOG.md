@@ -10,6 +10,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 _Nothing yet._
 
+## [0.3.0] — 2026-05-20
+
+The games drop. A wave of new host-streamed games and effects — most of them playable directly from the physical keyboard while you keep typing — bringing the catalogue to 40+ animations/games. Each engine renders on the real ragged key matrix (one key = one cell), is fuzz-tested for crash-freedom and valid LED output, and has a headless winnability/progression bot. Test suite grew 140 → 183.
+
+### Added
+
+#### Reactive effects (respond to your typing, no menu)
+
+- **Ripple** — each keypress emits an expanding, fading ring of light from that key.
+- **Spark** — the pressed key glows white-hot then cools through a fire palette, with a small bloom to its neighbours.
+- **Binary clock** — wall-clock HH:MM:SS as six BCD bit-columns (hours red, minutes green, seconds azure).
+- **Doom PSX fire** — the classic upward fire algorithm flickering from the bottom row.
+
+#### Games on the physical keyboard
+
+- **Whac-A-Mole**, **Bullet-hell** (WASD dodge), **Drag Race** (Space rev / Enter shift), **Frogger** (WASD cross the traffic) — arcade games with a difficulty menu (press 1-5).
+- **Flappy Bird** — Space to flap; gentle physics tuned for the 5-row board.
+- **Physical Wordle** — type 5-letter words; the letter keys light green / yellow / dark with the best-known status per letter. Backspace erases, Enter submits, six guesses.
+- **Keyboard Crawl** — turn-based roguelite in a dungeon larger than the board, with a torch-lit camera, fog-of-war, enemies, items, stairs, permadeath, and a persistent +HP meta-bonus.
+- **Cursed Keyboard** — a red contagion spreads key-to-key; press infected keys to cleanse before the board is overrun.
+- **Idle Garden** — plots grow seed → sprout → mature in real time; tap to harvest or let it auto-harvest; currency auto-buys plots/growth. Persists across sessions.
+- **Roguelite deck-builder** — a Slay-the-Spire-lite: hand on the home row (A-S-D-F-G), Space ends the turn, reward picks, bosses, and meta-progression.
+- **Genius / Simon**, **Pacman**, **DOOM** raycaster FPS, **Space Invaders**, **Super Mario**, **Pong 2P**, interactive **Snake** / **Breakout** — playable from the physical keyboard via the evdev listener.
+
+#### Engine & GUI
+
+- Difficulty menus (1-5) shared across the menu games; editable palette slots for stateful presets; gentler Space Invaders descent; DOOM enemies in turret mode.
+- New presets, animated thumbnails, and palette declarations for every new game/effect.
+- Meta-progression for Keyboard Crawl / Idle Garden / Deck-builder persists to `~/.config/fizz-rgb/saves/` (ESM `node:fs`, best-effort — never crashes the daemon).
+
+### Fixed
+
+- All interactive games render on the **physical key matrix** instead of the old uniform grid, so nothing collapses onto the wide spacebar on the bottom rows.
+
 ## [0.2.0] — 2026-05-19
 
 Massive UX + content drop. The headline: 22 new presets (including stateful day/night cycles + an interactive Pong game playable from the physical keyboard), a global tonality selector with vibrancy slider that reaches stateful daemon animations, animated thumbnails for every preset, drag-to-paint, undo/redo, live perkey state mirroring between GUI and daemon, and a polish pass on perf, IPC robustness, and accessibility.
