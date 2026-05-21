@@ -1,9 +1,11 @@
+import { readdirSync, readFileSync } from 'node:fs';
 import { encodeFirmwareEffect, encodePerKeyFrame } from '@fizz/core/encoder';
 import type { FirmwareEffectName, FirmwareEffectParams } from '@fizz/core';
 import { computeFrameInto, K617_LAYOUT } from '@fizz/core';
-import type { Color, Pattern } from '@fizz/core';
+import type { Color, Pattern, ProtocolFrame } from '@fizz/core';
 import type { HidController } from './hid.js';
 import { log } from './log.js';
+import { FrameCoalescer } from './frame-coalescer.js';
 import { gridToLed, GRID_HEIGHT } from './game-grid.js';
 import {
   KeyCapture,
@@ -971,15 +973,12 @@ class CpuThermalEngine {
     this.cursor = (this.cursor + 1) % 30;
     if (this.cursor !== 0) return; // only sample once per second at 30fps
     try {
-      // Lazy require so the daemon can still boot if /sys isn't present.
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const fs = require('node:fs') as typeof import('node:fs');
       const zonesDir = '/sys/class/thermal';
       let maxTempC = -Infinity;
-      for (const entry of fs.readdirSync(zonesDir)) {
+      for (const entry of readdirSync(zonesDir)) {
         if (!entry.startsWith('thermal_zone')) continue;
         try {
-          const raw = fs.readFileSync(`${zonesDir}/${entry}/temp`, 'utf8').trim();
+          const raw = readFileSync(`${zonesDir}/${entry}/temp`, 'utf8').trim();
           const milliC = Number(raw);
           if (!Number.isFinite(milliC)) continue;
           const c = milliC / 1000;
@@ -1551,6 +1550,12 @@ export class EffectEngine {
   private streamInterval: ReturnType<typeof setInterval> | null = null;
   private streamStart = 0;
   private currentPattern: Pattern | null = null;
+  /** Drops redundant per-key frames so the 30fps loop doesn't flood the
+   *  keyboard's USB feature-report endpoint (which degrades typing). */
+  private coalescer = new FrameCoalescer();
+  /** True while a feature-report write is in flight — skip the tick rather
+   *  than queue overlapping (synchronous, blocking) USB writes. */
+  private streamPending = false;
   /** Reference to the currently-active interactive engine, if any. Allows
    *  IPC handlers (perkey.gameInput) + the evdev capture loop to forward
    *  player input. Any of the interactive engines implements the common
@@ -1616,9 +1621,31 @@ export class EffectEngine {
         this.keyCapture.stop();
         this.keyCapture = null;
       }
+      this.coalescer.reset();
+      this.streamPending = false;
       log.info('stream stopped');
       this.notifyPerkey({ mode: 'off' });
     }
+  }
+
+  /**
+   * Write a streamed per-key frame to the keyboard with coalescing and
+   * backpressure. Identical consecutive frames are dropped (the keyboard is
+   * already showing them) and a frame is skipped while a prior write is still
+   * in flight, so the 30fps loop never floods the USB feature-report endpoint.
+   * On write failure the stream is torn down (it auto-resumes on reconnect via
+   * lastPattern). Fire-and-forget: callers don't await.
+   */
+  private pushStreamFrame(frame: ProtocolFrame): void {
+    if (this.streamPending) return;                  // backpressure
+    if (!this.coalescer.shouldSend(frame)) return;   // coalescing
+    this.streamPending = true;
+    this.hid.sendFeatureReport(frame)
+      .catch((err) => {
+        log.warn({ err: (err as Error).message }, 'stream frame send failed; stopping (auto-resumes on reconnect)');
+        this.stopStreamLoop();
+      })
+      .finally(() => { this.streamPending = false; });
   }
 
   /** Forward a player input (from the GUI's virtual-key click) to the active
@@ -1683,6 +1710,11 @@ export class EffectEngine {
 
   async startPattern(pattern: Pattern): Promise<void> {
     this.stopStreamLoop();
+    // Force the first frame of the new stream to send even if its bytes match
+    // whatever was last on screen — the keyboard may have lost state (e.g. a
+    // reconnect-driven restore reaches here with the interval already cleared).
+    this.coalescer.reset();
+    this.streamPending = false;
     this.lastPattern = pattern;
     this.lastPerKeyColors = null;
     this.lastNamedEffect = null;
@@ -1695,7 +1727,7 @@ export class EffectEngine {
       this.streamInterval = setInterval(() => {
         game.step();
         const colors = game.render(); applyVibrancyInPlace(colors, this.currentPattern?.vibrancy ?? 1); const frame = encodePerKeyFrame(colors);
-        this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
+        this.pushStreamFrame(frame);
       }, 1000 / 30);
       log.info('pong stream started');
       return;
@@ -1706,7 +1738,7 @@ export class EffectEngine {
       this.streamInterval = setInterval(() => {
         game.step();
         const colors = game.render(); applyVibrancyInPlace(colors, this.currentPattern?.vibrancy ?? 1); const frame = encodePerKeyFrame(colors);
-        this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
+        this.pushStreamFrame(frame);
       }, 1000 / 30);
       log.info('snake stream started');
       return;
@@ -1717,7 +1749,7 @@ export class EffectEngine {
       this.streamInterval = setInterval(() => {
         game.step();
         const colors = game.render(); applyVibrancyInPlace(colors, this.currentPattern?.vibrancy ?? 1); const frame = encodePerKeyFrame(colors);
-        this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
+        this.pushStreamFrame(frame);
       }, 1000 / 30);
       log.info('tetris stream started');
       return;
@@ -1728,7 +1760,7 @@ export class EffectEngine {
       this.streamInterval = setInterval(() => {
         game.step();
         const colors = game.render(); applyVibrancyInPlace(colors, this.currentPattern?.vibrancy ?? 1); const frame = encodePerKeyFrame(colors);
-        this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
+        this.pushStreamFrame(frame);
       }, 1000 / 30);
       log.info('Matrix Rain stream started');
       return;
@@ -1739,7 +1771,7 @@ export class EffectEngine {
       this.streamInterval = setInterval(() => {
         game.step();
         const colors = game.render(); applyVibrancyInPlace(colors, this.currentPattern?.vibrancy ?? 1); const frame = encodePerKeyFrame(colors);
-        this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
+        this.pushStreamFrame(frame);
       }, 1000 / 30);
       log.info('Breakout stream started');
       return;
@@ -1750,7 +1782,7 @@ export class EffectEngine {
       this.streamInterval = setInterval(() => {
         game.step();
         const colors = game.render(); applyVibrancyInPlace(colors, this.currentPattern?.vibrancy ?? 1); const frame = encodePerKeyFrame(colors);
-        this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
+        this.pushStreamFrame(frame);
       }, 1000 / 30);
       log.info('Fireworks stream started');
       return;
@@ -1761,7 +1793,7 @@ export class EffectEngine {
       this.streamInterval = setInterval(() => {
         game.step();
         const colors = game.render(); applyVibrancyInPlace(colors, this.currentPattern?.vibrancy ?? 1); const frame = encodePerKeyFrame(colors);
-        this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
+        this.pushStreamFrame(frame);
       }, 1000 / 30);
       log.info('DVD bouncer stream started');
       return;
@@ -1772,7 +1804,7 @@ export class EffectEngine {
       this.streamInterval = setInterval(() => {
         game.step();
         const colors = game.render(); applyVibrancyInPlace(colors, this.currentPattern?.vibrancy ?? 1); const frame = encodePerKeyFrame(colors);
-        this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
+        this.pushStreamFrame(frame);
       }, 1000 / 30);
       log.info('Heart rate stream started');
       return;
@@ -1783,7 +1815,7 @@ export class EffectEngine {
       this.streamInterval = setInterval(() => {
         game.step();
         const colors = game.render(); applyVibrancyInPlace(colors, this.currentPattern?.vibrancy ?? 1); const frame = encodePerKeyFrame(colors);
-        this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
+        this.pushStreamFrame(frame);
       }, 1000 / 30);
       log.info('Equalizer stream started');
       return;
@@ -1794,7 +1826,7 @@ export class EffectEngine {
       this.streamInterval = setInterval(() => {
         game.step();
         const colors = game.render(); applyVibrancyInPlace(colors, this.currentPattern?.vibrancy ?? 1); const frame = encodePerKeyFrame(colors);
-        this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
+        this.pushStreamFrame(frame);
       }, 1000 / 30);
       log.info('Rule 30 stream started');
       return;
@@ -1805,7 +1837,7 @@ export class EffectEngine {
       this.streamInterval = setInterval(() => {
         eng.step();
         const colors = eng.render(); applyVibrancyInPlace(colors, this.currentPattern?.vibrancy ?? 1); const frame = encodePerKeyFrame(colors);
-        this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
+        this.pushStreamFrame(frame);
       }, 1000 / 30);
       log.info('CPU thermal stream started');
       return;
@@ -1816,7 +1848,7 @@ export class EffectEngine {
       this.streamInterval = setInterval(() => {
         eng.step();
         const colors = eng.render(); applyVibrancyInPlace(colors, this.currentPattern?.vibrancy ?? 1); const frame = encodePerKeyFrame(colors);
-        this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
+        this.pushStreamFrame(frame);
       }, 1000 / 30);
       log.info('Minecraft day/night stream started');
       return;
@@ -1916,7 +1948,7 @@ export class EffectEngine {
         const colors = eng.render();
         applyVibrancyInPlace(colors, this.currentPattern?.vibrancy ?? 1);
         const frame = encodePerKeyFrame(colors);
-        this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
+        this.pushStreamFrame(frame);
       }, 1000 / 30);
       log.info({ animType: pattern.animType }, 'Interactive game stream started');
       return;
@@ -1927,7 +1959,7 @@ export class EffectEngine {
       this.streamInterval = setInterval(() => {
         eng.step();
         const colors = eng.render(); applyVibrancyInPlace(colors, this.currentPattern?.vibrancy ?? 1); const frame = encodePerKeyFrame(colors);
-        this.hid.sendFeatureReport(frame).catch(() => this.stopStreamLoop());
+        this.pushStreamFrame(frame);
       }, 1000 / 30);
       log.info('Aquarium stream started');
       return;
@@ -1945,23 +1977,14 @@ export class EffectEngine {
 
     // Start 30fps stream. Reuse a single Map across ticks — animations.ts'
     // computeFrameInto mutates it in place, avoiding ~30 allocations/sec.
+    // Backpressure + coalescing live in pushStreamFrame (shared with games).
     const tickIntervalMs = 1000 / 30;
     const frameBuf = new Map<number, Color>();
-    let pendingSend = false; // simple backpressure flag
     this.streamInterval = setInterval(() => {
       if (!this.currentPattern) return;
-      if (pendingSend) return; // last frame still in-flight; skip this tick
       const t = (performance.now() - this.streamStart) / 1000;
       computeFrameInto(this.currentPattern, t, frameBuf);
-      const frame = encodePerKeyFrame(frameBuf);
-      pendingSend = true;
-      this.hid.sendFeatureReport(frame).then(() => {
-        pendingSend = false;
-      }).catch((err) => {
-        pendingSend = false;
-        log.warn({ err: (err as Error).message }, 'frame send failed; stopping stream (will auto-resume on reconnect via lastPattern)');
-        this.stopStreamLoop();
-      });
+      this.pushStreamFrame(encodePerKeyFrame(frameBuf));
     }, tickIntervalMs);
 
     log.info(

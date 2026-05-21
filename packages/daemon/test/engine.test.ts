@@ -47,6 +47,17 @@ describe('EffectEngine', () => {
     await expect(engine.runEffect('fw-static', { color: '#010101' }))
       .rejects.toThrow(/not connected/);
   });
+
+  it('coalesces identical frames during a stream (no 30fps flood)', async () => {
+    // binary-clock renders the same frame on every tick within a wall second
+    // and only changes when the clock advances. Without coalescing the 30fps
+    // loop would write ~6 identical frames in 200ms; with it, at most 2 (and
+    // only >1 if the window straddles a second boundary).
+    await engine.startPattern({ keys: {}, animType: 'binary-clock', animSpeed: 0.5 });
+    await new Promise((r) => setTimeout(r, 200));
+    engine.stopStreamLoop();
+    expect(hid.sentFrames.length).toBeLessThanOrEqual(2);
+  });
 });
 
 describe('EffectEngine reconnect persistence', () => {

@@ -48,8 +48,12 @@ describe('EffectEngine sustained stream', () => {
 
     engine.stop();
 
-    // Sanity: at least 30 frames were actually pushed to the (fake) HID.
-    expect(hid.sentFrames.length).toBeGreaterThanOrEqual(30);
+    // Sanity: the stream advanced through many distinct blink phases (frames
+    // are produced, not silently frozen). The count is well below one-per-tick
+    // (~63 ticks in 2.1s) because frame coalescing drops identical consecutive
+    // frames — that reduction is the whole point of the anti-flood fix.
+    expect(hid.sentFrames.length).toBeGreaterThanOrEqual(5);
+    expect(hid.sentFrames.length).toBeLessThan(60);
 
     // Heap shouldn't more than double. Any genuine per-tick Map leak would
     // show ~30 * 60 * 64 bytes = ~120kb growth per second, which over 2s
