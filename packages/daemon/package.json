@@ -15,7 +15,7 @@
     "@fizz/core": "*",
     "dbus-next": "^0.10.2",
     "node-hid": "^3.1.2",
-    "pino": "^9.6.0",
+    "pino": "^10.3.1",
     "zod": "^3.24.0"
   },
   "devDependencies": {
