@@ -163,3 +163,33 @@ export function encodePerKeySolid(color: Color): Buffer {
   for (const k of K617_LAYOUT.keys) map.set(k.ledIndex, color);
   return encodePerKeyFrame(map);
 }
+
+// ---------------------------------------------------------------------------
+// Report 0x06 planar BGR per-key protocol (official Redragon K617IT software)
+// ---------------------------------------------------------------------------
+
+export const PER_KEY_EFFECT_MODE = 0x15;
+export const PLANAR_BGR_STRIDE = 126;
+const PLANAR_BGR_HEADER = [0x06, 0x09, 0xbc, 0x00, 0x40, 0x00, 0x00, 0x00];
+const PLANAR_BGR_PACKET_LEN = 1032;
+
+/**
+ * Encode a 1032-byte Report 0x06 Block #2 per-key color payload using the
+ * planar BGR layout (3 × 126-byte planes starting at offset 8).
+ *
+ * @param colorsByMatrixIndex Map from hardware matrix index (0x00..0x7D) to RGB Color.
+ * @returns A 1032-byte Buffer ready to send via hid.sendFeatureReport.
+ */
+export function encodePerKeyPlanarBlock(colorsByMatrixIndex: Map<number, Color>): Buffer {
+  const packet = Buffer.alloc(PLANAR_BGR_PACKET_LEN);
+  for (let i = 0; i < PLANAR_BGR_HEADER.length; i++) {
+    packet[i] = PLANAR_BGR_HEADER[i]!;
+  }
+  for (const [idx, color] of colorsByMatrixIndex.entries()) {
+    if (idx < 0 || idx >= PLANAR_BGR_STRIDE) continue;
+    packet[8 + idx] = color.b & 0xff;
+    packet[8 + PLANAR_BGR_STRIDE + idx] = color.g & 0xff;
+    packet[8 + PLANAR_BGR_STRIDE * 2 + idx] = color.r & 0xff;
+  }
+  return packet;
+}

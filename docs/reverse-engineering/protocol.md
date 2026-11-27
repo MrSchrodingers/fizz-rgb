@@ -59,6 +59,32 @@ The header pattern looks like `report_id, opcode, cursor_lo, cursor_hi, length (
 | `fw-waterfall`       | `0x10`     | Waterfall.pcapng           |
 | `fw-wheel`           | `0x06`     | Wheel.pcapng               |
 
+## Per-key RGB mode (observed on ISO-IT 62-key hardware)
+
+Custom per-key lighting uses **Effect mode `0x15`** in Block #4 (`06 03 b6 ...` at byte `[21]`), with the per-key color map carried inside **Block #2** (`06 09 bc 00 40 00 00 00`).
+
+### Planar BGR layout (Block #2, 1032 bytes)
+
+Colors are **not** stored as interleaved RGB triplets. Instead, the 1024-byte body (starting at packet offset `8`) contains **three separate 126-byte planes in BGR order**, indexed by the physical key matrix index (`0x00..0x7D`):
+
+| Plane | Packet byte range | Formula for `matrix_index` |
+| ----- | ----------------- | -------------------------- |
+| **Blue (B)**  | `8 .. 133`   | `packet[8 + matrix_index]`   |
+| **Green (G)** | `134 .. 259` | `packet[134 + matrix_index]` |
+| **Red (R)**   | `260 .. 385` | `packet[260 + matrix_index]` |
+
+### ISO-IT (62-key) hardware matrix indices
+
+Verified via live USBPcap capture from the official Redragon K617IT software:
+
+| Row | Keys (left to right) | `matrix_index` (hex) |
+| --- | -------------------- | -------------------- |
+| 1 | `Esc`, `1`..`0`, `'`, `ì`, `Backspace` | `0x15`..`0x22` |
+| 2 | `Tab`, `Q`..`P`, `è`, `+` | `0x2a`..`0x36` |
+| 3 | `CapsLock`, `A`..`L`, `ò`, `à`, `ù`, `Enter` | `0x3f`..`0x4c` (`ù` = `0x4b`, `Enter` = `0x4c`) |
+| 4 | `LShift`, `< >`, `Z`..`-`, `RShift` | `0x54`, `0x55` (`< >`), `0x56`..`0x5f`, `0x61` |
+| 5 | `LCtrl`, `LWin`, `LAlt`, `Space`, `RAlt`, `Fn`, `Menu`, `RCtrl` | `0x69`, `0x6a`, `0x6b`, `0x6e`, `0x71`, `0x72`, `0x75`, `0x76` |
+
 ## Encoding strategy used in `@fizz/core/protocol.ts`
 
 Given the protocol's complexity (1024-byte blocks with currently-opaque body content), we use a **template + patch** approach:
